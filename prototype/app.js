@@ -41,32 +41,73 @@
         hub: {
             title: "iCUE LINK System Hub",
             subtitle: "USB · Firmware 3.10.636",
-            capabilities: ["Cooling zones", "Per-channel speed", "RGB", "LCD assignment", "Device positions", "Temperature probes"]
+            capabilities: ["Cooling zones", "Per-channel speed", "RGB", "LCD assignment", "Device positions", "Temperature probes"],
+            tabs: [
+                ["overview", "Overview", "Hub status", "See the connected LINK topology, firmware, and aggregate health in one place."],
+                ["cooling", "Cooling", "Cooling channels", "Configure only the pump and fan channels exposed by the hub.", "cooling"],
+                ["lighting", "Lighting", "Lighting zones", "Coordinate RGB-capable devices and channels attached to the hub.", "lighting"],
+                ["topology", "Topology", "Device positions", "Arrange the physical LINK chain so labels and lighting order match the real build."],
+                ["sensors", "Sensors", "Temperature sources", "Inspect coolant and probe telemetry available to cooling profiles."]
+            ]
         },
         titan: {
             title: "TITAN 360 LCD",
             subtitle: "LINK · Coolant 38°C",
-            capabilities: ["Pump control", "Radiator fans", "Coolant sensor", "LCD", "RGB", "Critical protection"]
+            capabilities: ["Pump control", "Radiator fans", "Coolant sensor", "LCD", "RGB", "Critical protection"],
+            tabs: [
+                ["overview", "Overview", "Cooler status", "See pump speed, coolant temperature, radiator state, and protection status."],
+                ["cooling", "Cooling", "Pump and radiator", "Tune the pump and radiator fans with device-safe limits kept visible.", "cooling"],
+                ["display", "Display", "LCD content", "Choose sensor layouts, media, rotation, and display brightness."],
+                ["lighting", "Lighting", "Cooler lighting", "Configure the RGB zones supported by the pump cover and attached fans.", "lighting"],
+                ["sensors", "Sensors", "Coolant telemetry", "Inspect coolant and related telemetry available from the cooler."]
+            ]
         },
         keyboard: {
             title: "K100 AIR RGB",
             subtitle: "Wireless · Battery 82%",
-            capabilities: ["Per-key RGB", "Key assignments", "Macros", "Profiles", "Control dial", "Polling and sleep"]
+            capabilities: ["Per-key RGB", "Key assignments", "Macros", "Profiles", "Control dial", "Polling and sleep"],
+            tabs: [
+                ["overview", "Overview", "Keyboard status", "See connection mode, battery, active profile, and firmware."],
+                ["assignments", "Keys", "Key assignments", "Map supported keys, media controls, and the control dial."],
+                ["lighting", "Lighting", "Per-key lighting", "Build keyboard lighting layers and include them in shared scenes.", "lighting"],
+                ["macros", "Macros", "Macro library", "Create reusable actions and assign them to eligible keys."],
+                ["wireless", "Wireless", "Polling and sleep", "Tune wireless behavior, polling, sleep timing, and battery-conscious options."]
+            ]
         },
         mouse: {
             title: "Scimitar RGB Elite",
             subtitle: "USB · 1,000 Hz",
-            capabilities: ["DPI stages", "Button mappings", "Macros", "Lighting zones", "Polling", "Angle snapping"]
+            capabilities: ["DPI stages", "Button mappings", "Macros", "Lighting zones", "Polling", "Angle snapping"],
+            tabs: [
+                ["overview", "Overview", "Mouse status", "See the active DPI stage, polling rate, profile, and firmware."],
+                ["dpi", "DPI", "DPI stages", "Set sensitivity stages and choose the active stage indicator."],
+                ["buttons", "Buttons", "Button mappings", "Assign actions and macros to supported mouse buttons."],
+                ["lighting", "Lighting", "Mouse lighting", "Configure the mouse lighting zones or add them to a shared scene.", "lighting"],
+                ["performance", "Performance", "Tracking behavior", "Tune polling, angle snapping, and other supported sensor options."]
+            ]
         },
         slipstream: {
             title: "Slipstream receiver",
             subtitle: "USB · 2 paired devices",
-            capabilities: ["Wireless transport", "Paired devices", "Battery telemetry", "Connection status"]
+            capabilities: ["Wireless transport", "Paired devices", "Battery telemetry", "Connection status"],
+            tabs: [
+                ["overview", "Overview", "Receiver status", "See connection health, firmware, and currently paired devices."],
+                ["pairing", "Pairing", "Paired devices", "Review or change the devices attached to this receiver."],
+                ["wireless", "Wireless", "Connection details", "Inspect transport status and supported wireless settings."],
+                ["battery", "Battery", "Battery telemetry", "See the battery state reported by paired wireless devices."]
+            ]
         },
         lcd: {
             title: "LCD Pump Cover",
             subtitle: "480 × 480 display",
-            capabilities: ["Sensor layouts", "Images", "GIF animation", "Rotation", "Brightness", "Custom profiles"]
+            capabilities: ["Sensor layouts", "Images", "GIF animation", "Rotation", "Brightness", "Custom profiles"],
+            tabs: [
+                ["overview", "Overview", "Display status", "See the active layout, resolution, orientation, and brightness."],
+                ["display", "Display", "Display layout", "Choose the content layout and screen orientation."],
+                ["media", "Media", "Images and animation", "Manage compatible images and animated content."],
+                ["sensors", "Sensors", "Sensor layouts", "Select the telemetry shown in supported LCD layouts."],
+                ["brightness", "Brightness", "Display brightness", "Adjust panel brightness independently of RGB lighting."]
+            ]
         }
     };
 
@@ -163,9 +204,26 @@
         $("#drawerTitle").textContent = device.title;
         $("#drawerSubtitle").textContent = device.subtitle;
         $("#drawerCapabilities").innerHTML = device.capabilities.map(item => `<span>${item}</span>`).join("");
+        $("#drawerTabs").innerHTML = device.tabs.map((tab, index) => `<button type="button" role="tab" data-device-tab="${tab[0]}" aria-selected="${index === 0}" tabindex="${index === 0 ? "0" : "-1"}">${tab[1]}</button>`).join("");
+        $("#drawerTabs").dataset.device = key;
+        renderDeviceTab(device, device.tabs[0][0]);
         $("#deviceDrawer").classList.add("open");
         $("#deviceDrawer").setAttribute("aria-hidden", "false");
         $("#scrim").classList.add("open");
+    }
+
+    function renderDeviceTab(device, tabId) {
+        const tab = device.tabs.find(item => item[0] === tabId) || device.tabs[0];
+        $$("#drawerTabs [data-device-tab]").forEach(button => {
+            const active = button.dataset.deviceTab === tab[0];
+            button.classList.toggle("active", active);
+            button.setAttribute("aria-selected", String(active));
+            button.tabIndex = active ? 0 : -1;
+        });
+        const action = tab[4]
+            ? `<button type="button" class="button primary" data-route="${tab[4]}">Open ${tab[1]}</button>`
+            : `<button type="button" class="button ghost" data-device-demo="${tab[1]}">Explore ${tab[1]}</button>`;
+        $("#drawerTabPanel").innerHTML = `<p class="eyebrow">SUPPORTED FOR THIS DEVICE</p><h3>${tab[2]}</h3><p>${tab[3]}</p>${action}`;
     }
 
     function closeDrawer() {
@@ -327,6 +385,16 @@
 
         $("#closeDrawer").addEventListener("click", closeDrawer);
         $("#scrim").addEventListener("click", closeDrawer);
+        $("#drawerTabs").addEventListener("click", event => {
+            const tab = event.target.closest("[data-device-tab]");
+            if (!tab) return;
+            const device = devices[event.currentTarget.dataset.device] || devices.hub;
+            renderDeviceTab(device, tab.dataset.deviceTab);
+        });
+        $("#drawerTabPanel").addEventListener("click", event => {
+            const demo = event.target.closest("[data-device-demo]");
+            if (demo) toast(`${demo.dataset.deviceDemo} controls previewed`, "Only controls supported by this device would appear here.");
+        });
         $("#systemMode").addEventListener("change", event => applySystemMode(event.target.value));
 
         $$("[data-action]").forEach(button => button.addEventListener("click", () => {

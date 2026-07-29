@@ -442,6 +442,9 @@ select {
 .service-grid > div { display: grid; gap: 5px; padding: 16px; background: var(--surface-2); border-radius: 9px; }
 .service-grid span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .service-grid small { color: var(--faint); }
+.desktop-client-callout { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 14px; margin-top: 14px; padding: 15px; background: rgba(var(--accent-rgb), .06); border: 1px solid rgba(var(--accent-rgb), .18); border-radius: 10px; }
+.desktop-client-callout > span:nth-child(2) { display: grid; gap: 5px; }
+.desktop-client-callout small { color: var(--muted); line-height: 1.45; }
 .data-actions { display: flex; gap: 9px; margin-top: 18px; }
 
 .device-drawer {
@@ -458,8 +461,14 @@ select {
 .drawer-section { padding: 20px 0; border-top: 1px solid var(--border); }
 .drawer-section h3 { margin: 0 0 13px; font-size: 13px; }
 .drawer-capabilities { display: flex; flex-wrap: wrap; gap: 7px; }
-.drawer-link { display: flex; justify-content: space-between; width: 100%; min-height: 48px; padding: 0; background: transparent; border: 0; border-bottom: 1px solid var(--border-soft); color: var(--muted); text-align: left; }
-.drawer-link:hover { color: var(--accent); }
+.drawer-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 1px 1px 9px; scrollbar-width: thin; }
+.drawer-tabs button { flex: 0 0 auto; min-height: 34px; padding: 0 10px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; font-weight: 700; }
+.drawer-tabs button:hover { color: var(--text); border-color: rgba(var(--accent-rgb), .45); }
+.drawer-tabs button.active { color: var(--accent); background: rgba(var(--accent-rgb), .09); border-color: rgba(var(--accent-rgb), .38); }
+.drawer-tab-panel { min-height: 178px; margin-top: 5px; padding: 16px; background: var(--surface); border: 1px solid var(--border-soft); border-radius: 10px; }
+.drawer-tab-panel .eyebrow { margin: 0; }
+.drawer-tab-panel h3 { margin: 7px 0 8px; font-size: 16px; }
+.drawer-tab-panel > p:not(.eyebrow) { min-height: 48px; margin: 0 0 15px; color: var(--muted); line-height: 1.5; }
 .drawer-note { margin-top: 18px; padding: 14px; color: var(--muted); background: var(--surface); border-radius: 9px; font-size: 12px; line-height: 1.5; }
 .scrim { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.48); opacity: 0; visibility: hidden; transition: .2s; }
 .scrim.open { opacity: 1; visibility: visible; }

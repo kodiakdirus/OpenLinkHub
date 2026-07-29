@@ -616,6 +616,11 @@
                                 <div><span>Resume delay</span><strong>15 seconds</strong><small>Device reinitialization</small></div>
                                 <div><span>Build</span><strong>Prototype</strong><small>No service connection</small></div>
                             </div>
+                            <div class="desktop-client-callout">
+                                <span class="integration-icon">K</span>
+                                <span><strong>Plasma desktop client concept</strong><small>A Qt 6 + Kirigami shell would use the same local OpenLinkHub service API as the web interface. The service remains the source of truth; only the presentation layer changes.</small></span>
+                                <span class="experimental-pill">Future client</span>
+                            </div>
                             <div class="data-actions">
                                 <button class="button ghost" id="backupDemo">Download configuration backup</button>
                                 <button class="button ghost" id="restoreDemo">Restore from backup</button>
@@ -640,12 +645,11 @@
         <div class="drawer-capabilities" id="drawerCapabilities"></div>
     </div>
     <div class="drawer-section">
-        <h3>Quick settings</h3>
-        <button class="drawer-link" data-route="cooling">Cooling configuration <span>→</span></button>
-        <button class="drawer-link" data-route="lighting">Lighting configuration <span>→</span></button>
-        <button class="drawer-link capability-demo">Device profile <span>→</span></button>
+        <h3>Device settings</h3>
+        <div class="drawer-tabs" id="drawerTabs" role="tablist" aria-label="Device settings"></div>
+        <div class="drawer-tab-panel" id="drawerTabPanel" role="tabpanel"></div>
     </div>
-    <div class="drawer-note">This drawer demonstrates capability-aware disclosure. A real implementation would only show controls supported by this device.</div>
+    <div class="drawer-note">The settings tabs are generated from this device's capability model. Cooling controls, for example, never appear on the mouse.</div>
 </aside>
 <div class="scrim" id="scrim"></div>
 
