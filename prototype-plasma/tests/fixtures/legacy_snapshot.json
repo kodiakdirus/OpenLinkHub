@@ -27,6 +27,12 @@
         "Hidden": true,
         "GetDevice": null
       },
+      "TEST-HIDDEN-001": {
+        "Product": "Internal helper",
+        "Serial": "TEST-HIDDEN-001",
+        "Hidden": true,
+        "GetDevice": null
+      },
       "cluster": {
         "Product": "Cluster",
         "Serial": "cluster",

@@ -6,9 +6,61 @@ import "../components"
 
 Item {
     id: page
+    objectName: "devicesPage"
 
     required property var shell
     property string query: ""
+    property var cardDevices: []
+    property var filteredCardDevices: []
+    property string cardDeviceSignature: ""
+    property int presentationRevision: 0
+
+    function reconcileDevices() {
+        const sourceDevices = shell.devices || []
+        const nextSignature = JSON.stringify(sourceDevices.map(device => [
+            device.id,
+            device.name,
+            device.icon,
+            device.subtitle,
+            device.connected,
+            device.capabilities,
+            (device.tabs || []).map(tab => [tab.name, tab.icon])
+        ]))
+        if (nextSignature !== cardDeviceSignature) {
+            cardDeviceSignature = nextSignature
+            cardDevices = sourceDevices
+            presentationRevision += 1
+            applyFilter()
+        }
+    }
+
+    function applyFilter() {
+        const needle = query.trim().toLowerCase()
+        if (!needle) {
+            filteredCardDevices = cardDevices
+            return
+        }
+        filteredCardDevices = cardDevices.filter(device => {
+            const haystack = [
+                device.name,
+                device.subtitle,
+                (device.capabilities || []).join(" "),
+                (device.tabs || []).map(tab => tab.name).join(" ")
+            ].join(" ").toLowerCase()
+            return haystack.indexOf(needle) >= 0
+        })
+    }
+
+    onQueryChanged: applyFilter()
+    Component.onCompleted: reconcileDevices()
+
+    Connections {
+        target: page.shell
+
+        function onDevicesChanged() {
+            Qt.callLater(page.reconcileDevices)
+        }
+    }
 
     ScrollView {
         id: scroll
@@ -32,6 +84,7 @@ Item {
                 Item { Layout.fillWidth: true }
 
                 TextField {
+                    objectName: "deviceFilterField"
                     Layout.preferredWidth: 310
                     placeholderText: "Filter devices or capabilities…"
                     onTextChanged: page.query = text
@@ -39,10 +92,17 @@ Item {
 
                 Button {
                     visible: page.shell.liveMode
-                    text: page.shell.backendClient.refreshing ? "Refreshing…" : "Refresh"
+                    text: "Refresh"
                     icon.name: "view-refresh"
-                    enabled: !page.shell.backendClient.refreshing
-                    onClicked: page.shell.backendClient.refresh()
+                    onClicked: {
+                        if (!page.shell.backendClient.refreshing) {
+                            page.shell.backendClient.refresh()
+                        }
+                    }
+                    ToolTip.visible: hovered
+                    ToolTip.text: page.shell.backendClient.refreshing
+                        ? "A telemetry refresh is already in progress"
+                        : "Refresh live device data"
                 }
             }
 
@@ -83,7 +143,7 @@ Item {
                 rowSpacing: page.shell.cardSpacing
 
                 Repeater {
-                    model: page.shell.filteredDevices(page.query)
+                    model: page.filteredCardDevices
 
                     delegate: Panel {
                         required property var modelData
@@ -182,7 +242,7 @@ Item {
             }
 
             Label {
-                visible: page.shell.filteredDevices(page.query).length === 0
+                visible: page.filteredCardDevices.length === 0
                 Layout.fillWidth: true
                 Layout.topMargin: 60
                 text: page.shell.liveMode

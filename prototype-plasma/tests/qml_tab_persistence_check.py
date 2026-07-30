@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the device-tab selection across a same-device model replacement."""
+"""Exercise stable device navigation and presentation across model replacement."""
 
 from __future__ import annotations
 
@@ -68,7 +68,44 @@ def main() -> int:
     if tab_bar.property("currentIndex") != selected_index:
         print("Telemetry-style model replacement reset the visible tab indicator.", file=sys.stderr)
         return 7
-    print("Device tab content and visible indicator survived a same-device model replacement.")
+
+    root.setProperty("activeSection", "devices")
+    app.processEvents()
+    devices_page = root.findChild(QObject, "devicesPage")
+    filter_field = root.findChild(QObject, "deviceFilterField")
+    if devices_page is None or filter_field is None:
+        print("Devices page presentation controls were not created.", file=sys.stderr)
+        return 8
+    filter_field.setProperty("text", "mouse")
+    app.processEvents()
+    original_revision = devices_page.property("presentationRevision")
+
+    devices_property = root.property("demoDevices")
+    if hasattr(devices_property, "toVariant"):
+        devices_property = devices_property.toVariant()
+    telemetry_refresh = deepcopy(devices_property)
+    telemetry_refresh[0]["tabs"][0]["groups"][0]["items"][0]["value"] = "Updated"
+    root.setProperty("demoDevices", telemetry_refresh)
+    app.processEvents()
+    app.processEvents()
+
+    if filter_field.property("text") != "mouse":
+        print("Telemetry-style model replacement reset the device filter.", file=sys.stderr)
+        return 9
+    if devices_page.property("presentationRevision") != original_revision:
+        print("Telemetry-only replacement rebuilt the device-card presentation.", file=sys.stderr)
+        return 10
+
+    card_refresh = deepcopy(telemetry_refresh)
+    card_refresh[0]["subtitle"] += " · card changed"
+    root.setProperty("demoDevices", card_refresh)
+    app.processEvents()
+    app.processEvents()
+    if devices_page.property("presentationRevision") <= original_revision:
+        print("A card-visible model change did not update the presentation.", file=sys.stderr)
+        return 11
+
+    print("Device navigation, tab indicator, and filtered-card presentation survived model replacement.")
     return 0
 
 

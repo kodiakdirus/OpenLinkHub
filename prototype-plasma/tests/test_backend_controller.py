@@ -137,7 +137,7 @@ class BackendControllerTests(unittest.TestCase):
             and self.controller.connectionState == "connected"
         )
 
-        self.assertEqual(len(self.controller.devices), 3)
+        self.assertEqual(len(self.controller.devices), 4)
         self.assertEqual(self.controller.telemetry["coolant"], "38.5°C")
         hub = next(
             device

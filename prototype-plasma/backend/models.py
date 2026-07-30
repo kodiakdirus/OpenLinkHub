@@ -413,6 +413,20 @@ def _profile_name(detail: Mapping[str, Any]) -> str:
     )
 
 
+def _transport_display_name(product: str) -> str:
+    upper = product.upper()
+    if upper in {"SLIPSTREAM", "SLIPSTREAM WIRELESS"}:
+        return "Slipstream Receiver"
+    if "DONGLE" in upper or "RECEIVER" in upper:
+        return product
+    return f"{product} Receiver"
+
+
+def _is_user_transport(product: str) -> bool:
+    upper = product.upper()
+    return any(token in upper for token in ("SLIPSTREAM", "DONGLE", "RECEIVER"))
+
+
 def _build_tabs(
     product: str,
     firmware: str,
@@ -421,9 +435,16 @@ def _build_tabs(
     channels: list[tuple[str, Mapping[str, Any]]],
     battery: float | None,
     lighting_library: Mapping[str, Any],
+    *,
+    transport: bool = False,
 ) -> list[dict[str, Any]]:
     identity_items = [
-        _stat("Connection", "Connected · live", "Read from the loopback service", accent=True),
+        _stat(
+            "Connection",
+            "Detected transport · live" if transport else "Connected · live",
+            "Read from the loopback service",
+            accent=True,
+        ),
         _stat("Product", product, "Backend-reported identity"),
         _stat("Firmware", firmware or "Not reported", "Backend-reported firmware"),
         _stat(
@@ -567,6 +588,29 @@ def _build_tabs(
         elif capability == "Power":
             value = f"{round(battery)}%" if battery is not None else "Not reported"
             items = [_stat("Battery level", value)]
+        elif capability == "Wireless" and transport:
+            items = [
+                _stat(
+                    "Receiver transport",
+                    "Detected",
+                    "OpenLinkHub marks this service-owned transport as hidden",
+                    accent=True,
+                )
+            ]
+        elif capability == "Pairing" and transport:
+            items = [
+                _stat(
+                    "Receiver",
+                    "Available",
+                    "The wireless transport is present and managed by OpenLinkHub",
+                    accent=True,
+                ),
+                _stat(
+                    "Paired-device inventory",
+                    "Not reported",
+                    "The legacy device endpoint exposes no receiver detail",
+                ),
+            ]
 
         if not items:
             items = [
@@ -624,7 +668,10 @@ class LegacySnapshot:
 
         for device_id, wrapper in _items(records):
             product = _text(wrapper.get("Product"), "Unknown device")
-            if bool(wrapper.get("Hidden")) or product.casefold() == "cluster":
+            if product.casefold() == "cluster":
+                continue
+            transport = bool(wrapper.get("Hidden"))
+            if transport and not _is_user_transport(product):
                 continue
 
             detail = _mapping(self.details.get(device_id))
@@ -643,6 +690,8 @@ class LegacySnapshot:
             if detail.get("Usb") is True:
                 battery = None
             capabilities = _infer_capabilities(product, detail, channels)
+            if transport:
+                capabilities = ["Wireless", "Pairing"]
             lighting_library = _mapping(self.lighting_profiles.get(device_id))
 
             for _, channel in channels:
@@ -655,7 +704,11 @@ class LegacySnapshot:
                     coolant = temperature
 
             subtitle_parts = ["Live"]
-            if firmware:
+            if transport:
+                subtitle_parts.extend(
+                    ["Service transport", "paired inventory unavailable"]
+                )
+            elif firmware:
                 subtitle_parts.append(f"Firmware {firmware}")
             if channels:
                 subtitle_parts.append(f"{len(channels)} channels")
@@ -665,7 +718,11 @@ class LegacySnapshot:
             devices.append(
                 {
                     "id": device_id,
-                    "name": product,
+                    "name": (
+                        _transport_display_name(product)
+                        if transport
+                        else product
+                    ),
                     "icon": _device_icon(product, detail),
                     "subtitle": " · ".join(subtitle_parts),
                     "capabilities": capabilities,
@@ -677,11 +734,23 @@ class LegacySnapshot:
                         channels,
                         battery,
                         lighting_library,
+                        transport=transport,
                     ),
                     "connected": bool(detail.get("Connected", True)),
-                    "source": "live",
+                    "source": "live-transport" if transport else "live",
                 }
             )
+
+        # Go map iteration order is deliberately unstable. Present ordinary
+        # devices deterministically and keep service transports grouped last so
+        # cards do not jump between grid cells on every inventory response.
+        devices.sort(
+            key=lambda device: (
+                device["source"] == "live-transport",
+                device["name"].casefold(),
+                device["id"],
+            )
+        )
 
         cooling_zones, zone_values = self._cooling_zones(all_channels)
         telemetry = {

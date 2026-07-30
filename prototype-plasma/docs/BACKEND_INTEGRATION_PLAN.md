@@ -458,6 +458,23 @@ comboboxes, or effect-library delegates. Regressions cover both semantic tab
 selection and the actual `TabBar.currentIndex`, plus the absence of a transient
 Connecting state during an established background refresh.
 
+The Devices workspace likewise keeps its search control and card model mounted
+through telemetry-only replacement. Card order is normalized because the
+legacy inventory originates in a Go map and therefore has no stable iteration
+order. Hidden records are not treated uniformly: internal cluster/helper
+records remain excluded, while recognizable receiver/dongle transports are
+shown as user-relevant devices with an explicit warning when the legacy API
+does not expose their paired-device inventory.
+
+Live hardware inspection identified a separate service-support gap for the
+connected CORSAIR VOID ELITE Wireless revision. Linux enumerates its headset and
+dongle as USB product IDs `0a54` and `0a55`, but the current OpenLinkHub device
+register includes only the earlier VOID ELITE dongle product ID `0a51`.
+Consequently no headset object reaches `/api/devices/` or `/api/batteryStats`.
+The client must not synthesize a controllable headset from raw USB presence;
+support requires a separately reviewed backend driver/USB-ID change and
+hardware validation before the normal capability adapter can expose it.
+
 ## Planning acceptance checklist
 
 - Every registered route is represented in the inventory.

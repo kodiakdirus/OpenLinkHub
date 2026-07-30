@@ -43,11 +43,27 @@ class LegacySnapshotTests(unittest.TestCase):
             gpu_temperature=cls.fixture["gpu"]["data"],
         ).build()
 
-    def test_hidden_transport_and_cluster_are_not_device_cards(self) -> None:
+    def test_hidden_transports_are_visible_but_cluster_is_not(self) -> None:
         names = [device["name"] for device in self.snapshot["devices"]]
         self.assertEqual(
             names,
-            ["iCUE LINK System Hub", "K100 AIR", "SCIMITAR ELITE"],
+            [
+                "iCUE LINK System Hub",
+                "K100 AIR",
+                "SCIMITAR ELITE",
+                "Slipstream Receiver",
+            ],
+        )
+        receiver = next(
+            device
+            for device in self.snapshot["devices"]
+            if device["name"] == "Slipstream Receiver"
+        )
+        self.assertEqual(receiver["capabilities"], ["Wireless", "Pairing"])
+        pairing = next(tab for tab in receiver["tabs"] if tab["name"] == "Pairing")
+        self.assertEqual(
+            pairing["groups"][0]["items"][1]["value"],
+            "Not reported",
         )
 
     def test_capabilities_are_device_relevant(self) -> None:
@@ -57,6 +73,29 @@ class LegacySnapshotTests(unittest.TestCase):
         self.assertNotIn("Power", devices["SCIMITAR ELITE"]["capabilities"])
         self.assertIn("DPI", devices["SCIMITAR ELITE"]["capabilities"])
         self.assertIn("Keys", devices["K100 AIR"]["capabilities"])
+
+    def test_device_card_order_is_stable_and_transports_are_last(self) -> None:
+        reversed_inventory = {
+            **self.fixture["inventory"],
+            "devices": dict(
+                reversed(list(self.fixture["inventory"]["devices"].items()))
+            ),
+        }
+        snapshot = LegacySnapshot(
+            inventory=reversed_inventory,
+            details=self.fixture["details"],
+            batteries=self.fixture["battery"]["data"],
+            lighting_profiles=self.fixture["lighting"]["data"],
+        ).build()
+        self.assertEqual(
+            [device["name"] for device in snapshot["devices"]],
+            [
+                "iCUE LINK System Hub",
+                "K100 AIR",
+                "SCIMITAR ELITE",
+                "Slipstream Receiver",
+            ],
+        )
 
     def test_live_tabs_contain_read_only_rows_only(self) -> None:
         for device in self.snapshot["devices"]:
