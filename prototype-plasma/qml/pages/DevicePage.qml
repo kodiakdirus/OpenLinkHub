@@ -13,30 +13,78 @@ Item {
     property string selectedTabKey: "Overview"
     property bool layoutEditing: false
     property var arrangedGroups: []
+    property var displayDevice: ({
+        id: "",
+        name: "",
+        icon: "applications-system",
+        subtitle: "",
+        capabilities: []
+    })
+    property var navigationTabs: []
+    property string displayDeviceSignature: ""
+    property string navigationSignature: ""
     readonly property int selectedTab: tabIndex(selectedTabKey)
-    readonly property var currentTab: device
-        && device.tabs
-        && selectedTab >= 0
-        && selectedTab < device.tabs.length
-        ? device.tabs[selectedTab]
-        : ({ name: "", icon: "applications-system", groups: [] })
+    readonly property var currentTab: tabForKey(selectedTabKey)
     readonly property bool showingLightingEditor: currentTab.name === "Lighting"
         && currentTab.lightingEditor !== undefined
 
     function tabIndex(name) {
-        const availableTabs = device && device.tabs ? device.tabs : []
+        const availableTabs = navigationTabs
         for (let index = 0; index < availableTabs.length; ++index) {
             if (availableTabs[index].name === name) return index
         }
         return availableTabs.length > 0 ? 0 : -1
     }
 
-    function preserveSelectedTab() {
+    function tabForKey(name) {
         const availableTabs = device && device.tabs ? device.tabs : []
+        for (let index = 0; index < availableTabs.length; ++index) {
+            if (availableTabs[index].name === name) return availableTabs[index]
+        }
+        return availableTabs.length > 0
+            ? availableTabs[0]
+            : ({ name: "", icon: "applications-system", groups: [] })
+    }
+
+    function preserveSelectedTab() {
+        const availableTabs = navigationTabs
         if (availableTabs.length === 0) return
         const matchedIndex = tabIndex(selectedTabKey)
         if (availableTabs[matchedIndex].name !== selectedTabKey) {
             selectedTabKey = availableTabs[0].name
+        }
+    }
+
+    function updatePresentationModels() {
+        const source = device || ({})
+        const capabilities = source.capabilities || []
+        const nextDisplaySignature = JSON.stringify([
+            source.id || "",
+            source.name || "",
+            source.icon || "",
+            source.subtitle || "",
+            capabilities
+        ])
+        if (nextDisplaySignature !== displayDeviceSignature) {
+            displayDeviceSignature = nextDisplaySignature
+            displayDevice = {
+                id: source.id || "",
+                name: source.name || "",
+                icon: source.icon || "applications-system",
+                subtitle: source.subtitle || "",
+                capabilities: capabilities
+            }
+        }
+
+        const sourceTabs = source.tabs || []
+        const nextTabs = sourceTabs.map(tab => ({
+            name: tab.name,
+            icon: tab.icon
+        }))
+        const nextNavigationSignature = JSON.stringify(nextTabs)
+        if (nextNavigationSignature !== navigationSignature) {
+            navigationSignature = nextNavigationSignature
+            navigationTabs = nextTabs
         }
     }
 
@@ -80,14 +128,19 @@ Item {
     }
 
     onDeviceChanged: {
+        updatePresentationModels()
         preserveSelectedTab()
-        resetLayout()
+        if (!showingLightingEditor) resetLayout()
     }
     onSelectedTabKeyChanged: {
         layoutEditing = false
+        resetLayout()
     }
-    onCurrentTabChanged: resetLayout()
-    Component.onCompleted: resetLayout()
+    Component.onCompleted: {
+        updatePresentationModels()
+        preserveSelectedTab()
+        resetLayout()
+    }
 
     ScrollView {
         id: scroll
@@ -117,7 +170,7 @@ Item {
                             anchors.centerIn: parent
                             width: 36
                             height: 36
-                            source: page.device.icon
+                            source: page.displayDevice.icon
                             color: page.shell.accentColor
                         }
                     }
@@ -126,20 +179,20 @@ Item {
                         Layout.fillWidth: true
                         spacing: 2
                         Label {
-                            text: page.device.name
+                            text: page.displayDevice.name
                             color: page.shell.primaryText
                             font.pixelSize: 22
                             font.weight: Font.DemiBold
                         }
                         Label {
-                            text: page.device.subtitle
+                            text: page.displayDevice.subtitle
                             color: page.shell.mutedText
                         }
                         Flow {
                             Layout.fillWidth: true
                             spacing: 6
                             Repeater {
-                                model: page.device.capabilities
+                                model: page.displayDevice.capabilities
                                 delegate: StatusBadge {
                                     required property var modelData
                                     shell: page.shell
@@ -169,11 +222,12 @@ Item {
 
             TabBar {
                 id: tabs
+                objectName: "deviceTabBar"
                 Layout.fillWidth: true
                 currentIndex: page.selectedTab
 
                 Repeater {
-                    model: page.device.tabs
+                    model: page.navigationTabs
                     delegate: TabButton {
                         required property var modelData
                         text: modelData.name

@@ -39,12 +39,20 @@ def main() -> int:
     if page is None:
         print("Device page was not created.", file=sys.stderr)
         return 2
+    tab_bar = page.findChild(QObject, "deviceTabBar")
+    if tab_bar is None:
+        print("Device tab bar was not created.", file=sys.stderr)
+        return 3
 
     page.setProperty("selectedTabKey", "Lighting")
     app.processEvents()
     if page.property("selectedTabKey") != "Lighting":
         print("Could not select the Lighting tab.", file=sys.stderr)
-        return 3
+        return 4
+    selected_index = page.property("selectedTab")
+    if selected_index <= 0 or tab_bar.property("currentIndex") != selected_index:
+        print("The visible tab indicator did not follow Lighting.", file=sys.stderr)
+        return 5
 
     devices_property = root.property("demoDevices")
     if hasattr(devices_property, "toVariant"):
@@ -56,8 +64,11 @@ def main() -> int:
 
     if page.property("selectedTabKey") != "Lighting":
         print("Telemetry-style model replacement reset the selected tab.", file=sys.stderr)
-        return 4
-    print("Device tab selection survived a same-device model replacement.")
+        return 6
+    if tab_bar.property("currentIndex") != selected_index:
+        print("Telemetry-style model replacement reset the visible tab indicator.", file=sys.stderr)
+        return 7
+    print("Device tab content and visible indicator survived a same-device model replacement.")
     return 0
 
 

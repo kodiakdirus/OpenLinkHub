@@ -176,6 +176,24 @@ class BackendControllerTests(unittest.TestCase):
         self.assertEqual(self.controller.devices, original_devices)
         self.assertEqual(self.controller.errorMessage, "")
 
+    def test_background_refresh_does_not_reenter_connecting(self) -> None:
+        self.controller.setMode("live")
+        self.wait_until(
+            lambda: not self.controller.refreshing
+            and self.controller.connectionState == "connected"
+        )
+        observed_states: list[str] = []
+        self.controller.connectionChanged.connect(
+            lambda: observed_states.append(self.controller.connectionState)
+        )
+
+        self.controller.refresh()
+        self.assertNotEqual(self.controller.connectionState, "connecting")
+        self.wait_until(lambda: not self.controller.refreshing)
+
+        self.assertNotIn("connecting", observed_states)
+        self.assertEqual(self.controller.connectionState, "connected")
+
 
 if __name__ == "__main__":
     unittest.main()

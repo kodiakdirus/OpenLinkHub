@@ -23,8 +23,11 @@ ColumnLayout {
     property real draftMinTemperature: 0
     property real draftMaxTemperature: 0
 
-    readonly property var targets: modelData.targets || []
-    readonly property var profiles: modelData.profiles || []
+    property var targets: []
+    property var profiles: []
+    property string targetModelSignature: ""
+    property string profileModelSignature: ""
+    property string profileSource: ""
     readonly property var selectedTarget: targetForKey(selectedTargetKey)
     readonly property var selectedProfile: profileForKey(selectedProfileKey)
 
@@ -75,6 +78,42 @@ ColumnLayout {
     }
 
     function reconcileModel() {
+        const incomingTargets = modelData.targets || []
+        const incomingProfiles = modelData.profiles || []
+        const nextTargetSignature = JSON.stringify(incomingTargets.map(target => [
+            target.key,
+            target.name,
+            target.description,
+            target.activeProfile
+        ]))
+        const nextProfileSignature = JSON.stringify(incomingProfiles.map(profile => [
+            profile.key,
+            profile.name,
+            profile.speed,
+            profile.brightness,
+            profile.smoothness,
+            profile.startColor,
+            profile.middleColor,
+            profile.endColor,
+            profile.gradientColors,
+            profile.minTemperature,
+            profile.maxTemperature,
+            profile.direction,
+            profile.alternateColors,
+            profile.perLed,
+            profile.temperatureReactive
+        ]))
+
+        if (nextTargetSignature !== targetModelSignature) {
+            targetModelSignature = nextTargetSignature
+            targets = incomingTargets
+        }
+        if (nextProfileSignature !== profileModelSignature) {
+            profileModelSignature = nextProfileSignature
+            profiles = incomingProfiles
+        }
+        profileSource = modelData.source || "Device-filtered OpenLinkHub profile library"
+
         const nextDeviceId = device.id || ""
         if (loadedDeviceId !== nextDeviceId) {
             loadedDeviceId = nextDeviceId
@@ -190,7 +229,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 StatusBadge {
                     shell: editor.shell
-                    text: (editor.modelData.profileCount || 0) + " supported effects"
+                    text: editor.profiles.length + " supported effects"
                     badgeColor: editor.shell.accentColor
                 }
                 StatusBadge {
@@ -417,7 +456,7 @@ ColumnLayout {
                         font.weight: Font.DemiBold
                     }
                     Label {
-                        text: editor.modelData.source || "Device-filtered OpenLinkHub profile library"
+                        text: editor.profileSource
                         color: editor.shell.mutedText
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true

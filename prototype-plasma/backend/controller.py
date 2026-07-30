@@ -157,7 +157,10 @@ class BackendController(QObject):
         self._generation += 1
         generation = self._generation
         self._set_refreshing(True)
-        self._set_connection("connecting", "Connecting…", "")
+        # A routine poll is not a connectivity transition. Keep the last known
+        # state visible so the application chrome does not flash every cycle.
+        if not self._devices or self._connection_state in {"demo", "offline"}:
+            self._set_connection("connecting", "Connecting…", "")
 
         results: dict[str, Any] = {}
         errors: list[str] = []

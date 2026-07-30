@@ -70,7 +70,10 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   profile, and capability summaries
 - Per-device live Lighting tabs with physical target selection, the backend's
   complete device-filtered effect library, and a local-only parameter draft
-- Stable device and tab identities that survive telemetry-model replacement
+- Stable device and tab identities plus a presentation-stable tab model, so
+  both loaded content and the visible tab indicator survive telemetry refresh
+- Background polls retain the last connection state and unchanged header,
+  capability, target, and effect models instead of flashing application chrome
 - Sanitized response fixtures and GET-only reconnect/failure tests
 - Mock Quiet, Balanced, Performance, and Custom operating modes
 - Interactive cooling-curve profile manager

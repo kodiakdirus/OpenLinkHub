@@ -442,6 +442,22 @@ without risking cooling behavior. The additive capability manifest is the first
 backend change after that read-only client demonstrates what data the current
 API cannot express safely.
 
+### Phase 1 implementation checkpoint
+
+The read-only client now treats periodic telemetry replacement as data
+freshness, not navigation or a connection transition. Stable device IDs and tab
+names preserve semantic selection, while a presentation-stable tab-button model
+also preserves the control-owned visible indicator. Routine background polls
+retain the last known connection state; only initial entry, Demo-to-Live, and
+offline recovery present a Connecting state.
+
+Header identity/capability data and device-lighting target/effect collections
+are replaced only when their normalized signatures change. This allows live
+measurements to refresh without rebuilding unchanged application chrome,
+comboboxes, or effect-library delegates. Regressions cover both semantic tab
+selection and the actual `TabBar.currentIndex`, plus the absence of a transient
+Connecting state during an established background refresh.
+
 ## Planning acceptance checklist
 
 - Every registered route is represented in the inventory.
