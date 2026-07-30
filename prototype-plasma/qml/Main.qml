@@ -21,6 +21,7 @@ ApplicationWindow {
     property bool demoArrange: false
     property string activeGlobalProfile: "balanced"
     property int selectedDeviceIndex: 0
+    property string selectedDeviceId: ""
     property bool pendingChanges: false
     property bool lightsEnabled: true
     readonly property var backendClient: backend
@@ -59,10 +60,18 @@ ApplicationWindow {
     readonly property color successColor: "#73d575"
     readonly property color warningColor: "#e7b85c"
     readonly property color dangerColor: "#ee7278"
-    readonly property var currentDevice: devices.length > 0
-        && selectedDeviceIndex >= 0
-        && selectedDeviceIndex < devices.length
-        ? devices[selectedDeviceIndex]
+    readonly property int resolvedDeviceIndex: {
+        if (selectedDeviceId) {
+            for (let index = 0; index < devices.length; ++index) {
+                if (devices[index].id === selectedDeviceId) return index
+            }
+        }
+        return selectedDeviceIndex >= 0 && selectedDeviceIndex < devices.length
+            ? selectedDeviceIndex
+            : devices.length > 0 ? 0 : -1
+    }
+    readonly property var currentDevice: resolvedDeviceIndex >= 0
+        ? devices[resolvedDeviceIndex]
         : ({
             id: "",
             name: "No device selected",
@@ -77,17 +86,29 @@ ApplicationWindow {
 
         function onModeChanged() {
             root.selectedDeviceIndex = 0
+            root.selectedDeviceId = ""
             if (root.activeSection === "device") root.activeSection = "devices"
             if (!root.pendingChanges) statusHint.text = root.baseStatusHint()
         }
 
         function onDataChanged() {
-            if (root.selectedDeviceIndex >= root.devices.length) {
-                root.selectedDeviceIndex = 0
-                if (root.activeSection === "device" && root.devices.length === 0) {
-                    root.activeSection = "devices"
+            // The derived QML devices binding can still contain the previous
+            // list while this signal handler is running. Reconcile on the next
+            // event-loop turn and preserve the stable backend device id.
+            Qt.callLater(function() {
+                if (root.devices.length === 0) {
+                    root.selectedDeviceIndex = 0
+                    root.selectedDeviceId = ""
+                    if (root.activeSection === "device") root.activeSection = "devices"
+                    return
                 }
-            }
+
+                const resolved = root.resolvedDeviceIndex >= 0
+                    ? root.resolvedDeviceIndex
+                    : 0
+                root.selectedDeviceIndex = resolved
+                root.selectedDeviceId = root.devices[resolved].id
+            })
         }
 
         function onConnectionChanged() {
@@ -775,6 +796,7 @@ ApplicationWindow {
         for (let i = 0; i < devices.length; ++i) {
             if (devices[i].id === id) {
                 selectedDeviceIndex = i
+                selectedDeviceId = id
                 activeSection = "device"
                 searchField.clear()
                 searchPopup.close()

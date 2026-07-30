@@ -56,6 +56,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="start the Phase 1 read-only connection to 127.0.0.1:27003",
     )
+    parser.add_argument(
+        "--device-index",
+        type=int,
+        default=0,
+        help="select a device card by index for device-page inspection",
+    )
+    parser.add_argument(
+        "--device-tab",
+        help="select a named device tab for inspection (for example Lighting)",
+    )
     return parser.parse_args()
 
 
@@ -65,7 +75,7 @@ def main() -> int:
     if args.screenshot or args.smoke_test:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-    from PyQt6.QtCore import QCoreApplication, QTimer, QUrl
+    from PyQt6.QtCore import QCoreApplication, QObject, QTimer, QUrl
     from PyQt6.QtGui import QGuiApplication, QIcon
     from PyQt6.QtQml import QQmlApplicationEngine
 
@@ -91,14 +101,22 @@ def main() -> int:
         print("Failed to create the QML application window.", file=sys.stderr)
         return 1
 
+    window = engine.rootObjects()[0]
+    if args.live:
+        backend.setMode("live")
+        app.processEvents()
+    if args.device_index >= 0:
+        window.setProperty("selectedDeviceIndex", args.device_index)
     if args.page:
-        engine.rootObjects()[0].setProperty("activeSection", args.page)
+        window.setProperty("activeSection", args.page)
+    if args.device_tab:
+        device_page = window.findChild(QObject, "devicePage")
+        if device_page is not None:
+            device_page.setProperty("selectedTabKey", args.device_tab)
     if args.dialog:
         engine.rootObjects()[0].setProperty("demoDialog", True)
     if args.arrange:
         engine.rootObjects()[0].setProperty("demoArrange", True)
-    if args.live:
-        backend.setMode("live")
 
     if args.screenshot:
         destination = Path(args.screenshot).expanduser().resolve()
@@ -115,7 +133,9 @@ def main() -> int:
             print(destination)
             app.quit()
 
-        QTimer.singleShot(1200, capture)
+        # Live renders intentionally span the first periodic refresh so
+        # screenshots also exercise navigation-state persistence.
+        QTimer.singleShot(5200 if args.live else 1200, capture)
 
     if args.smoke_test:
         window = engine.rootObjects()[0]

@@ -58,7 +58,9 @@ class BackendController(QObject):
         self._refreshing = False
         self._api_call_count = 0
         self._generation = 0
+        self._refresh_cycle = 0
         self._devices: list[dict[str, Any]] = []
+        self._lighting_profiles: dict[str, Any] = {}
         self._telemetry: dict[str, Any] = {}
         self._overview_metrics: list[dict[str, Any]] = []
         self._cooling_zones: list[dict[str, Any]] = []
@@ -141,6 +143,9 @@ class BackendController(QObject):
             self._set_connection("demo", "Demo data", "")
             return
 
+        # Force a fresh device-filtered lighting library whenever Live mode is
+        # entered, while keeping the last good data visible during the request.
+        self._refresh_cycle = 0
         self._timer.start()
         self.refresh()
 
@@ -157,6 +162,13 @@ class BackendController(QObject):
         results: dict[str, Any] = {}
         errors: list[str] = []
         pending_base = {"inventory", "battery", "cpu", "gpu"}
+        self._refresh_cycle += 1
+        refresh_lighting = (
+            not self._lighting_profiles
+            or self._refresh_cycle % 10 == 1
+        )
+        if refresh_lighting:
+            pending_base.add("lighting")
         pending_details: set[str] = set()
 
         def maybe_finish() -> None:
@@ -223,6 +235,11 @@ class BackendController(QObject):
             "/api/gpuTemp/clean",
             lambda payload, error: accept_base("gpu", payload, error),
         )
+        if refresh_lighting:
+            self._get_json(
+                "/api/color/",
+                lambda payload, error: accept_base("lighting", payload, error),
+            )
 
     def _get_json(self, path: str, callback: JsonCallback) -> None:
         request = QNetworkRequest(QUrl(self._endpoint + path))
@@ -278,10 +295,14 @@ class BackendController(QObject):
             return
 
         try:
+            lighting_profiles = _data_mapping(results.get("lighting"))
+            if lighting_profiles:
+                self._lighting_profiles = dict(lighting_profiles)
             snapshot = LegacySnapshot(
                 inventory=inventory,
                 details=results.get("details", {}),
                 batteries=_data_mapping(results.get("battery")),
+                lighting_profiles=self._lighting_profiles,
                 cpu_temperature=_data_value(results.get("cpu")),
                 gpu_temperature=_data_value(results.get("gpu")),
             ).build()

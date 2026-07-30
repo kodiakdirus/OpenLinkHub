@@ -6,18 +6,39 @@ import "../components"
 
 Item {
     id: page
+    objectName: "devicePage"
 
     required property var shell
     required property var device
-    property int selectedTab: 0
+    property string selectedTabKey: "Overview"
     property bool layoutEditing: false
     property var arrangedGroups: []
+    readonly property int selectedTab: tabIndex(selectedTabKey)
     readonly property var currentTab: device
         && device.tabs
         && selectedTab >= 0
         && selectedTab < device.tabs.length
         ? device.tabs[selectedTab]
         : ({ name: "", icon: "applications-system", groups: [] })
+    readonly property bool showingLightingEditor: currentTab.name === "Lighting"
+        && currentTab.lightingEditor !== undefined
+
+    function tabIndex(name) {
+        const availableTabs = device && device.tabs ? device.tabs : []
+        for (let index = 0; index < availableTabs.length; ++index) {
+            if (availableTabs[index].name === name) return index
+        }
+        return availableTabs.length > 0 ? 0 : -1
+    }
+
+    function preserveSelectedTab() {
+        const availableTabs = device && device.tabs ? device.tabs : []
+        if (availableTabs.length === 0) return
+        const matchedIndex = tabIndex(selectedTabKey)
+        if (availableTabs[matchedIndex].name !== selectedTabKey) {
+            selectedTabKey = availableTabs[0].name
+        }
+    }
 
     function resetLayout() {
         arrangedGroups = (currentTab.groups || []).map(group => ({
@@ -59,10 +80,10 @@ Item {
     }
 
     onDeviceChanged: {
-        selectedTab = 0
+        preserveSelectedTab()
         resetLayout()
     }
-    onSelectedTabChanged: {
+    onSelectedTabKeyChanged: {
         layoutEditing = false
     }
     onCurrentTabChanged: resetLayout()
@@ -150,7 +171,6 @@ Item {
                 id: tabs
                 Layout.fillWidth: true
                 currentIndex: page.selectedTab
-                onCurrentIndexChanged: page.selectedTab = currentIndex
 
                 Repeater {
                     model: page.device.tabs
@@ -158,6 +178,7 @@ Item {
                         required property var modelData
                         text: modelData.name
                         icon.name: modelData.icon
+                        onClicked: page.selectedTabKey = modelData.name
                     }
                 }
             }
@@ -193,6 +214,7 @@ Item {
 
             GridLayout {
                 id: contentGrid
+                visible: !page.showingLightingEditor
                 Layout.fillWidth: true
                 columns: width > 960 ? 2 : 1
                 columnSpacing: page.shell.cardSpacing
@@ -284,6 +306,16 @@ Item {
                         }
                     }
                 }
+            }
+
+            LightingDeviceEditor {
+                visible: page.showingLightingEditor
+                Layout.fillWidth: true
+                shell: page.shell
+                device: page.device
+                modelData: page.showingLightingEditor
+                    ? page.currentTab.lightingEditor
+                    : ({ targets: [], profiles: [] })
             }
 
             RowLayout {

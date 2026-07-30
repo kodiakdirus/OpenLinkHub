@@ -41,6 +41,8 @@ class FixtureHandler(BaseHTTPRequestHandler):
             payload = type(self).fixture["cpu"]
         elif self.path == "/api/gpuTemp/clean":
             payload = type(self).fixture["gpu"]
+        elif self.path == "/api/color/":
+            payload = type(self).fixture["lighting"]
         elif self.path.startswith("/api/devices/"):
             device_id = self.path.rsplit("/", 1)[-1]
             payload = {
@@ -137,10 +139,18 @@ class BackendControllerTests(unittest.TestCase):
 
         self.assertEqual(len(self.controller.devices), 3)
         self.assertEqual(self.controller.telemetry["coolant"], "38.5°C")
+        hub = next(
+            device
+            for device in self.controller.devices
+            if device["name"] == "iCUE LINK System Hub"
+        )
+        lighting = next(tab for tab in hub["tabs"] if tab["name"] == "Lighting")
+        self.assertEqual(lighting["lightingEditor"]["profileCount"], 3)
         self.assertTrue(FixtureHandler.requests)
         self.assertTrue(
             all(request.startswith("GET ") for request in FixtureHandler.requests)
         )
+        self.assertIn("GET /api/color/", FixtureHandler.requests)
 
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:
         self.controller.setMode("live")

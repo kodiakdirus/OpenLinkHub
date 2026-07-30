@@ -136,6 +136,153 @@
       ]
     }
   },
+  "lighting": {
+    "code": 200,
+    "status": 0,
+    "data": {
+      "TEST-HUB-001": {
+        "device": "iCUE LINK System Hub",
+        "defaultColor": {
+          "red": 0,
+          "green": 255,
+          "blue": 255
+        },
+        "profiles": {
+          "static": {
+            "speed": 4,
+            "brightness": 1,
+            "smoothness": 20,
+            "start": {
+              "red": 0,
+              "green": 255,
+              "blue": 255
+            },
+            "middle": {
+              "red": 0,
+              "green": 0,
+              "blue": 0
+            },
+            "end": {
+              "red": 0,
+              "green": 255,
+              "blue": 255
+            },
+            "profileName": "Static"
+          },
+          "colorpulse": {
+            "speed": 1,
+            "brightness": 1,
+            "smoothness": 40,
+            "start": {
+              "red": 255,
+              "green": 0,
+              "blue": 0
+            },
+            "middle": {
+              "red": 0,
+              "green": 0,
+              "blue": 0
+            },
+            "end": {
+              "red": 0,
+              "green": 0,
+              "blue": 0
+            },
+            "profileName": "Color Pulse"
+          },
+          "liquid-temperature": {
+            "speed": 4,
+            "brightness": 1,
+            "smoothness": 40,
+            "start": {
+              "red": 0,
+              "green": 255,
+              "blue": 0
+            },
+            "middle": {
+              "red": 255,
+              "green": 255,
+              "blue": 0
+            },
+            "end": {
+              "red": 255,
+              "green": 0,
+              "blue": 0
+            },
+            "minTemp": 20,
+            "maxTemp": 60,
+            "profileName": "Liquid Temperature",
+            "rgbDirection": 1
+          }
+        }
+      },
+      "TEST-KEYBOARD-001": {
+        "device": "K100 AIR",
+        "defaultColor": {
+          "red": 0,
+          "green": 255,
+          "blue": 255
+        },
+        "profiles": {
+          "static": {
+            "speed": 4,
+            "brightness": 1,
+            "start": {
+              "red": 0,
+              "green": 255,
+              "blue": 255
+            },
+            "end": {
+              "red": 0,
+              "green": 255,
+              "blue": 255
+            },
+            "profileName": "Static"
+          }
+        }
+      },
+      "TEST-MOUSE-001": {
+        "device": "SCIMITAR ELITE",
+        "defaultColor": {
+          "red": 0,
+          "green": 255,
+          "blue": 255
+        },
+        "profiles": {
+          "static": {
+            "speed": 4,
+            "brightness": 1,
+            "start": {
+              "red": 0,
+              "green": 255,
+              "blue": 255
+            },
+            "end": {
+              "red": 0,
+              "green": 255,
+              "blue": 255
+            },
+            "profileName": "Static"
+          },
+          "rainbow": {
+            "speed": 4,
+            "brightness": 1,
+            "start": {
+              "red": 0,
+              "green": 0,
+              "blue": 0
+            },
+            "end": {
+              "red": 0,
+              "green": 0,
+              "blue": 0
+            },
+            "profileName": "Rainbow"
+          }
+        }
+      }
+    }
+  },
   "battery": {
     "code": 200,
     "status": 1,

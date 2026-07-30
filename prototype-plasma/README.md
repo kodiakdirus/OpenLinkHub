@@ -3,7 +3,8 @@
 This is a native Qt 6/Kirigami prototype for an OpenLinkHub desktop client.
 It starts in self-contained Demo mode. Phase 1 adds an opt-in, GET-only
 connection to the loopback OpenLinkHub service for device inventory and
-telemetry; no hardware mutation callback or persistence path is implemented.
+telemetry, plus each device's filtered RGB effect library; no hardware mutation
+callback or persistence path is implemented.
 
 ## Run
 
@@ -36,6 +37,12 @@ For a deterministic offscreen render:
 ./prototype-plasma/run.sh --page input \
   --arrange \
   --screenshot /tmp/openlinkhub-layout.png
+
+./prototype-plasma/run.sh --live \
+  --page device \
+  --device-index 0 \
+  --device-tab Lighting \
+  --screenshot /tmp/openlinkhub-device-lighting.png
 ```
 
 To instantiate every workspace and device shell without opening a visible
@@ -61,6 +68,9 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   other device payloads
 - Read-only live CPU, GPU, coolant, fan/pump RPM, firmware, battery, channel,
   profile, and capability summaries
+- Per-device live Lighting tabs with physical target selection, the backend's
+  complete device-filtered effect library, and a local-only parameter draft
+- Stable device and tab identities that survive telemetry-model replacement
 - Sanitized response fixtures and GET-only reconnect/failure tests
 - Mock Quiet, Balanced, Performance, and Custom operating modes
 - Interactive cooling-curve profile manager
@@ -99,8 +109,8 @@ The source-derived production plan is documented in:
 
 The existing WebUI is served by the OpenLinkHub Go service and uses same-origin
 HTTP requests to `/api/...`. The Phase 1 client reads legacy inventory, device
-detail, battery, CPU temperature, and GPU temperature routes through a typed
-adapter. It never accesses Corsair USB devices or service-owned files. Global
-profiles still require a backend-owned composition contract so their cooling,
-lighting, and per-device references can eventually be validated, applied, and
-recovered as one operation.
+detail, battery, CPU temperature, GPU temperature, and `/api/color/` filtered
+RGB-library data through a typed adapter. It never accesses Corsair USB devices
+or service-owned files. Global profiles still require a backend-owned
+composition contract so their cooling, lighting, and per-device references can
+eventually be validated, applied, and recovered as one operation.

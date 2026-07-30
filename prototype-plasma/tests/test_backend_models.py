@@ -38,6 +38,7 @@ class LegacySnapshotTests(unittest.TestCase):
             inventory=cls.fixture["inventory"],
             details=cls.fixture["details"],
             batteries=cls.fixture["battery"]["data"],
+            lighting_profiles=cls.fixture["lighting"]["data"],
             cpu_temperature=cls.fixture["cpu"]["data"],
             gpu_temperature=cls.fixture["gpu"]["data"],
         ).build()
@@ -64,6 +65,28 @@ class LegacySnapshotTests(unittest.TestCase):
                 for group in tab["groups"]:
                     for item in group["items"]:
                         self.assertEqual(item["kind"], "stat")
+
+    def test_lighting_library_is_filtered_and_mapped_per_device(self) -> None:
+        devices = {device["name"]: device for device in self.snapshot["devices"]}
+        hub_lighting = next(
+            tab
+            for tab in devices["iCUE LINK System Hub"]["tabs"]
+            if tab["name"] == "Lighting"
+        )["lightingEditor"]
+        mouse_lighting = next(
+            tab
+            for tab in devices["SCIMITAR ELITE"]["tabs"]
+            if tab["name"] == "Lighting"
+        )["lightingEditor"]
+
+        self.assertEqual(hub_lighting["profileCount"], 3)
+        self.assertEqual(
+            [profile["key"] for profile in hub_lighting["profiles"]],
+            ["colorpulse", "liquid-temperature", "static"],
+        )
+        self.assertEqual(len(hub_lighting["targets"]), 3)
+        self.assertEqual(mouse_lighting["profileCount"], 2)
+        self.assertEqual(mouse_lighting["targets"][0]["name"], "Whole device")
 
     def test_telemetry_and_cooling_groups_are_normalized(self) -> None:
         self.assertEqual(self.snapshot["telemetry"]["cpu"], "52.2°C")

@@ -122,8 +122,151 @@ def _tab(
     name: str,
     icon: str,
     groups: list[dict[str, Any]],
+    **extra: Any,
 ) -> dict[str, Any]:
-    return {"name": name, "icon": icon, "groups": groups, "readOnly": True}
+    tab = {"name": name, "icon": icon, "groups": groups, "readOnly": True}
+    tab.update(extra)
+    return tab
+
+
+def _color_hex(value: Any) -> str:
+    color = _mapping(value)
+
+    def channel(name: str) -> int:
+        number = _number(color.get(name))
+        return max(0, min(255, round(number if number is not None else 0)))
+
+    return f"#{channel('red'):02x}{channel('green'):02x}{channel('blue'):02x}"
+
+
+def _profile_display_name(key: str, profile: Mapping[str, Any]) -> str:
+    reported = _text(profile.get("profileName"))
+    if reported:
+        return reported
+    purpose_names = {
+        "keyboard": "Per-key Colors",
+        "mouse": "Zone Colors",
+    }
+    if key in purpose_names:
+        return purpose_names[key]
+    return key.replace("-", " ").replace("_", " ").title()
+
+
+def _normalize_lighting(
+    product: str,
+    detail: Mapping[str, Any],
+    channels: list[tuple[str, Mapping[str, Any]]],
+    raw_library: Mapping[str, Any],
+) -> dict[str, Any]:
+    profiles: list[dict[str, Any]] = []
+    for key, profile in _items(raw_library.get("profiles")):
+        gradients = [
+            _color_hex(color)
+            for _, color in sorted(
+                _items(profile.get("gradients")),
+                key=lambda item: (
+                    0,
+                    int(item[0]),
+                )
+                if item[0].isdigit()
+                else (1, item[0]),
+            )
+        ]
+        brightness = _number(profile.get("brightness"))
+        profiles.append(
+            {
+                "key": key,
+                "name": _profile_display_name(key, profile),
+                "speed": _number(profile.get("speed")) or 0,
+                "brightness": round((brightness or 0) * 100),
+                "smoothness": round(_number(profile.get("smoothness")) or 0),
+                "startColor": _color_hex(profile.get("start")),
+                "middleColor": _color_hex(profile.get("middle")),
+                "endColor": _color_hex(profile.get("end")),
+                "gradientColors": gradients,
+                "minTemperature": _number(profile.get("minTemp")) or 0,
+                "maxTemperature": _number(profile.get("maxTemp")) or 0,
+                "direction": round(_number(profile.get("rgbDirection")) or 0),
+                "alternateColors": bool(profile.get("alternateColors")),
+                "perLed": bool(profile.get("perLed")),
+                "temperatureReactive": (
+                    key.endswith("-temperature")
+                    or (_number(profile.get("maxTemp")) or 0) > 0
+                ),
+            }
+        )
+    profiles.sort(key=lambda profile: (profile["name"].casefold(), profile["key"]))
+
+    profile_keys = {profile["key"] for profile in profiles}
+    targets: list[dict[str, Any]] = []
+    ordered_channels = sorted(
+        channels,
+        key=lambda item: (
+            0,
+            int(item[0]),
+        )
+        if item[0].isdigit()
+        else (1, item[0]),
+    )
+    for channel_id, channel in ordered_channels:
+        active_profile = _text(channel.get("rgb"))
+        if not active_profile:
+            continue
+        reported_label = _text(channel.get("label"))
+        if reported_label.casefold() in {"set label", "label"}:
+            reported_label = ""
+        target_name = _text(
+            reported_label or channel.get("name"),
+            f"Channel {channel_id}",
+        )
+        targets.append(
+            {
+                "key": channel_id,
+                "name": f"{target_name} · Ch {channel_id}",
+                "description": (
+                    f"Channel {channel_id} · "
+                    f"{_text(channel.get('description'), 'attached lighting device')}"
+                ),
+                "activeProfile": (
+                    active_profile if active_profile in profile_keys else profiles[0]["key"]
+                    if profiles else active_profile
+                ),
+            }
+        )
+
+    if not targets:
+        device_profile = _mapping(detail.get("DeviceProfile"))
+        active_profile = _text(
+            device_profile.get("RGBProfile")
+            or detail.get("RGBProfile")
+            or detail.get("SlipstreamRGBProfile")
+        )
+        if active_profile not in profile_keys and profiles:
+            active_profile = profiles[0]["key"]
+        zone_count = round(_number(detail.get("ZoneAmount")) or 0)
+        if zone_count > 1:
+            target_description = f"{zone_count} color zones · one device effect"
+        elif "K100" in product.upper() or detail.get("UIKeyboard"):
+            target_description = "Keyboard lighting surface"
+        else:
+            target_description = "Whole-device lighting target"
+        targets.append(
+            {
+                "key": "device",
+                "name": "Whole device",
+                "description": target_description,
+                "activeProfile": active_profile,
+            }
+        )
+
+    return {
+        "source": "OpenLinkHub /api/color/ filtered device library",
+        "device": _text(raw_library.get("device"), product),
+        "defaultColor": _color_hex(raw_library.get("defaultColor")),
+        "targets": targets,
+        "profiles": profiles,
+        "profileCount": len(profiles),
+    }
 
 
 CAPABILITY_ICONS = {
@@ -277,6 +420,7 @@ def _build_tabs(
     detail: Mapping[str, Any],
     channels: list[tuple[str, Mapping[str, Any]]],
     battery: float | None,
+    lighting_library: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
     identity_items = [
         _stat("Connection", "Connected · live", "Read from the loopback service", accent=True),
@@ -320,6 +464,7 @@ def _build_tabs(
         icon = CAPABILITY_ICONS.get(capability, "applications-system")
         items: list[dict[str, Any]] = []
         description = "Detected from the current legacy device payload."
+        tab_extra: dict[str, Any] = {}
 
         if capability == "Cooling":
             for channel_id, channel in channels:
@@ -344,6 +489,12 @@ def _build_tabs(
                     )
                 )
         elif capability == "Lighting":
+            normalized_lighting = _normalize_lighting(
+                product,
+                detail,
+                channels,
+                lighting_library,
+            )
             if channels:
                 for channel_id, channel in channels:
                     rgb = _text(channel.get("rgb"))
@@ -352,6 +503,21 @@ def _build_tabs(
                         items.append(_stat(title, rgb, f"Channel {channel_id} · active effect"))
             if not items:
                 items.append(_stat("Active lighting", _profile_name(detail), "Read-only profile state"))
+            items.extend(
+                [
+                    _stat(
+                        "Supported effects",
+                        str(normalized_lighting["profileCount"]),
+                        "Filtered by the backend for this device",
+                    ),
+                    _stat(
+                        "Lighting targets",
+                        str(len(normalized_lighting["targets"])),
+                        "Whole-device or channel-level assignment scope",
+                    ),
+                ]
+            )
+            tab_extra["lightingEditor"] = normalized_lighting
         elif capability == "Topology":
             items = [
                 _stat(
@@ -423,6 +589,7 @@ def _build_tabs(
                         items,
                     )
                 ],
+                **tab_extra,
             )
         )
 
@@ -438,12 +605,14 @@ class LegacySnapshot:
         inventory: Mapping[str, Any],
         details: Mapping[str, Mapping[str, Any]],
         batteries: Mapping[str, Any] | None = None,
+        lighting_profiles: Mapping[str, Any] | None = None,
         cpu_temperature: Any = None,
         gpu_temperature: Any = None,
     ) -> None:
         self.inventory = inventory
         self.details = details
         self.batteries = _mapping(batteries)
+        self.lighting_profiles = _mapping(lighting_profiles)
         self.cpu_temperature = cpu_temperature
         self.gpu_temperature = gpu_temperature
 
@@ -474,6 +643,7 @@ class LegacySnapshot:
             if detail.get("Usb") is True:
                 battery = None
             capabilities = _infer_capabilities(product, detail, channels)
+            lighting_library = _mapping(self.lighting_profiles.get(device_id))
 
             for _, channel in channels:
                 temperature = _number(channel.get("temperature"))
@@ -506,6 +676,7 @@ class LegacySnapshot:
                         detail,
                         channels,
                         battery,
+                        lighting_library,
                     ),
                     "connected": bool(detail.get("Connected", True)),
                     "source": "live",

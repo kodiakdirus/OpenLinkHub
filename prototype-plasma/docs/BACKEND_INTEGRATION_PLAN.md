@@ -1,7 +1,7 @@
 # OpenLinkHub Plasma Backend Integration Plan
 
-Status: planning baseline; no prototype networking or hardware callbacks are
-authorized by this document.
+Status: Phase 1 loopback read client implemented; hardware mutation callbacks
+remain unauthorized.
 
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules at
@@ -14,19 +14,35 @@ Phase 1 is implemented as an opt-in read-only client:
 - Demo mode remains the default and opens no connection.
 - Live mode is fixed to `http://127.0.0.1:27003`.
 - The asynchronous Qt transport implements only GET requests for inventory,
-  per-device detail, battery, CPU temperature, and GPU temperature.
+  per-device detail, battery, CPU temperature, GPU temperature, and the
+  device-filtered RGB library at `/api/color/`.
 - Product-specific legacy payloads are normalized into device cards,
   capability-relevant read-only tabs, telemetry, and cooling summaries.
+- Per-device Lighting tabs expose physical targets, the complete supported
+  effect library, and local-only editable drafts without implying that a
+  profile was saved or applied.
+- Device and tab selection use stable backend identifiers and survive periodic
+  telemetry model replacement.
 - Hidden transport/cluster records are excluded from ordinary device cards.
 - Sanitized hub, keyboard, and mouse fixtures cover the device families
   currently connected on SparkleDog.
 - Tests prove loopback enforcement, zero Demo-mode requests, GET-only Live mode,
-  capability relevance, stale-data preservation, and reconnect recovery.
+  capability relevance, stale-data preservation, reconnect recovery, RGB
+  library normalization, and tab persistence across refresh.
 - QML still treats every interactive control and global profile as a local
   preview; no POST, PUT, DELETE, HID, configuration, or persistence path exists.
 
 The capability inference in this slice is explicitly provisional. The additive
 versioned capability manifest remains the next backend contract milestone.
+
+The legacy Lighting write surface is deliberately not flattened into one
+generic Apply call. The current Web UI assigns an effect with
+`POST /api/color`, has separate adapter/global/zone paths, saves peripheral zone
+colors through device-family endpoints such as `/api/mouse/zoneColors`, and
+edits an existing effect definition with `PUT /api/color/change`. Phase 3 must
+model target scope and operation type explicitly, validate the response
+envelope's `status` field even on HTTP 200, and refresh the affected target
+before claiming success.
 
 ## Outcome
 
