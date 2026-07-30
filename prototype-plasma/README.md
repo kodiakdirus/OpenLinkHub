@@ -73,6 +73,11 @@ Device behavior, validation, safety policy, and persistent state stay in the
 service. This prototype explores only the native client's information
 architecture and interaction model.
 
+The source-derived production plan is documented in:
+
+- [Backend integration plan](docs/BACKEND_INTEGRATION_PLAN.md)
+- [Complete backend route inventory](docs/BACKEND_ROUTE_INVENTORY.md)
+
 The existing WebUI is served by the OpenLinkHub Go service and uses same-origin
 HTTP requests to `/api/...`. A production native client should use a typed
 loopback HTTP/JSON client against the same API: `GET` for inventory, capability,
