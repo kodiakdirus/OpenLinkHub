@@ -50,6 +50,16 @@ class QmlStateTests(unittest.TestCase):
         self.assertIn("model: row.choiceModel", sources["components/ControlRow.qml"])
         self.assertIn("model: root.stableSearchResults", sources["Main.qml"])
 
+    def test_dark_modern_theme_is_the_default(self) -> None:
+        main = (QML_ROOT / "Main.qml").read_text(encoding="utf-8")
+        service = (QML_ROOT / "pages" / "ServicePage.qml").read_text(encoding="utf-8")
+        self.assertIn('property string themeMode: "Dark Modern"', main)
+        self.assertIn('property color accentColor: "#0078d4"', main)
+        for color in ("#181818", "#1f1f1f", "#2b2b2b", "#3c3c3c", "#cccccc"):
+            with self.subTest(color=color):
+                self.assertIn(color, main)
+        self.assertIn('model: ["Dark Modern", "Midnight", "Dim", "Light"]', service)
+
 
 if __name__ == "__main__":
     unittest.main()

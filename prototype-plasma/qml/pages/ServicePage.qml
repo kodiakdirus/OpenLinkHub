@@ -202,7 +202,7 @@ Item {
                             Layout.fillWidth: true
                         }
                         ComboBox {
-                            model: ["Dark", "Dim", "Light"]
+                            model: ["Dark Modern", "Midnight", "Dim", "Light"]
                             currentIndex: model.indexOf(page.shell.themeMode)
                             Layout.preferredWidth: 180
                             onActivated: page.shell.themeMode = currentText
@@ -218,7 +218,7 @@ Item {
                             Layout.fillWidth: true
                         }
                         Repeater {
-                            model: ["#66d7c5", "#7aa8ff", "#a98cf5", "#ee876f", "#e8bd57"]
+                            model: ["#0078d4", "#66d7c5", "#7aa8ff", "#a98cf5", "#ee876f", "#e8bd57"]
                             delegate: AbstractButton {
                                 required property var modelData
                                 implicitWidth: 32

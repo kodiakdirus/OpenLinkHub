@@ -27,8 +27,8 @@ ApplicationWindow {
     readonly property var backendClient: backend
     readonly property bool liveMode: backendClient.mode === "live"
 
-    property string themeMode: "Dark"
-    property color accentColor: "#66d7c5"
+    property string themeMode: "Dark Modern"
+    property color accentColor: "#0078d4"
     property bool compactMode: false
     property bool sidebarLabels: true
     property int cornerRadius: 11
@@ -41,25 +41,58 @@ ApplicationWindow {
     readonly property int sectionSpacing: compactMode ? 12 : 17
     readonly property color backgroundColor: themeMode === "Light"
         ? "#eef2f5"
-        : themeMode === "Dim" ? "#192129" : "#0e151b"
+        : themeMode === "Dim"
+            ? "#192129"
+            : (themeMode === "Midnight" || themeMode === "Dark")
+                ? "#0e151b"
+                : "#1f1f1f"
     readonly property color sidebarColor: themeMode === "Light"
         ? "#e3e9ee"
-        : themeMode === "Dim" ? "#141c23" : "#0b1116"
+        : themeMode === "Dim"
+            ? "#141c23"
+            : (themeMode === "Midnight" || themeMode === "Dark")
+                ? "#0b1116"
+                : "#181818"
     readonly property color surface: themeMode === "Light"
         ? "#ffffff"
-        : themeMode === "Dim" ? "#212c35" : "#151f27"
+        : themeMode === "Dim"
+            ? "#212c35"
+            : (themeMode === "Midnight" || themeMode === "Dark")
+                ? "#151f27"
+                : "#181818"
     readonly property color surfaceAlt: themeMode === "Light"
         ? "#f3f6f8"
-        : themeMode === "Dim" ? "#27343e" : "#1b2730"
+        : themeMode === "Dim"
+            ? "#27343e"
+            : (themeMode === "Midnight" || themeMode === "Dark")
+                ? "#1b2730"
+                : "#2b2b2b"
     readonly property color surfaceHover: themeMode === "Light"
         ? "#e8eef2"
-        : themeMode === "Dim" ? "#30404c" : "#23323d"
+        : themeMode === "Dim"
+            ? "#30404c"
+            : (themeMode === "Midnight" || themeMode === "Dark")
+                ? "#23323d"
+                : "#313131"
     readonly property color outline: themeMode === "Light"
         ? "#ccd5dc"
-        : themeMode === "Dim" ? "#3c4b56" : "#2b3a44"
-    readonly property color primaryText: themeMode === "Light" ? "#172129" : "#eef4f6"
-    readonly property color secondaryText: themeMode === "Light" ? "#43515b" : "#c4d0d6"
-    readonly property color mutedText: themeMode === "Light" ? "#687781" : "#84949e"
+        : themeMode === "Dim"
+            ? "#3c4b56"
+            : (themeMode === "Midnight" || themeMode === "Dark")
+                ? "#2b3a44"
+                : "#3c3c3c"
+    readonly property color primaryText: themeMode === "Light"
+        ? "#172129"
+        : themeMode === "Dark Modern" ? "#f8f8f8" : "#eef4f6"
+    readonly property color secondaryText: themeMode === "Light"
+        ? "#43515b"
+        : themeMode === "Dark Modern" ? "#cccccc" : "#c4d0d6"
+    readonly property color mutedText: themeMode === "Light"
+        ? "#687781"
+        : themeMode === "Dark Modern" ? "#9d9d9d" : "#84949e"
+    readonly property color accentTextColor: (
+        0.299 * accentColor.r + 0.587 * accentColor.g + 0.114 * accentColor.b
+    ) > 0.58 ? "#081214" : "#ffffff"
     readonly property color successColor: "#73d575"
     readonly property color warningColor: "#e7b85c"
     readonly property color dangerColor: "#ee7278"
@@ -153,7 +186,7 @@ ApplicationWindow {
     palette.button: surfaceAlt
     palette.buttonText: primaryText
     palette.highlight: accentColor
-    palette.highlightedText: "#081214"
+    palette.highlightedText: accentTextColor
     palette.toolTipBase: surfaceAlt
     palette.toolTipText: primaryText
 

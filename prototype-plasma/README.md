@@ -91,7 +91,8 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Configurable Plasma System Monitor sensor-export concept for coolant, pump,
   fan, battery, and other read-only Corsair telemetry
 - Keyboard, mouse, audio, display, automation, and integration surfaces
-- Theme, accent, density, corner, and sidebar presentation controls
+- VS Code-inspired Dark Modern default, retained Midnight/Dim/Light themes,
+  accent choices, density, corner, and sidebar presentation controls
 - Constrained per-workspace and per-device-tab cell ordering with half/full-row
   sizing and equal-height neighbors to prevent masonry-style gaps
 - Local notifications and explicit demo/read-only-live state
