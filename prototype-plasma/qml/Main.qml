@@ -32,6 +32,9 @@ ApplicationWindow {
     property bool compactMode: false
     property bool sidebarLabels: true
     property int cornerRadius: 11
+    property var stableSearchResults: []
+    property string searchResultSignature: ""
+    property int searchPresentationRevision: 0
 
     readonly property int contentPadding: compactMode ? 13 : 17
     readonly property int cardSpacing: compactMode ? 10 : 14
@@ -96,6 +99,7 @@ ApplicationWindow {
             // list while this signal handler is running. Reconcile on the next
             // event-loop turn and preserve the stable backend device id.
             Qt.callLater(function() {
+                root.reconcileSearchResults(searchField.text)
                 if (root.devices.length === 0) {
                     root.selectedDeviceIndex = 0
                     root.selectedDeviceId = ""
@@ -135,6 +139,10 @@ ApplicationWindow {
             })
         }
     }
+
+    onDevicesChanged: Qt.callLater(function() {
+        root.reconcileSearchResults(searchField.text)
+    })
 
     palette.window: backgroundColor
     palette.windowText: primaryText
@@ -850,6 +858,21 @@ ApplicationWindow {
         return results.slice(0, 8)
     }
 
+    function reconcileSearchResults(query) {
+        const results = searchResults(query)
+        const nextSignature = JSON.stringify(results.map(result => [
+            result.key,
+            result.label,
+            result.detail,
+            result.icon,
+            result.device
+        ]))
+        if (nextSignature === searchResultSignature) return
+        searchResultSignature = nextSignature
+        stableSearchResults = results
+        searchPresentationRevision += 1
+    }
+
     function markDirty(label) {
         pendingChanges = true
         statusHint.text = "Pending mock change: " + label
@@ -1066,6 +1089,7 @@ ApplicationWindow {
 
                     TextField {
                         id: searchField
+                        objectName: "globalSearchField"
                         Layout.preferredWidth: Math.min(430, Math.max(280, topbar.width * 0.30))
                         placeholderText: "Search settings and devices…"
                         leftPadding: 38
@@ -1091,11 +1115,12 @@ ApplicationWindow {
                         }
 
                         onTextChanged: {
-                            if (text.length > 0 && root.searchResults(text).length > 0) searchPopup.open()
+                            root.reconcileSearchResults(text)
+                            if (text.length > 0 && root.stableSearchResults.length > 0) searchPopup.open()
                             else searchPopup.close()
                         }
                         onAccepted: {
-                            const results = root.searchResults(text)
+                            const results = root.stableSearchResults
                             if (results.length > 0) {
                                 if (results[0].device) root.selectDevice(results[0].key)
                                 else root.navigate(results[0].key)
@@ -1104,6 +1129,7 @@ ApplicationWindow {
 
                         Popup {
                             id: searchPopup
+                            objectName: "globalSearchPopup"
                             y: searchField.height + 6
                             width: searchField.width
                             height: Math.min(390, searchList.contentHeight + 12)
@@ -1120,7 +1146,7 @@ ApplicationWindow {
                                 id: searchList
                                 clip: true
                                 spacing: 3
-                                model: root.searchResults(searchField.text)
+                                model: root.stableSearchResults
 
                                 delegate: AbstractButton {
                                     required property var modelData

@@ -9,6 +9,8 @@ Item {
     required property var shell
     required property var feature
     property bool showDivider: true
+    property var choiceModel: []
+    property string choiceModelSignature: ""
     Layout.fillWidth: true
     readonly property bool stacked: width < 430
         || ((feature.kind === "slider"
@@ -19,6 +21,20 @@ Item {
     implicitHeight: stacked
         ? (feature.description ? 108 : 90)
         : (feature.description ? 68 : 52)
+
+    function reconcileChoices() {
+        const fallback = feature.kind === "color"
+            ? ["#66d7c5", "#8b7cf6", "#ef8b6b"]
+            : []
+        const nextChoices = feature.choices || fallback
+        const nextSignature = JSON.stringify(nextChoices)
+        if (nextSignature === choiceModelSignature) return
+        choiceModelSignature = nextSignature
+        choiceModel = nextChoices
+    }
+
+    onFeatureChanged: Qt.callLater(reconcileChoices)
+    Component.onCompleted: reconcileChoices()
 
     ColumnLayout {
         anchors.fill: parent
@@ -87,7 +103,7 @@ Item {
 
             ComboBox {
                 visible: row.feature.kind === "choice"
-                model: row.feature.choices || []
+                model: row.choiceModel
                 currentIndex: Math.max(0, model.indexOf(row.feature.value))
                 Layout.preferredWidth: 240
                 Layout.fillWidth: row.stacked
@@ -125,7 +141,7 @@ Item {
                 spacing: 6
 
                 Repeater {
-                    model: row.feature.choices || ["#66d7c5", "#8b7cf6", "#ef8b6b"]
+                    model: row.choiceModel
                     delegate: AbstractButton {
                         required property var modelData
                         implicitWidth: 30

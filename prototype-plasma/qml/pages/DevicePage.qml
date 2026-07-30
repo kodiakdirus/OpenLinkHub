@@ -13,15 +13,18 @@ Item {
     property string selectedTabKey: "Overview"
     property bool layoutEditing: false
     property var arrangedGroups: []
+    property string layoutSignature: ""
+    property int layoutPresentationRevision: 0
     property var displayDevice: ({
         id: "",
         name: "",
         icon: "applications-system",
-        subtitle: "",
-        capabilities: []
+        subtitle: ""
     })
+    property var displayCapabilities: []
     property var navigationTabs: []
     property string displayDeviceSignature: ""
+    property string capabilitySignature: ""
     property string navigationSignature: ""
     readonly property int selectedTab: tabIndex(selectedTabKey)
     readonly property var currentTab: tabForKey(selectedTabKey)
@@ -62,8 +65,7 @@ Item {
             source.id || "",
             source.name || "",
             source.icon || "",
-            source.subtitle || "",
-            capabilities
+            source.subtitle || ""
         ])
         if (nextDisplaySignature !== displayDeviceSignature) {
             displayDeviceSignature = nextDisplaySignature
@@ -71,9 +73,13 @@ Item {
                 id: source.id || "",
                 name: source.name || "",
                 icon: source.icon || "applications-system",
-                subtitle: source.subtitle || "",
-                capabilities: capabilities
+                subtitle: source.subtitle || ""
             }
+        }
+        const nextCapabilitySignature = JSON.stringify(capabilities)
+        if (nextCapabilitySignature !== capabilitySignature) {
+            capabilitySignature = nextCapabilitySignature
+            displayCapabilities = capabilities
         }
 
         const sourceTabs = source.tabs || []
@@ -88,14 +94,56 @@ Item {
         }
     }
 
-    function resetLayout() {
-        arrangedGroups = (currentTab.groups || []).map(group => ({
+    function groupKey(group, index) {
+        return (group.key || group.title || "group") + "::" + index
+    }
+
+    function itemKey(item, index) {
+        return (item.key || item.title || "item") + "::" + index
+    }
+
+    function groupForKey(key) {
+        const groups = currentTab.groups || []
+        for (let index = 0; index < groups.length; ++index) {
+            if (groupKey(groups[index], index) === key) return groups[index]
+        }
+        return ({ title: "Unavailable", icon: "dialog-warning", description: "", items: [] })
+    }
+
+    function featureForKey(groupKeyValue, itemKeyValue) {
+        const group = groupForKey(groupKeyValue)
+        const items = group.items || []
+        for (let index = 0; index < items.length; ++index) {
+            if (itemKey(items[index], index) === itemKeyValue) return items[index]
+        }
+        return ({ title: "Unavailable", description: "No current service data", kind: "stat", value: "—" })
+    }
+
+    function resetLayout(force) {
+        const groups = currentTab.groups || []
+        const structure = groups.map((group, groupIndex) => ({
+            key: groupKey(group, groupIndex),
             title: group.title,
             icon: group.icon,
             description: group.description,
-            items: group.items,
+            items: (group.items || []).map((item, itemIndex) => itemKey(item, itemIndex)),
+            itemShape: (group.items || []).map(item => [
+                item.title,
+                item.description,
+                item.kind,
+                item.choices || [],
+                item.from,
+                item.to,
+                item.step,
+                item.unit
+            ]),
             wide: Boolean(group.wide)
         }))
+        const nextSignature = JSON.stringify([currentTab.name, structure])
+        if (!force && nextSignature === layoutSignature) return
+        layoutSignature = nextSignature
+        arrangedGroups = structure
+        layoutPresentationRevision += 1
     }
 
     function openLayoutEditor() {
@@ -117,10 +165,12 @@ Item {
         const updated = arrangedGroups.slice()
         const current = updated[index]
         updated[index] = {
+            key: current.key,
             title: current.title,
             icon: current.icon,
             description: current.description,
             items: current.items,
+            itemShape: current.itemShape,
             wide: !current.wide
         }
         arrangedGroups = updated
@@ -134,7 +184,10 @@ Item {
     }
     onSelectedTabKeyChanged: {
         layoutEditing = false
-        resetLayout()
+        Qt.callLater(resetLayout)
+    }
+    onCurrentTabChanged: {
+        if (!showingLightingEditor) resetLayout()
     }
     Component.onCompleted: {
         updatePresentationModels()
@@ -192,7 +245,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: 6
                             Repeater {
-                                model: page.displayDevice.capabilities
+                                model: page.displayCapabilities
                                 delegate: StatusBadge {
                                     required property var modelData
                                     shell: page.shell
@@ -261,7 +314,7 @@ Item {
                     Button {
                         text: "Reset tab layout"
                         icon.name: "edit-undo"
-                        onClicked: page.resetLayout()
+                        onClicked: page.resetLayout(true)
                     }
                 }
             }
@@ -278,6 +331,7 @@ Item {
                     model: page.arrangedGroups
 
                     delegate: Panel {
+                        id: groupPanel
                         required property var modelData
                         required property int index
                         shell: page.shell
@@ -353,8 +407,11 @@ Item {
                                 required property var modelData
                                 required property int index
                                 shell: page.shell
-                                feature: modelData
-                                showDivider: index < (parent.parent.modelData.items.length - 1)
+                                feature: page.featureForKey(
+                                    groupPanel.modelData.key,
+                                    String(modelData)
+                                )
+                                showDivider: index < (groupPanel.modelData.items.length - 1)
                                 Layout.fillWidth: true
                             }
                         }

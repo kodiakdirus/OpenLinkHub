@@ -6,8 +6,116 @@ import "../components"
 
 Item {
     id: page
+    objectName: "overviewPage"
 
     required property var shell
+    property var metricKeys: []
+    property var zoneKeys: []
+    property var deviceKeys: []
+    property string metricKeySignature: ""
+    property string zoneKeySignature: ""
+    property string deviceKeySignature: ""
+    property int presentationRevision: 0
+
+    function metricForKey(key) {
+        const metrics = shell.overviewMetrics || []
+        for (let index = 0; index < metrics.length; ++index) {
+            if (metrics[index].key === key) return metrics[index]
+        }
+        return ({
+            key: key,
+            label: key,
+            detail: "Unavailable",
+            icon: "dialog-warning",
+            state: "Unavailable",
+            warning: true
+        })
+    }
+
+    function zoneForKey(key) {
+        const zones = shell.coolingZones || []
+        for (let index = 0; index < zones.length; ++index) {
+            if (zones[index].key === key) return zones[index]
+        }
+        return ({
+            key: key,
+            name: key,
+            icon: "temperature-normal",
+            source: "Unavailable",
+            profile: "Not reported"
+        })
+    }
+
+    function deviceForKey(key) {
+        const devices = shell.devices || []
+        for (let index = 0; index < devices.length; ++index) {
+            if (devices[index].id === key) return devices[index]
+        }
+        return ({
+            id: key,
+            name: "Unavailable device",
+            icon: "network-disconnect",
+            subtitle: "No current service data",
+            connected: false
+        })
+    }
+
+    function reconcileMetricKeys() {
+        const metrics = shell.overviewMetrics || []
+        const nextKeys = []
+        for (let index = 0; index < metrics.length; ++index)
+            nextKeys.push(metrics[index].key)
+        const nextSignature = JSON.stringify(nextKeys)
+        if (nextSignature === metricKeySignature) return
+        metricKeySignature = nextSignature
+        metricKeys = nextKeys
+        presentationRevision += 1
+    }
+
+    function reconcileZoneKeys() {
+        const zones = shell.coolingZones || []
+        const nextKeys = []
+        for (let index = 0; index < zones.length; ++index)
+            nextKeys.push(zones[index].key)
+        const nextSignature = JSON.stringify(nextKeys)
+        if (nextSignature === zoneKeySignature) return
+        zoneKeySignature = nextSignature
+        zoneKeys = nextKeys
+        presentationRevision += 1
+    }
+
+    function reconcileDeviceKeys() {
+        const devices = shell.devices || []
+        const nextKeys = []
+        for (let index = 0; index < Math.min(devices.length, 4); ++index)
+            nextKeys.push(devices[index].id)
+        const nextSignature = JSON.stringify(nextKeys)
+        if (nextSignature === deviceKeySignature) return
+        deviceKeySignature = nextSignature
+        deviceKeys = nextKeys
+        presentationRevision += 1
+    }
+
+    function reconcilePresentationKeys() {
+        reconcileMetricKeys()
+        reconcileZoneKeys()
+        reconcileDeviceKeys()
+    }
+
+    Connections {
+        target: page.shell
+        function onOverviewMetricsChanged() {
+            Qt.callLater(page.reconcileMetricKeys)
+        }
+        function onCoolingZonesChanged() {
+            Qt.callLater(page.reconcileZoneKeys)
+        }
+        function onDevicesChanged() {
+            Qt.callLater(page.reconcileDeviceKeys)
+        }
+    }
+
+    Component.onCompleted: reconcilePresentationKeys()
 
     ScrollView {
         id: scroll
@@ -25,10 +133,12 @@ Item {
                 rowSpacing: page.shell.cardSpacing
 
                 Repeater {
-                    model: page.shell.overviewMetrics
+                    model: page.metricKeys.length
 
                     delegate: Panel {
-                        required property var modelData
+                        id: metricCard
+                        required property int index
+                        readonly property var metric: page.metricForKey(String(page.metricKeys[index]))
                         shell: page.shell
                         Layout.fillWidth: true
                         Layout.preferredHeight: page.shell.compactMode ? 126 : 142
@@ -47,7 +157,7 @@ Item {
                             anchors.centerIn: parent
                                     width: 25
                                     height: 25
-                                    source: modelData.icon
+                                    source: metricCard.metric.icon
                                     color: page.shell.accentColor
                                 }
                             }
@@ -57,20 +167,20 @@ Item {
                                 spacing: 2
 
                                 Label {
-                                    text: modelData.label
+                                    text: metricCard.metric.label
                                     color: page.shell.mutedText
                                     font.pixelSize: 12
                                 }
 
                                 Label {
-                                    text: page.shell.metricValue(modelData.key)
+                                    text: page.shell.metricValue(metricCard.metric.key)
                                     color: page.shell.primaryText
                                     font.pixelSize: 25
                                     font.weight: Font.DemiBold
                                 }
 
                                 Label {
-                                    text: modelData.detail
+                                    text: metricCard.metric.detail
                                     color: page.shell.mutedText
                                     font.pixelSize: 11
                                     elide: Text.ElideRight
@@ -81,8 +191,10 @@ Item {
 
                         StatusBadge {
                             shell: page.shell
-                            text: modelData.state
-                            badgeColor: modelData.warning ? page.shell.warningColor : page.shell.successColor
+                            text: metricCard.metric.state
+                            badgeColor: metricCard.metric.warning
+                                ? page.shell.warningColor
+                                : page.shell.successColor
                         }
                     }
                 }
@@ -129,10 +241,12 @@ Item {
                     }
 
                     Repeater {
-                        model: page.shell.coolingZones
+                        model: page.zoneKeys.length
 
                         delegate: AbstractButton {
-                            required property var modelData
+                            id: zoneButton
+                            required property int index
+                            readonly property var zone: page.zoneForKey(String(page.zoneKeys[index]))
                             Layout.fillWidth: true
                             implicitHeight: page.shell.compactMode ? 62 : 70
                             hoverEnabled: true
@@ -148,7 +262,7 @@ Item {
                                 spacing: 12
 
                                 Kirigami.Icon {
-                            source: modelData.icon
+                            source: zoneButton.zone.icon
                                     color: page.shell.accentColor
                                     Layout.preferredWidth: 24
                                     Layout.preferredHeight: 24
@@ -158,20 +272,22 @@ Item {
                                     Layout.fillWidth: true
                                     spacing: 1
                                     Label {
-                                        text: modelData.name
+                                        text: zoneButton.zone.name
                                         color: page.shell.primaryText
                                         font.weight: Font.DemiBold
                                     }
                                     Label {
-                                        text: modelData.source + " source · " + modelData.profile
+                                        text: zoneButton.zone.source
+                                            + " source · " + zoneButton.zone.profile
                                         color: page.shell.mutedText
                                         font.pixelSize: 11
                                     }
                                 }
 
                                 Label {
-                                    text: page.shell.zoneRpm(modelData.key)
-                                    color: modelData.key === "case" && page.shell.activeGlobalProfile !== "gaming"
+                                    text: page.shell.zoneRpm(zoneButton.zone.key)
+                                    color: zoneButton.zone.key === "case"
+                                        && page.shell.activeGlobalProfile !== "gaming"
                                         ? page.shell.accentColor
                                         : page.shell.primaryText
                                     font.weight: Font.DemiBold
@@ -223,14 +339,16 @@ Item {
                     }
 
                     Repeater {
-                        model: page.shell.devices.slice(0, 4)
+                        model: page.deviceKeys.length
 
                         delegate: AbstractButton {
-                            required property var modelData
+                            id: deviceButton
+                            required property int index
+                            readonly property var device: page.deviceForKey(String(page.deviceKeys[index]))
                             Layout.fillWidth: true
                             implicitHeight: page.shell.compactMode ? 62 : 70
                             hoverEnabled: true
-                            onClicked: page.shell.selectDevice(modelData.id)
+                            onClicked: page.shell.selectDevice(device.id)
 
                             background: Rectangle {
                                 radius: Math.max(6, page.shell.cornerRadius - 4)
@@ -242,7 +360,7 @@ Item {
                                 spacing: 12
 
                                 Kirigami.Icon {
-                            source: modelData.icon
+                            source: deviceButton.device.icon
                                     color: page.shell.secondaryText
                                     Layout.preferredWidth: 27
                                     Layout.preferredHeight: 27
@@ -252,12 +370,12 @@ Item {
                                     Layout.fillWidth: true
                                     spacing: 1
                                     Label {
-                                        text: modelData.name
+                                        text: deviceButton.device.name
                                         color: page.shell.primaryText
                                         font.weight: Font.DemiBold
                                     }
                                     Label {
-                                        text: modelData.subtitle
+                                        text: deviceButton.device.subtitle
                                         color: page.shell.mutedText
                                         font.pixelSize: 11
                                     }
@@ -267,7 +385,7 @@ Item {
                                     width: 8
                                     height: 8
                                     radius: 4
-                                    color: modelData.connected === false
+                                    color: deviceButton.device.connected === false
                                         ? page.shell.warningColor
                                         : page.shell.successColor
                                 }

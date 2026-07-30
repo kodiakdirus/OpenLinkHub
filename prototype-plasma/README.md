@@ -74,10 +74,16 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   both loaded content and the visible tab indicator survive telemetry refresh
 - Background polls retain the last connection state and unchanged header,
   capability, target, and effect models instead of flashing application chrome
+- Telemetry updates values through stable identity-keyed presentation models;
+  open cooling/profile choices, expanded channel details, global search,
+  per-device controls, Overview cells, filters, and scroll owners are not
+  recreated on an ordinary poll
 - Stable Devices-page filter/card presentation with deterministic card ordering;
   user-relevant hidden wireless transports appear as receiver cards while
   internal cluster/helper records remain excluded
-- Sanitized response fixtures and GET-only reconnect/failure tests
+- Sanitized response fixtures, GET-only reconnect/failure tests, a GUI-wide
+  refresh-state exercise, and a static guard against binding live arrays
+  directly to stateful controls
 - Mock Quiet, Balanced, Performance, and Custom operating modes
 - Interactive cooling-curve profile manager
 - Custom lighting-scene editor, targets, brightness, and hardware-lighting controls

@@ -6,12 +6,108 @@ import "../components"
 
 Item {
     id: page
+    objectName: "coolingPage"
 
     required property var shell
+    property var expandedZones: ({})
+    property var zoneKeys: []
+    property string zoneKeySignature: ""
+    property int presentationRevision: 0
+    property var firstProfileControl: null
+    property bool firstProfilePopupRequested: false
+    readonly property bool firstProfilePopupOpened: firstProfileControl
+        ? firstProfileControl.popup.opened
+        : false
+    property var summaryCards: [
+        { key: "coolant", label: "Coolant", icon: "temperature-normal" },
+        { key: "pump", label: "Pump", icon: "media-playback-start" },
+        { key: "fans", label: "Fans", icon: "temperature-normal" }
+    ]
 
     function openPrimaryDialog() {
         coolingProfiles.open()
     }
+
+    function openFirstProfilePopup() {
+        if (firstProfileControl) firstProfileControl.popup.open()
+    }
+
+    function closeFirstProfilePopup() {
+        if (firstProfileControl) firstProfileControl.popup.close()
+    }
+
+    onFirstProfilePopupRequestedChanged: {
+        if (firstProfilePopupRequested)
+            openFirstProfilePopup()
+        else
+            closeFirstProfilePopup()
+    }
+
+    function zoneForKey(key) {
+        const zones = shell.coolingZones || []
+        for (let index = 0; index < zones.length; ++index) {
+            if (zones[index].key === key) return zones[index]
+        }
+        return ({
+            key: key,
+            name: key,
+            icon: "temperature-normal",
+            temperature: "—",
+            source: "Unavailable",
+            profile: "Not reported",
+            profiles: [],
+            zeroRpm: false,
+            minimum: 0
+        })
+    }
+
+    function summaryValue(key) {
+        if (key === "coolant") return shell.metricValue("coolant")
+        if (key === "pump") return shell.zoneRpm("pump")
+        if (key === "fans") {
+            if (!shell.liveMode) return "6 channels"
+            let count = 0
+            const zones = shell.coolingZones || []
+            for (let index = 0; index < zones.length; ++index) {
+                if (zones[index].key === "pump") continue
+                const summary = zones[index].channelSummary || ""
+                count += summary.length > 0 ? summary.split(",").length : 1
+            }
+            return count + (count === 1 ? " channel" : " channels")
+        }
+        return "—"
+    }
+
+    function isZoneExpanded(key) {
+        return Boolean(expandedZones[key])
+    }
+
+    function toggleZone(key) {
+        const updated = Object.assign({}, expandedZones)
+        updated[key] = !Boolean(updated[key])
+        expandedZones = updated
+    }
+
+    function reconcileZoneKeys() {
+        const zones = shell.coolingZones || []
+        const nextKeys = []
+        for (let index = 0; index < zones.length; ++index)
+            nextKeys.push(zones[index].key)
+        const nextSignature = JSON.stringify(nextKeys)
+        if (nextSignature === zoneKeySignature) return
+        zoneKeySignature = nextSignature
+        zoneKeys = nextKeys
+        presentationRevision += 1
+    }
+
+    Connections {
+        target: page.shell
+        function onCoolingZonesChanged() {
+            Qt.callLater(page.reconcileZoneKeys)
+        }
+    }
+
+    Component.onCompleted: reconcileZoneKeys()
 
     ScrollView {
         id: scroll
@@ -65,11 +161,7 @@ Item {
                 rowSpacing: page.shell.cardSpacing
 
                 Repeater {
-                    model: [
-                        { label: "Coolant", value: page.shell.metricValue("coolant"), icon: "temperature-normal" },
-                        { label: "Pump", value: page.shell.zoneRpm("pump"), icon: "media-playback-start" },
-                        { label: "Fans", value: "6 channels", icon: "temperature-normal" }
-                    ]
+                    model: page.summaryCards
 
                     delegate: Panel {
                         required property var modelData
@@ -92,7 +184,7 @@ Item {
                                     font.pixelSize: 12
                                 }
                                 Label {
-                                    text: modelData.value
+                                    text: page.summaryValue(modelData.key)
                                     color: page.shell.primaryText
                                     font.pixelSize: 20
                                     font.weight: Font.DemiBold
@@ -173,14 +265,29 @@ Item {
                     spacing: page.shell.cardSpacing
 
                     Repeater {
-                        model: page.shell.coolingZones
+                        model: page.zoneKeys.length
 
                         delegate: Panel {
                             id: channelCard
-                            required property var modelData
-                            property bool expanded: false
+                            required property int index
+                            readonly property string zoneKey: String(page.zoneKeys[index])
+                            readonly property var zone: page.zoneForKey(zoneKey)
+                            readonly property bool expanded: page.isZoneExpanded(zoneKey)
+                            property var profileChoices: []
+                            property string profileSignature: ""
                             shell: page.shell
                             Layout.fillWidth: true
+
+                            function reconcileProfiles() {
+                                const choices = zone.profiles || [zone.profile]
+                                const nextSignature = JSON.stringify(choices)
+                                if (nextSignature === profileSignature) return
+                                profileSignature = nextSignature
+                                profileChoices = choices
+                            }
+
+                            onZoneChanged: reconcileProfiles()
+                            Component.onCompleted: reconcileProfiles()
 
                             RowLayout {
                                 Layout.fillWidth: true
@@ -197,7 +304,7 @@ Item {
                             anchors.centerIn: parent
                                         width: 30
                                         height: 30
-                                        source: modelData.icon
+                                        source: channelCard.zone.icon
                                         color: page.shell.secondaryText
                                     }
                                 }
@@ -206,29 +313,33 @@ Item {
                                     Layout.preferredWidth: 150
                                     spacing: 2
                                     Label {
-                                        text: modelData.name
+                                        text: channelCard.zone.name
                                         color: page.shell.primaryText
                                         font.pixelSize: 17
                                         font.weight: Font.DemiBold
                                     }
                                     Label {
-                                        text: modelData.temperature + " · " + modelData.source
+                                        text: channelCard.zone.temperature + " · " + channelCard.zone.source
                                         color: page.shell.mutedText
                                         font.pixelSize: 12
                                     }
                                     Label {
-                                        text: page.shell.zoneRpm(modelData.key)
+                                        text: page.shell.zoneRpm(channelCard.zoneKey)
                                         color: page.shell.accentColor
                                         font.weight: Font.DemiBold
                                     }
                                 }
 
                                 ComboBox {
-                                    model: modelData.profiles || [modelData.profile]
-                                    currentIndex: Math.max(0, model.indexOf(modelData.profile))
+                                    model: channelCard.profileChoices
+                                    currentIndex: Math.max(0, model.indexOf(channelCard.zone.profile))
                                     Layout.preferredWidth: 160
                                     enabled: !page.shell.liveMode
-                                    onActivated: page.shell.markDirty(modelData.name + " profile")
+                                    onActivated: page.shell.markDirty(channelCard.zone.name + " profile")
+                                    Component.onCompleted: {
+                                        if (channelCard.index === 0)
+                                            page.firstProfileControl = this
+                                    }
                                     ToolTip.visible: hovered && page.shell.liveMode
                                     ToolTip.text: "Read-only in Phase 1"
                                 }
@@ -240,13 +351,15 @@ Item {
                                     Layout.maximumWidth: 250
                                     accentColor: page.shell.accentColor
                                     gridColor: page.shell.outline
-                                    intensity: modelData.key === "pump" ? 0.9 : modelData.key === "case" ? 0.45 : 0.7
+                                    intensity: channelCard.zoneKey === "pump"
+                                        ? 0.9
+                                        : channelCard.zoneKey === "case" ? 0.45 : 0.7
                                 }
 
                                 Item { Layout.fillWidth: true }
 
                                 StatusBadge {
-                                    visible: modelData.zeroRpm
+                                    visible: channelCard.zone.zeroRpm
                                     shell: page.shell
                                     text: "Zero RPM"
                                     badgeColor: page.shell.accentColor
@@ -254,7 +367,7 @@ Item {
 
                                 ToolButton {
                                     icon.name: channelCard.expanded ? "arrow-up" : "arrow-down"
-                                    onClicked: channelCard.expanded = !channelCard.expanded
+                                    onClicked: page.toggleZone(channelCard.zoneKey)
                                     ToolTip.visible: hovered
                                     ToolTip.text: channelCard.expanded ? "Hide channel details" : "Show channel details"
                                 }
@@ -282,9 +395,9 @@ Item {
                                     Slider {
                                         from: 0
                                         to: 100
-                                        value: modelData.minimum
+                                        value: channelCard.zone.minimum
                                         Layout.fillWidth: true
-                                        onMoved: page.shell.markDirty(modelData.name + " minimum")
+                                        onMoved: page.shell.markDirty(channelCard.zone.name + " minimum")
                                     }
                                 }
 
@@ -296,9 +409,9 @@ Item {
                                     }
                                     ComboBox {
                                         model: ["Coolant temperature", "GPU temperature", "CPU temperature", "Temperature probe"]
-                                        currentIndex: modelData.source.indexOf("GPU") >= 0 ? 1 : 0
+                                        currentIndex: channelCard.zone.source.indexOf("GPU") >= 0 ? 1 : 0
                                         Layout.fillWidth: true
-                                        onActivated: page.shell.markDirty(modelData.name + " sensor")
+                                        onActivated: page.shell.markDirty(channelCard.zone.name + " sensor")
                                     }
                                 }
 
@@ -310,9 +423,9 @@ Item {
                                     }
                                     Switch {
                                         text: "Allow zero RPM"
-                                        checked: modelData.zeroRpm
-                                        enabled: modelData.key !== "pump"
-                                        onToggled: page.shell.markDirty(modelData.name + " zero RPM")
+                                        checked: channelCard.zone.zeroRpm
+                                        enabled: channelCard.zoneKey !== "pump"
+                                        onToggled: page.shell.markDirty(channelCard.zone.name + " zero RPM")
                                     }
                                 }
                             }

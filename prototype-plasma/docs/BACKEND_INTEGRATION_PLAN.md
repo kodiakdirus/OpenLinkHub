@@ -23,12 +23,18 @@ Phase 1 is implemented as an opt-in read-only client:
   profile was saved or applied.
 - Device and tab selection use stable backend identifiers and survive periodic
   telemetry model replacement.
+- Presentation state is separated from telemetry payload ownership across the
+  shell: identity-keyed models retain tab indicators, expanded cooling
+  channels, open choice popups, global search, device-tab cells, Overview
+  cells, filters, and scroll containers while value bindings update in place.
 - Hidden transport/cluster records are excluded from ordinary device cards.
 - Sanitized hub, keyboard, and mouse fixtures cover the device families
   currently connected on SparkleDog.
 - Tests prove loopback enforcement, zero Demo-mode requests, GET-only Live mode,
   capability relevance, stale-data preservation, reconnect recovery, RGB
-  library normalization, and tab persistence across refresh.
+  library normalization, and GUI-wide state persistence across refresh. A
+  static QML guard also rejects direct live-array models on audited stateful
+  controls.
 - QML still treats every interactive control and global profile as a local
   preview; no POST, PUT, DELETE, HID, configuration, or persistence path exists.
 
