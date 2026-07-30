@@ -249,6 +249,10 @@ Item {
                             readonly property var zone: page.zoneForKey(String(page.zoneKeys[index]))
                             Layout.fillWidth: true
                             implicitHeight: page.shell.compactMode ? 62 : 70
+                            leftPadding: page.shell.compactMode ? 12 : 16
+                            rightPadding: page.shell.compactMode ? 12 : 16
+                            topPadding: page.shell.compactMode ? 8 : 10
+                            bottomPadding: page.shell.compactMode ? 8 : 10
                             hoverEnabled: true
                             onClicked: page.shell.navigate("cooling")
 
@@ -347,6 +351,10 @@ Item {
                             readonly property var device: page.deviceForKey(String(page.deviceKeys[index]))
                             Layout.fillWidth: true
                             implicitHeight: page.shell.compactMode ? 62 : 70
+                            leftPadding: page.shell.compactMode ? 12 : 16
+                            rightPadding: page.shell.compactMode ? 12 : 16
+                            topPadding: page.shell.compactMode ? 8 : 10
+                            bottomPadding: page.shell.compactMode ? 8 : 10
                             hoverEnabled: true
                             onClicked: page.shell.selectDevice(device.id)
 

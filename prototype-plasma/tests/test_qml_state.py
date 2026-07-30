@@ -60,6 +60,22 @@ class QmlStateTests(unittest.TestCase):
                 self.assertIn(color, main)
         self.assertIn('model: ["Dark Modern", "Midnight", "Dim", "Light"]', service)
 
+    def test_overview_and_service_alignment_contracts(self) -> None:
+        overview = (QML_ROOT / "pages" / "OverviewPage.qml").read_text(encoding="utf-8")
+        service = (QML_ROOT / "pages" / "ServicePage.qml").read_text(encoding="utf-8")
+        panel_header = (QML_ROOT / "components" / "PanelHeader.qml").read_text(encoding="utf-8")
+        self.assertEqual(
+            overview.count("leftPadding: page.shell.compactMode ? 12 : 16"),
+            2,
+        )
+        self.assertEqual(
+            overview.count("rightPadding: page.shell.compactMode ? 12 : 16"),
+            2,
+        )
+        self.assertEqual(service.count("PanelHeader {"), 4)
+        self.assertGreaterEqual(panel_header.count("Layout.alignment: Qt.AlignTop"), 3)
+        self.assertIn('Accessible.name: "Show sidebar labels"', service)
+
 
 if __name__ == "__main__":
     unittest.main()

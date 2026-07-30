@@ -163,28 +163,11 @@ Item {
                     Layout.row: page.cellRow("appearance", serviceGrid.columns)
                     Layout.column: page.cellColumn("appearance", serviceGrid.columns)
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: "preferences-desktop-theme"
-                            color: page.shell.accentColor
-                            Layout.preferredWidth: 27
-                            Layout.preferredHeight: 27
-                        }
-                        ColumnLayout {
-                            spacing: 1
-                            Label {
-                                text: "Appearance"
-                                color: page.shell.primaryText
-                                font.pixelSize: 19
-                                font.weight: Font.DemiBold
-                            }
-                            Label {
-                                text: "Constrained customization preserves navigation"
-                                color: page.shell.mutedText
-                                font.pixelSize: 12
-                            }
-                        }
+                    PanelHeader {
+                        shell: page.shell
+                        iconName: "preferences-desktop-theme"
+                        title: "Appearance"
+                        subtitle: "Constrained customization preserves navigation"
                     }
 
                     Rectangle {
@@ -275,10 +258,19 @@ Item {
                         }
                     }
 
-                    Switch {
-                        text: "Show sidebar labels"
-                        checked: page.shell.sidebarLabels
-                        onToggled: page.shell.sidebarLabels = checked
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Show sidebar labels"
+                            color: page.shell.primaryText
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                        }
+                        Switch {
+                            checked: page.shell.sidebarLabels
+                            Accessible.name: "Show sidebar labels"
+                            onToggled: page.shell.sidebarLabels = checked
+                        }
                     }
                 }
 
@@ -289,28 +281,11 @@ Item {
                     Layout.row: page.cellRow("layout", serviceGrid.columns)
                     Layout.column: page.cellColumn("layout", serviceGrid.columns)
 
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: "view-grid"
-                            color: page.shell.accentColor
-                            Layout.preferredWidth: 27
-                            Layout.preferredHeight: 27
-                        }
-                        ColumnLayout {
-                            spacing: 1
-                            Label {
-                                text: "Layout"
-                                color: page.shell.primaryText
-                                font.pixelSize: 19
-                                font.weight: Font.DemiBold
-                            }
-                            Label {
-                                text: "Customize presentation without losing hierarchy"
-                                color: page.shell.mutedText
-                                font.pixelSize: 12
-                            }
-                        }
+                    PanelHeader {
+                        shell: page.shell
+                        iconName: "view-grid"
+                        title: "Layout"
+                        subtitle: "Customize presentation without losing hierarchy"
                     }
 
                     Rectangle {
@@ -370,20 +345,13 @@ Item {
                     Layout.row: page.cellRow("connection", serviceGrid.columns)
                     Layout.column: page.cellColumn("connection", serviceGrid.columns)
 
-                    Label {
-                        text: "Client connection"
-                        color: page.shell.primaryText
-                        font.pixelSize: 19
-                        font.weight: Font.DemiBold
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: page.shell.liveMode
+                    PanelHeader {
+                        shell: page.shell
+                        iconName: "network-connect"
+                        title: "Client connection"
+                        subtitle: page.shell.liveMode
                             ? "The Phase 1 transport uses asynchronous GET-only loopback requests. QML receives normalized models and never constructs URLs or parses arbitrary JSON."
                             : "Choose Live in the top bar to use the GET-only loopback transport. Demo mode opens no socket."
-                        color: page.shell.mutedText
-                        wrapMode: Text.WordWrap
                     }
 
                     ControlRow {
@@ -452,22 +420,16 @@ Item {
                     Layout.row: page.cellRow("features", serviceGrid.columns)
                     Layout.column: page.cellColumn("features", serviceGrid.columns)
 
-                    Label {
-                        text: "Service feature map"
-                        color: page.shell.primaryText
-                        font.pixelSize: 19
-                        font.weight: Font.DemiBold
-                    }
-
-                    Label {
-                        Layout.fillWidth: true
-                        text: "These administration areas remain visible in the information architecture even though this prototype cannot execute them."
-                        color: page.shell.mutedText
-                        wrapMode: Text.WordWrap
+                    PanelHeader {
+                        shell: page.shell
+                        iconName: "preferences-system"
+                        title: "Service feature map"
+                        subtitle: "These administration areas remain visible in the information architecture even though this prototype cannot execute them."
                     }
 
                     Flow {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
                         spacing: 7
                         Repeater {
                             model: [

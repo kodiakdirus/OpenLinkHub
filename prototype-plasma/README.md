@@ -93,6 +93,8 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Keyboard, mouse, audio, display, automation, and integration surfaces
 - VS Code-inspired Dark Modern default, retained Midnight/Dim/Light themes,
   accent choices, density, corner, and sidebar presentation controls
+- Consistent nested-cell insets on Overview and shared icon/title/subtitle
+  alignment across Service cards
 - Constrained per-workspace and per-device-tab cell ordering with half/full-row
   sizing and equal-height neighbors to prevent masonry-style gaps
 - Local notifications and explicit demo/read-only-live state
