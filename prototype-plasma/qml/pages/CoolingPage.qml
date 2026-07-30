@@ -224,10 +224,13 @@ Item {
                                 }
 
                                 ComboBox {
-                                    model: modelData.profiles
+                                    model: modelData.profiles || [modelData.profile]
                                     currentIndex: Math.max(0, model.indexOf(modelData.profile))
                                     Layout.preferredWidth: 160
+                                    enabled: !page.shell.liveMode
                                     onActivated: page.shell.markDirty(modelData.name + " profile")
+                                    ToolTip.visible: hovered && page.shell.liveMode
+                                    ToolTip.text: "Read-only in Phase 1"
                                 }
 
                                 CoolingCurve {

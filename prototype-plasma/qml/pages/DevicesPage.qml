@@ -36,6 +36,14 @@ Item {
                     placeholderText: "Filter devices or capabilities…"
                     onTextChanged: page.query = text
                 }
+
+                Button {
+                    visible: page.shell.liveMode
+                    text: page.shell.backendClient.refreshing ? "Refreshing…" : "Refresh"
+                    icon.name: "view-refresh"
+                    enabled: !page.shell.backendClient.refreshing
+                    onClicked: page.shell.backendClient.refresh()
+                }
             }
 
             Panel {
@@ -53,14 +61,16 @@ Item {
                     }
                     Label {
                         Layout.fillWidth: true
-                        text: "Capability-aware navigation is active. Device tabs below are generated from the mock hardware capabilities."
+                        text: page.shell.liveMode
+                            ? "Live cards and read-only tabs are normalized from legacy service payloads. Capability inference remains provisional until the versioned manifest exists."
+                            : "Capability-aware navigation is active. Device tabs below are generated from the demo hardware capabilities."
                         color: page.shell.secondaryText
                         wrapMode: Text.WordWrap
                     }
                     StatusBadge {
                         shell: page.shell
-                        text: "Backend disconnected"
-                        badgeColor: page.shell.warningColor
+                        text: page.shell.backendClient.statusText
+                        badgeColor: page.shell.connectionBadgeColor()
                         filled: true
                     }
                 }
@@ -124,7 +134,9 @@ Item {
                                 width: 9
                                 height: 9
                                 radius: 5
-                                color: page.shell.successColor
+                                color: modelData.connected === false
+                                    ? page.shell.warningColor
+                                    : page.shell.successColor
                             }
                         }
 
@@ -173,7 +185,11 @@ Item {
                 visible: page.shell.filteredDevices(page.query).length === 0
                 Layout.fillWidth: true
                 Layout.topMargin: 60
-                text: "No mock device matches “" + page.query + "”."
+                text: page.shell.liveMode
+                    ? (page.query.length > 0
+                        ? "No live device matches “" + page.query + "”."
+                        : "No live devices are available.")
+                    : "No demo device matches “" + page.query + "”."
                 color: page.shell.mutedText
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: 16

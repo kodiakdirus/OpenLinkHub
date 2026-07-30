@@ -1,0 +1,610 @@
+"""Pure legacy-API adapters used by the read-only Plasma client."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+import json
+from typing import Any, Mapping
+
+
+class PayloadError(ValueError):
+    """Raised when a legacy response cannot be normalized safely."""
+
+
+@dataclass(frozen=True)
+class ApiEnvelope:
+    code: int
+    status: int | None
+    message: str
+    data: Any = None
+    device: Any = None
+    devices: Any = None
+    dashboard: Any = None
+
+    @classmethod
+    def from_bytes(cls, payload: bytes) -> "ApiEnvelope":
+        try:
+            decoded = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise PayloadError("The service returned malformed JSON.") from error
+        if not isinstance(decoded, dict):
+            raise PayloadError("The service response is not a JSON object.")
+
+        code = decoded.get("code", 0)
+        if not isinstance(code, int):
+            raise PayloadError("The service response has an invalid code field.")
+        status = decoded.get("status")
+        if status is not None and not isinstance(status, int):
+            raise PayloadError("The service response has an invalid status field.")
+
+        return cls(
+            code=code,
+            status=status,
+            message=str(decoded.get("message", "")),
+            data=decoded.get("data"),
+            device=decoded.get("device"),
+            devices=decoded.get("devices"),
+            dashboard=decoded.get("dashboard"),
+        )
+
+
+def _mapping(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _items(value: Any) -> list[tuple[str, Mapping[str, Any]]]:
+    if not isinstance(value, Mapping):
+        return []
+    return [
+        (str(key), item)
+        for key, item in value.items()
+        if isinstance(item, Mapping)
+    ]
+
+
+def _number(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _text(value: Any, fallback: str = "") -> str:
+    return str(value) if value not in (None, "") else fallback
+
+
+def _format_temperature(value: Any) -> str:
+    number = _number(value)
+    if number is None:
+        return "—"
+    return f"{number:.1f}°C"
+
+
+def _format_rpm(value: Any) -> str:
+    number = _number(value)
+    if number is None:
+        return "—"
+    return f"{round(number):,} RPM"
+
+
+def _stat(
+    title: str,
+    value: str,
+    description: str = "",
+    *,
+    accent: bool = False,
+) -> dict[str, Any]:
+    return {
+        "title": title,
+        "description": description,
+        "kind": "stat",
+        "value": value,
+        "accent": accent,
+    }
+
+
+def _group(
+    title: str,
+    icon: str,
+    description: str,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "title": title,
+        "icon": icon,
+        "description": description,
+        "items": items,
+    }
+
+
+def _tab(
+    name: str,
+    icon: str,
+    groups: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {"name": name, "icon": icon, "groups": groups, "readOnly": True}
+
+
+CAPABILITY_ICONS = {
+    "Cooling": "temperature-normal",
+    "Sensors": "office-chart-line",
+    "Lighting": "preferences-desktop-color",
+    "Topology": "view-list-tree",
+    "Display": "video-display",
+    "Keys": "input-keyboard",
+    "Actuation": "input-keyboard",
+    "Buttons": "configure-shortcuts",
+    "DPI": "input-mouse",
+    "Performance": "preferences-system-performance",
+    "Profiles": "document-multiple",
+    "Audio": "audio-headphones",
+    "Power": "battery",
+    "Controls": "input-gaming",
+    "Analog": "office-chart-line",
+    "Vibration": "preferences-desktop-notification-bell",
+    "Pairing": "network-wireless",
+    "Wireless": "network-wireless",
+}
+
+
+def _device_icon(product: str, detail: Mapping[str, Any]) -> str:
+    upper = product.upper()
+    keyboard_tokens = (
+        "KEYBOARD", "K55", "K60", "K65", "K68", "K70", "K95", "K100", "STRAFE"
+    )
+    if any(token in upper for token in keyboard_tokens):
+        return "input-keyboard"
+    if "SCUF" in upper or "CONTROLLER" in upper:
+        return "input-gaming"
+    if any(token in upper for token in ("HEADSET", "VIRTUOSO", "HS80", "VOID")):
+        return "audio-headphones"
+    mouse_tokens = (
+        "MOUSE", "SCIMITAR", "M65", "M75", "HARPOON", "IRONCLAW",
+        "DARKSTAR", "KATAR", "SABRE",
+    )
+    if any(token in upper for token in mouse_tokens):
+        return "input-mouse"
+    if "SLIPSTREAM" in upper or "DONGLE" in upper:
+        return "network-wireless"
+    if "PSU" in upper or detail.get("Psu"):
+        return "preferences-system-power-management"
+    if any(token in upper for token in ("LCD", "DISPLAY", "XENEON")) and not detail.get("devices"):
+        return "video-display"
+    if "MEMORY" in upper or "DRAM" in upper:
+        return "memory"
+    if detail.get("devices") or "HUB" in upper or "COMMANDER" in upper:
+        return "drive-multidisk"
+    return "applications-system"
+
+
+def _infer_capabilities(
+    product: str,
+    detail: Mapping[str, Any],
+    channels: list[tuple[str, Mapping[str, Any]]],
+) -> list[str]:
+    capabilities: list[str] = []
+    upper = product.upper()
+
+    def add(name: str, condition: bool = True) -> None:
+        if condition and name not in capabilities:
+            capabilities.append(name)
+
+    add("Cooling", any(bool(channel.get("HasSpeed")) for _, channel in channels))
+    add(
+        "Sensors",
+        bool(detail.get("TemperatureProbes"))
+        or any(
+            bool(channel.get("HasTemps"))
+            or bool(channel.get("IsTemperatureProbe"))
+            or _number(channel.get("temperature")) not in (None, 0.0)
+            for _, channel in channels
+        ),
+    )
+    add(
+        "Lighting",
+        any(
+            key in detail
+            for key in ("RGBModes", "Rgb", "LEDChannels", "ChangeableLedChannels")
+        )
+        or any(_text(channel.get("rgb")) != "" for _, channel in channels),
+    )
+    add("Topology", bool(channels))
+    add("Display", bool(detail.get("HasLCD")) or bool(detail.get("LCDModes")))
+
+    keyboard_tokens = (
+        "K55", "K60", "K65", "K68", "K70", "K95", "K100", "KEYBOARD", "STRAFE"
+    )
+    keyboard = (
+        any(token in upper for token in keyboard_tokens)
+        or "KeyboardKey" in detail
+        or "UIKeyboard" in detail
+    )
+    mouse_tokens = (
+        "SCIMITAR", "M65", "M75", "HARPOON", "IRONCLAW",
+        "DARKSTAR", "KATAR", "SABRE", "MOUSE",
+    )
+    mouse = (
+        any(token in upper for token in mouse_tokens)
+        or "DPIAmount" in detail
+        or "MaxDPI" in detail
+    )
+    headset = (
+        any(token in upper for token in ("HEADSET", "VIRTUOSO", "HS80", "VOID"))
+        or any(key in detail for key in ("Equalizers", "NoiseCancellation", "SideTone"))
+    )
+    controller = (
+        "SCUF" in upper
+        or "CONTROLLER" in upper
+        or any(key in detail for key in ("VibrationValue", "EmulationMode", "CurveData"))
+    )
+
+    add("Keys", keyboard)
+    add("Actuation", keyboard and any("Actuation" in key for key in detail))
+    add("Buttons", mouse or headset)
+    add("DPI", mouse)
+    add("Performance", (keyboard or mouse) and "PollingRates" in detail)
+    add("Profiles", keyboard or bool(detail.get("userProfiles")))
+    add("Audio", headset)
+    add("Controls", controller)
+    add("Analog", controller)
+    add("Vibration", controller)
+    add(
+        "Power",
+        _number(detail.get("BatteryLevel")) is not None
+        and detail.get("Usb") is not True,
+    )
+    add("Wireless", bool(detail.get("Connected")) and not bool(detail.get("Usb", True)))
+    add("Pairing", "SLIPSTREAM" in upper or "DONGLE" in upper)
+
+    return capabilities
+
+
+def _profile_name(detail: Mapping[str, Any]) -> str:
+    profile = _mapping(detail.get("DeviceProfile"))
+    return _text(
+        profile.get("Profile")
+        or profile.get("ActiveProfile")
+        or profile.get("RGBProfile"),
+        "Service managed",
+    )
+
+
+def _build_tabs(
+    product: str,
+    firmware: str,
+    capabilities: list[str],
+    detail: Mapping[str, Any],
+    channels: list[tuple[str, Mapping[str, Any]]],
+    battery: float | None,
+) -> list[dict[str, Any]]:
+    identity_items = [
+        _stat("Connection", "Connected · live", "Read from the loopback service", accent=True),
+        _stat("Product", product, "Backend-reported identity"),
+        _stat("Firmware", firmware or "Not reported", "Backend-reported firmware"),
+        _stat(
+            "Capability source",
+            "Legacy adapter",
+            "Provisional until the versioned capability manifest exists",
+        ),
+    ]
+    if battery is not None:
+        identity_items.append(_stat("Battery", f"{round(battery)}%", "Read-only telemetry"))
+
+    tabs = [
+        _tab(
+            "Overview",
+            "view-grid",
+            [
+                _group(
+                    "Live identity",
+                    "dialog-ok",
+                    "This Phase 1 tab contains read-only service state.",
+                    identity_items,
+                ),
+                _group(
+                    "Detected capabilities",
+                    "view-list-details",
+                    "Legacy payload inference is visible and deliberately provisional.",
+                    [
+                        _stat(name, "Available", "No mutation callback is connected")
+                        for name in capabilities
+                    ]
+                    or [_stat("Detailed controls", "Not reported")],
+                ),
+            ],
+        )
+    ]
+
+    for capability in capabilities:
+        icon = CAPABILITY_ICONS.get(capability, "applications-system")
+        items: list[dict[str, Any]] = []
+        description = "Detected from the current legacy device payload."
+
+        if capability == "Cooling":
+            for channel_id, channel in channels:
+                if not channel.get("HasSpeed"):
+                    continue
+                title = _text(channel.get("label") or channel.get("name"), f"Channel {channel_id}")
+                value = _format_rpm(channel.get("rpm"))
+                profile = _text(channel.get("profile"), "No profile reported")
+                items.append(_stat(title, value, f"Channel {channel_id} · {profile}"))
+        elif capability == "Sensors":
+            for channel_id, channel in channels:
+                temperature = _number(channel.get("temperature"))
+                if temperature in (None, 0.0) and not channel.get("IsTemperatureProbe"):
+                    continue
+                title = _text(channel.get("label") or channel.get("name"), f"Sensor {channel_id}")
+                items.append(
+                    _stat(
+                        title,
+                        _format_temperature(temperature),
+                        f"Channel {channel_id} · read-only",
+                        accent=temperature not in (None, 0.0),
+                    )
+                )
+        elif capability == "Lighting":
+            if channels:
+                for channel_id, channel in channels:
+                    rgb = _text(channel.get("rgb"))
+                    if rgb:
+                        title = _text(channel.get("label") or channel.get("name"), f"Channel {channel_id}")
+                        items.append(_stat(title, rgb, f"Channel {channel_id} · active effect"))
+            if not items:
+                items.append(_stat("Active lighting", _profile_name(detail), "Read-only profile state"))
+        elif capability == "Topology":
+            items = [
+                _stat(
+                    _text(channel.get("label") or channel.get("name"), f"Channel {channel_id}"),
+                    _text(channel.get("description"), "Attached device"),
+                    f"Channel {channel_id} · port {_text(channel.get('portId'), '—')}",
+                )
+                for channel_id, channel in channels
+            ]
+        elif capability == "Display":
+            brightness_levels = detail.get("LCDBrightnessLevels", [])
+            items = [
+                _stat("LCD support", "Available", "Reported by the device"),
+                _stat(
+                    "LCD brightness modes",
+                    str(len(brightness_levels) if isinstance(brightness_levels, (list, dict)) else 0),
+                    "Reported options",
+                ),
+            ]
+        elif capability == "DPI":
+            items = [
+                _stat("DPI stages", _text(detail.get("DPIAmount"), "Not reported")),
+                _stat(
+                    "DPI range",
+                    f"{_text(detail.get('MinDPI'), '—')}–{_text(detail.get('MaxDPI'), '—')}",
+                    "Backend-reported limits",
+                ),
+            ]
+        elif capability == "Performance":
+            items = [
+                _stat(
+                    "Polling-rate options",
+                    str(len(_mapping(detail.get("PollingRates")))),
+                    "Read-only option inventory",
+                )
+            ]
+        elif capability == "Profiles":
+            profiles = detail.get("userProfiles", [])
+            items = [
+                _stat("Active profile", _profile_name(detail)),
+                _stat(
+                    "Saved snapshots",
+                    str(len(profiles) if isinstance(profiles, (list, dict)) else 0),
+                    "Device-local profiles",
+                ),
+            ]
+        elif capability == "Power":
+            value = f"{round(battery)}%" if battery is not None else "Not reported"
+            items = [_stat("Battery level", value)]
+
+        if not items:
+            items = [
+                _stat(
+                    capability,
+                    "Available",
+                    "Detailed read mapping is scheduled for a later Phase 1 fixture",
+                )
+            ]
+
+        tabs.append(
+            _tab(
+                capability,
+                icon,
+                [
+                    _group(
+                        f"Live {capability.lower()} state",
+                        icon,
+                        description,
+                        items,
+                    )
+                ],
+            )
+        )
+
+    return tabs
+
+
+class LegacySnapshot:
+    """Normalize a set of successful legacy GET responses."""
+
+    def __init__(
+        self,
+        *,
+        inventory: Mapping[str, Any],
+        details: Mapping[str, Mapping[str, Any]],
+        batteries: Mapping[str, Any] | None = None,
+        cpu_temperature: Any = None,
+        gpu_temperature: Any = None,
+    ) -> None:
+        self.inventory = inventory
+        self.details = details
+        self.batteries = _mapping(batteries)
+        self.cpu_temperature = cpu_temperature
+        self.gpu_temperature = gpu_temperature
+
+    def build(self) -> dict[str, Any]:
+        records = _mapping(self.inventory.get("devices"))
+        devices: list[dict[str, Any]] = []
+        all_channels: list[tuple[str, Mapping[str, Any]]] = []
+        coolant: float | None = None
+
+        for device_id, wrapper in _items(records):
+            product = _text(wrapper.get("Product"), "Unknown device")
+            if bool(wrapper.get("Hidden")) or product.casefold() == "cluster":
+                continue
+
+            detail = _mapping(self.details.get(device_id))
+            if not detail:
+                detail = _mapping(wrapper.get("GetDevice"))
+
+            channels = _items(detail.get("devices"))
+            all_channels.extend(channels)
+            firmware = _text(detail.get("firmware") or wrapper.get("Firmware"))
+            battery_record = _mapping(self.batteries.get(device_id))
+            battery = _number(
+                battery_record.get("Level")
+                if battery_record
+                else detail.get("BatteryLevel")
+            )
+            if detail.get("Usb") is True:
+                battery = None
+            capabilities = _infer_capabilities(product, detail, channels)
+
+            for _, channel in channels:
+                temperature = _number(channel.get("temperature"))
+                if temperature not in (None, 0.0) and (
+                    bool(channel.get("AIO"))
+                    or "AIO" in _text(channel.get("description")).upper()
+                    or "PUMP" in _text(channel.get("description")).upper()
+                ):
+                    coolant = temperature
+
+            subtitle_parts = ["Live"]
+            if firmware:
+                subtitle_parts.append(f"Firmware {firmware}")
+            if channels:
+                subtitle_parts.append(f"{len(channels)} channels")
+            if battery is not None:
+                subtitle_parts.append(f"Battery {round(battery)}%")
+
+            devices.append(
+                {
+                    "id": device_id,
+                    "name": product,
+                    "icon": _device_icon(product, detail),
+                    "subtitle": " · ".join(subtitle_parts),
+                    "capabilities": capabilities,
+                    "tabs": _build_tabs(
+                        product,
+                        firmware,
+                        capabilities,
+                        detail,
+                        channels,
+                        battery,
+                    ),
+                    "connected": bool(detail.get("Connected", True)),
+                    "source": "live",
+                }
+            )
+
+        cooling_zones, zone_values = self._cooling_zones(all_channels)
+        telemetry = {
+            "cpu": _format_temperature(self.cpu_temperature),
+            "gpu": _format_temperature(self.gpu_temperature),
+            "coolant": _format_temperature(coolant),
+            "acoustics": "Read-only",
+        }
+        overview_metrics = [
+            {
+                "key": "cpu",
+                "label": "CPU",
+                "detail": "OpenLinkHub service sensor",
+                "icon": "cpu",
+                "state": "Live" if telemetry["cpu"] != "—" else "Unavailable",
+                "warning": telemetry["cpu"] == "—",
+            },
+            {
+                "key": "gpu",
+                "label": "GPU",
+                "detail": "OpenLinkHub service sensor",
+                "icon": "video-card-inactive",
+                "state": "Live" if telemetry["gpu"] != "—" else "Unavailable",
+                "warning": telemetry["gpu"] == "—",
+            },
+            {
+                "key": "coolant",
+                "label": "Coolant",
+                "detail": "Detected AIO liquid sensor",
+                "icon": "temperature-normal",
+                "state": "Live" if telemetry["coolant"] != "—" else "Unavailable",
+                "warning": telemetry["coolant"] == "—",
+            },
+            {
+                "key": "acoustics",
+                "label": "Service",
+                "detail": "No write operations are connected",
+                "icon": "network-connect",
+                "state": "Read only",
+                "warning": False,
+            },
+        ]
+        return {
+            "devices": devices,
+            "telemetry": telemetry,
+            "overviewMetrics": overview_metrics,
+            "coolingZones": cooling_zones,
+            "zoneValues": zone_values,
+        }
+
+    @staticmethod
+    def _cooling_zones(
+        channels: list[tuple[str, Mapping[str, Any]]],
+    ) -> tuple[list[dict[str, Any]], dict[str, str]]:
+        grouped: dict[str, dict[str, Any]] = {}
+        for channel_id, channel in channels:
+            if not channel.get("HasSpeed"):
+                continue
+            profile = _text(channel.get("profile"), "Unassigned")
+            description = _text(channel.get("description"))
+            name = _text(channel.get("name"))
+            is_pump = bool(channel.get("AIO")) or "PUMP" in (description + " " + name).upper()
+            key = "pump" if is_pump else profile.casefold().replace(" ", "-")
+            group = grouped.setdefault(
+                key,
+                {
+                    "key": key,
+                    "name": "Pump" if is_pump else profile,
+                    "icon": "media-playback-start" if is_pump else "temperature-normal",
+                    "source": "Device sensor" if is_pump else "Service profile",
+                    "temperature": "—",
+                    "profile": profile,
+                    "profiles": [profile],
+                    "zeroRpm": False,
+                    "minimum": 0,
+                    "rpms": [],
+                    "channels": [],
+                },
+            )
+            rpm = _number(channel.get("rpm"))
+            if rpm is not None:
+                group["rpms"].append(rpm)
+            group["channels"].append(channel_id)
+            temperature = _number(channel.get("temperature"))
+            if temperature not in (None, 0.0):
+                group["temperature"] = _format_temperature(temperature)
+
+        zones: list[dict[str, Any]] = []
+        values: dict[str, str] = {}
+        for group in grouped.values():
+            rpms = group.pop("rpms")
+            channels_for_group = group.pop("channels")
+            average = sum(rpms) / len(rpms) if rpms else None
+            group["channelSummary"] = ", ".join(channels_for_group)
+            zones.append(group)
+            values[group["key"]] = _format_rpm(average)
+        return zones, values

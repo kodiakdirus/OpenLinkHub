@@ -137,8 +137,10 @@ Item {
 
                     StatusBadge {
                         shell: page.shell
-                        text: "Connected · mock"
-                        badgeColor: page.shell.successColor
+                        text: page.shell.liveMode ? "Connected · read only" : "Connected · demo"
+                        badgeColor: page.device.connected === false
+                            ? page.shell.warningColor
+                            : page.shell.successColor
                         filled: true
                     }
                 }

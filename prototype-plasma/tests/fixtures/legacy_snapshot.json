@@ -1,0 +1,165 @@
+{
+  "inventory": {
+    "code": 200,
+    "status": 0,
+    "devices": {
+      "TEST-HUB-001": {
+        "Product": "iCUE LINK System Hub",
+        "Serial": "TEST-HUB-001",
+        "Hidden": false,
+        "GetDevice": null
+      },
+      "TEST-KEYBOARD-001": {
+        "Product": "K100 AIR",
+        "Serial": "TEST-KEYBOARD-001",
+        "Hidden": false,
+        "GetDevice": null
+      },
+      "TEST-MOUSE-001": {
+        "Product": "SCIMITAR ELITE",
+        "Serial": "TEST-MOUSE-001",
+        "Hidden": false,
+        "GetDevice": null
+      },
+      "TEST-DONGLE-001": {
+        "Product": "SLIPSTREAM",
+        "Serial": "TEST-DONGLE-001",
+        "Hidden": true,
+        "GetDevice": null
+      },
+      "cluster": {
+        "Product": "Cluster",
+        "Serial": "cluster",
+        "Hidden": true,
+        "GetDevice": null
+      }
+    }
+  },
+  "details": {
+    "TEST-HUB-001": {
+      "product": "iCUE LINK System Hub",
+      "firmware": "3.10.test",
+      "HasLCD": true,
+      "RGBModes": {
+        "static": 1
+      },
+      "TemperatureProbes": {},
+      "devices": {
+        "2": {
+          "channelId": 2,
+          "name": "Test AIO",
+          "description": "AIO",
+          "rpm": 1500,
+          "temperature": 38.5,
+          "profile": "Pump Quiet",
+          "rgb": "static",
+          "HasSpeed": true,
+          "HasTemps": true,
+          "AIO": true,
+          "portId": 0
+        },
+        "13": {
+          "channelId": 13,
+          "name": "Test Radiator Fan",
+          "description": "Fan",
+          "rpm": 600,
+          "temperature": 0,
+          "profile": "Radiator",
+          "rgb": "static",
+          "HasSpeed": true,
+          "HasTemps": false,
+          "AIO": false,
+          "portId": 0
+        },
+        "15": {
+          "channelId": 15,
+          "name": "Test Case Fan",
+          "description": "Fan",
+          "rpm": 0,
+          "temperature": 0,
+          "profile": "Case",
+          "rgb": "off",
+          "HasSpeed": true,
+          "HasTemps": false,
+          "AIO": false,
+          "portId": 1
+        }
+      }
+    },
+    "TEST-KEYBOARD-001": {
+      "product": "K100 AIR",
+      "firmware": "5.13.test",
+      "Connected": true,
+      "Usb": false,
+      "BatteryLevel": 82,
+      "KeyboardKey": {},
+      "KeyAssignmentTypes": {
+        "1": "Keyboard"
+      },
+      "PollingRates": {
+        "1": "125 Hz",
+        "4": "1000 Hz"
+      },
+      "RGBModes": {
+        "static": 1
+      },
+      "LEDChannels": 137,
+      "DeviceProfile": {
+        "Profile": "Desktop"
+      },
+      "userProfiles": [
+        "Default"
+      ]
+    },
+    "TEST-MOUSE-001": {
+      "product": "SCIMITAR ELITE",
+      "firmware": "5.6.test",
+      "Connected": true,
+      "Usb": true,
+      "BatteryLevel": 100,
+      "DPIAmount": 6,
+      "MinDPI": 100,
+      "MaxDPI": 26000,
+      "KeyAssignmentTypes": {
+        "1": "Mouse"
+      },
+      "PollingRates": {
+        "1": "125 Hz",
+        "4": "1000 Hz"
+      },
+      "RGBModes": {
+        "static": 1
+      },
+      "LEDChannels": 4,
+      "userProfiles": [
+        "Default"
+      ]
+    }
+  },
+  "battery": {
+    "code": 200,
+    "status": 1,
+    "data": {
+      "TEST-KEYBOARD-001": {
+        "Device": "K100 AIR",
+        "Level": 82,
+        "DeviceType": 0
+      },
+      "TEST-MOUSE-001": {
+        "Device": "SCIMITAR ELITE",
+        "Level": 100,
+        "DeviceType": 1
+      }
+    }
+  },
+  "cpu": {
+    "code": 200,
+    "status": 1,
+    "data": 52.25
+  },
+  "gpu": {
+    "code": 200,
+    "status": 1,
+    "data": 47
+  }
+}

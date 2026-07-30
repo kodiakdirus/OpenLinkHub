@@ -111,7 +111,9 @@ Item {
                                 font.weight: Font.DemiBold
                             }
                             Label {
-                                text: "Mock values follow the active global profile"
+                                text: page.shell.liveMode
+                                    ? "Grouped read-only RPM from the service"
+                                    : "Mock values follow the active global profile"
                                 color: page.shell.mutedText
                                 font.pixelSize: 12
                             }
@@ -203,7 +205,9 @@ Item {
                                 font.weight: Font.DemiBold
                             }
                             Label {
-                                text: page.shell.devices.length + " mock devices · all available"
+                                text: page.shell.liveMode
+                                    ? page.shell.devices.length + " live devices · read only"
+                                    : page.shell.devices.length + " demo devices · all available"
                                 color: page.shell.mutedText
                                 font.pixelSize: 12
                             }
@@ -263,7 +267,9 @@ Item {
                                     width: 8
                                     height: 8
                                     radius: 4
-                                    color: page.shell.successColor
+                                    color: modelData.connected === false
+                                        ? page.shell.warningColor
+                                        : page.shell.successColor
                                 }
                             }
                         }
@@ -276,7 +282,7 @@ Item {
                 Layout.fillWidth: true
 
                 Label {
-                    text: "Quick actions"
+                    text: page.shell.liveMode ? "Local previews" : "Quick actions"
                     color: page.shell.primaryText
                     font.pixelSize: 20
                     font.weight: Font.DemiBold
@@ -313,7 +319,14 @@ Item {
                                         "Only the mock interface changed."
                                     )
                                 } else {
-                                    page.shell.showToast("No active alerts", "All prototype devices report normal status.")
+                                    page.shell.showToast(
+                                        page.shell.backendClient.errorMessage.length > 0
+                                            ? "Some live data is unavailable"
+                                            : "No connection alerts",
+                                        page.shell.backendClient.errorMessage.length > 0
+                                            ? page.shell.backendClient.errorMessage
+                                            : "The read-only service connection reports normally."
+                                    )
                                 }
                             }
 

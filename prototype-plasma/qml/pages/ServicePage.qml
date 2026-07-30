@@ -59,8 +59,8 @@ Item {
                     spacing: 14
 
                     Kirigami.Icon {
-                            source: "network-disconnect"
-                        color: page.shell.warningColor
+                        source: page.shell.liveMode ? "network-connect" : "network-disconnect"
+                        color: page.shell.connectionBadgeColor()
                         Layout.preferredWidth: 34
                         Layout.preferredHeight: 34
                     }
@@ -69,14 +69,18 @@ Item {
                         Layout.fillWidth: true
                         spacing: 2
                         Label {
-                            text: "Prototype mode — no backend connection"
+                            text: page.shell.liveMode
+                                ? "Phase 1 — read-only backend connection"
+                                : "Demo mode — no backend connection"
                             color: page.shell.primaryText
                             font.pixelSize: 18
                             font.weight: Font.DemiBold
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: "This process has no networking code. Controls change local QML state only and reset when the window closes."
+                            text: page.shell.liveMode
+                                ? "Only GET requests are implemented. Live inventory and telemetry are normalized by a typed Qt client; every control mutation remains a local preview."
+                                : "Controls use local demo state and reset when the window closes."
                             color: page.shell.secondaryText
                             wrapMode: Text.WordWrap
                         }
@@ -90,8 +94,8 @@ Item {
 
                     StatusBadge {
                         shell: page.shell
-                        text: "0 API calls"
-                        badgeColor: page.shell.successColor
+                        text: page.shell.backendClient.apiCallCount + " read calls"
+                        badgeColor: page.shell.connectionBadgeColor()
                         filled: true
                     }
                 }
@@ -367,7 +371,7 @@ Item {
                     Layout.column: page.cellColumn("connection", serviceGrid.columns)
 
                     Label {
-                        text: "Future client connection"
+                        text: "Client connection"
                         color: page.shell.primaryText
                         font.pixelSize: 19
                         font.weight: Font.DemiBold
@@ -375,7 +379,9 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: "The production native client would use the same loopback HTTP API as the WebUI. This prototype intentionally leaves that transport disabled."
+                        text: page.shell.liveMode
+                            ? "The Phase 1 transport uses asynchronous GET-only loopback requests. QML receives normalized models and never constructs URLs or parses arbitrary JSON."
+                            : "Choose Live in the top bar to use the GET-only loopback transport. Demo mode opens no socket."
                         color: page.shell.mutedText
                         wrapMode: Text.WordWrap
                     }
@@ -411,18 +417,20 @@ Item {
                         shell: page.shell
                         feature: ({
                             title: "Write path",
-                            description: "Validated profile and device commands",
+                            description: "Not implemented in Phase 1",
                             kind: "stat",
-                            value: "POST / PUT / DELETE"
+                            value: "Unavailable"
                         })
                     }
                     ControlRow {
                         shell: page.shell
                         feature: ({
                             title: "Connection",
-                            description: "No socket is opened",
+                            description: page.shell.backendClient.errorMessage.length > 0
+                                ? page.shell.backendClient.errorMessage
+                                : "Current client state",
                             kind: "stat",
-                            value: "Disabled"
+                            value: page.shell.backendClient.statusText
                         })
                     }
                     ControlRow {
@@ -432,7 +440,7 @@ Item {
                             title: "API operations",
                             description: "Lifetime of this process",
                             kind: "stat",
-                            value: "0"
+                            value: page.shell.backendClient.apiCallCount + " GET"
                         })
                     }
                 }

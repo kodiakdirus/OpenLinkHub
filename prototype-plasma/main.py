@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the backend-free OpenLinkHub Plasma interaction prototype."""
+"""Launch the OpenLinkHub Plasma interaction prototype."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run the backend-free OpenLinkHub Plasma prototype."
+        description="Run the OpenLinkHub Plasma prototype."
     )
     parser.add_argument(
         "--screenshot",
@@ -51,6 +51,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="open the selected page in cell-arrangement mode",
     )
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="start the Phase 1 read-only connection to 127.0.0.1:27003",
+    )
     return parser.parse_args()
 
 
@@ -64,6 +69,8 @@ def main() -> int:
     from PyQt6.QtGui import QGuiApplication, QIcon
     from PyQt6.QtQml import QQmlApplicationEngine
 
+    from backend import BackendController
+
     QCoreApplication.setOrganizationName("OpenLinkHub")
     QCoreApplication.setApplicationName("OpenLinkHub Plasma Prototype")
     QCoreApplication.setApplicationVersion("0.1")
@@ -74,7 +81,9 @@ def main() -> int:
     if not QIcon.themeName():
         QIcon.setThemeName("breeze")
 
+    backend = BackendController()
     engine = QQmlApplicationEngine()
+    engine.rootContext().setContextProperty("backend", backend)
     qml_file = Path(__file__).resolve().parent / "qml" / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml_file)))
 
@@ -88,6 +97,8 @@ def main() -> int:
         engine.rootObjects()[0].setProperty("demoDialog", True)
     if args.arrange:
         engine.rootObjects()[0].setProperty("demoArrange", True)
+    if args.live:
+        backend.setMode("live")
 
     if args.screenshot:
         destination = Path(args.screenshot).expanduser().resolve()

@@ -7,6 +7,27 @@ Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules at
 OpenLinkHub commit `9c242a17`.
 
+## Implementation checkpoint
+
+Phase 1 is implemented as an opt-in read-only client:
+
+- Demo mode remains the default and opens no connection.
+- Live mode is fixed to `http://127.0.0.1:27003`.
+- The asynchronous Qt transport implements only GET requests for inventory,
+  per-device detail, battery, CPU temperature, and GPU temperature.
+- Product-specific legacy payloads are normalized into device cards,
+  capability-relevant read-only tabs, telemetry, and cooling summaries.
+- Hidden transport/cluster records are excluded from ordinary device cards.
+- Sanitized hub, keyboard, and mouse fixtures cover the device families
+  currently connected on SparkleDog.
+- Tests prove loopback enforcement, zero Demo-mode requests, GET-only Live mode,
+  capability relevance, stale-data preservation, and reconnect recovery.
+- QML still treats every interactive control and global profile as a local
+  preview; no POST, PUT, DELETE, HID, configuration, or persistence path exists.
+
+The capability inference in this slice is explicitly provisional. The additive
+versioned capability manifest remains the next backend contract milestone.
+
 ## Outcome
 
 Keep one hardware authority and offer two first-class clients:
@@ -416,4 +437,3 @@ API cannot express safely.
 - Existing Web UI routes remain compatible.
 - Plasma sensor publication is read-only and separate from hardware control.
 - Initial implementation is loopback-only and read-only.
-

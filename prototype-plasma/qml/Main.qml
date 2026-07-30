@@ -23,6 +23,8 @@ ApplicationWindow {
     property int selectedDeviceIndex: 0
     property bool pendingChanges: false
     property bool lightsEnabled: true
+    readonly property var backendClient: backend
+    readonly property bool liveMode: backendClient.mode === "live"
 
     property string themeMode: "Dark"
     property color accentColor: "#66d7c5"
@@ -57,7 +59,41 @@ ApplicationWindow {
     readonly property color successColor: "#73d575"
     readonly property color warningColor: "#e7b85c"
     readonly property color dangerColor: "#ee7278"
-    readonly property var currentDevice: devices[selectedDeviceIndex]
+    readonly property var currentDevice: devices.length > 0
+        && selectedDeviceIndex >= 0
+        && selectedDeviceIndex < devices.length
+        ? devices[selectedDeviceIndex]
+        : ({
+            id: "",
+            name: "No device selected",
+            icon: "network-disconnect",
+            subtitle: "No live device data is available",
+            capabilities: [],
+            tabs: []
+        })
+
+    Connections {
+        target: root.backendClient
+
+        function onModeChanged() {
+            root.selectedDeviceIndex = 0
+            if (root.activeSection === "device") root.activeSection = "devices"
+            if (!root.pendingChanges) statusHint.text = root.baseStatusHint()
+        }
+
+        function onDataChanged() {
+            if (root.selectedDeviceIndex >= root.devices.length) {
+                root.selectedDeviceIndex = 0
+                if (root.activeSection === "device" && root.devices.length === 0) {
+                    root.activeSection = "devices"
+                }
+            }
+        }
+
+        function onConnectionChanged() {
+            if (!root.pendingChanges) statusHint.text = root.baseStatusHint()
+        }
+    }
 
     onDemoDialogChanged: {
         if (demoDialog) {
@@ -106,12 +142,15 @@ ApplicationWindow {
         { key: "service", label: "Service", icon: "preferences-system" }
     ]
 
-    property var overviewMetrics: [
+    property var demoOverviewMetrics: [
         { key: "cpu", label: "CPU", detail: "Ryzen processor", icon: "cpu", state: "Normal" },
         { key: "gpu", label: "GPU", detail: "Radeon graphics", icon: "video-card-inactive", state: "Normal" },
         { key: "coolant", label: "Coolant", detail: "TITAN 360 LCD", icon: "temperature-normal", state: "Stable" },
         { key: "acoustics", label: "Acoustics", detail: "Estimated from mock curves", icon: "audio-volume-low", state: "Good" }
     ]
+    readonly property var overviewMetrics: liveMode
+        ? backendClient.overviewMetrics
+        : demoOverviewMetrics
 
     property var globalProfiles: [
         {
@@ -171,7 +210,7 @@ ApplicationWindow {
         }
     })
 
-    property var coolingZones: [
+    property var demoCoolingZones: [
         {
             key: "radiator", name: "Radiator", icon: "temperature-normal",
             source: "Coolant", temperature: "38°C", profile: "Radiator 20",
@@ -191,8 +230,11 @@ ApplicationWindow {
             zeroRpm: false, minimum: 31
         }
     ]
+    readonly property var coolingZones: liveMode
+        ? backendClient.coolingZones
+        : demoCoolingZones
 
-    property var devices: [
+    property var demoDevices: [
         {
             id: "hub", name: "iCUE LINK System Hub", icon: "drive-multidisk",
             subtitle: "USB · Firmware 3.10.636 · 7 channels",
@@ -236,6 +278,9 @@ ApplicationWindow {
             tabs: deviceTabs("receiver")
         }
     ]
+    readonly property var devices: liveMode
+        ? backendClient.devices
+        : demoDevices
 
     function control(title, description, kind, value, choices, extra) {
         const item = {
@@ -678,11 +723,31 @@ ApplicationWindow {
     }
 
     function metricValue(key) {
+        if (liveMode) return backendClient.telemetry[key] || "—"
         return profileTelemetry[activeGlobalProfile][key] || "—"
     }
 
     function zoneRpm(key) {
+        if (liveMode) return backendClient.zoneValues[key] || "—"
         return profileTelemetry[activeGlobalProfile][key] || "—"
+    }
+
+    function baseStatusHint() {
+        if (!liveMode) return "Demo controls remain local to this prototype"
+        if (backendClient.connectionState === "connected") {
+            return "Live telemetry is read-only · updated " + backendClient.lastUpdated
+        }
+        if (backendClient.connectionState === "degraded") {
+            return "Live telemetry is read-only · some data is stale or unavailable"
+        }
+        return "Live telemetry is read-only · " + backendClient.statusText
+    }
+
+    function connectionBadgeColor() {
+        if (!liveMode || backendClient.connectionState === "offline") return warningColor
+        if (backendClient.connectionState === "degraded") return warningColor
+        if (backendClient.connectionState === "connecting") return accentColor
+        return successColor
     }
 
     function previewGlobalProfile(profileKey) {
@@ -770,13 +835,13 @@ ApplicationWindow {
 
     function applyChanges() {
         pendingChanges = false
-        statusHint.text = "Changes remain local to this prototype"
+        statusHint.text = baseStatusHint()
         showToast("Preview applied locally", "No backend request or hardware command was sent.")
     }
 
     function revertChanges() {
         pendingChanges = false
-        statusHint.text = "Changes remain local to this prototype"
+        statusHint.text = baseStatusHint()
         showToast("Pending preview cleared", "Controls will fully reset when the prototype closes.")
     }
 
@@ -908,27 +973,29 @@ ApplicationWindow {
                             width: 10
                             height: 10
                             radius: 5
-                            color: root.warningColor
+                            color: root.connectionBadgeColor()
                         }
                         ColumnLayout {
                             visible: root.sidebarLabels
                             Layout.fillWidth: true
                             spacing: 0
                             Label {
-                                text: "Prototype mode"
+                                text: root.liveMode ? "Read-only live mode" : "Demo mode"
                                 color: root.primaryText
                                 font.weight: Font.DemiBold
                             }
                             Label {
-                                text: "No backend connected"
+                                text: root.backendClient.statusText
                                 color: root.mutedText
                                 font.pixelSize: 11
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
                             }
                         }
                     }
 
                     ToolTip.visible: hovered && !root.sidebarLabels
-                    ToolTip.text: "Prototype mode · no backend"
+                    ToolTip.text: root.backendClient.statusText
                 }
             }
         }
@@ -1082,10 +1149,26 @@ ApplicationWindow {
                         }
                     }
 
+                    ComboBox {
+                        id: dataSourceCombo
+                        model: [
+                            { key: "demo", name: "Demo" },
+                            { key: "live", name: "Live" }
+                        ]
+                        textRole: "name"
+                        valueRole: "key"
+                        currentIndex: root.backendClient.mode === "live" ? 1 : 0
+                        Layout.preferredWidth: 108
+                        onActivated: root.backendClient.setMode(currentValue)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Demo uses local fixtures; Live performs GET-only loopback reads"
+                        Accessible.name: "Data source"
+                    }
+
                     StatusBadge {
                         shell: root
-                        text: "Prototype · Offline"
-                        badgeColor: root.warningColor
+                        text: root.backendClient.statusText
+                        badgeColor: root.connectionBadgeColor()
                         filled: true
                     }
 
@@ -1094,15 +1177,17 @@ ApplicationWindow {
                         model: root.globalProfiles
                         textRole: "name"
                         valueRole: "key"
-                        displayText: "Global · " + currentText
+                        displayText: (root.liveMode ? "Preview · " : "Global · ") + currentText
                         currentIndex: root.globalProfiles
                             .map(profile => profile.key)
                             .indexOf(root.activeGlobalProfile)
                         Layout.preferredWidth: 190
                         onActivated: root.previewGlobalProfile(currentValue)
                         ToolTip.visible: hovered
-                        ToolTip.text: "Active global profile · coordinates saved cooling, lighting, and device profiles"
-                        Accessible.name: "Active global profile"
+                        ToolTip.text: root.liveMode
+                            ? "Global profiles remain a local preview until their backend contract is implemented"
+                            : "Active demo global profile · coordinates saved cooling, lighting, and device profiles"
+                        Accessible.name: root.liveMode ? "Preview global profile" : "Active global profile"
                     }
                 }
             }
@@ -1119,7 +1204,7 @@ ApplicationWindow {
                     anchors.left: parent.left
                     anchors.leftMargin: root.contentPadding + 5
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Changes remain local to this prototype"
+                    text: root.baseStatusHint()
                     color: root.pendingChanges ? root.warningColor : root.mutedText
                     font.pixelSize: 10
                 }
