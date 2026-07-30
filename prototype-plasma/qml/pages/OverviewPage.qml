@@ -292,7 +292,7 @@ Item {
                         model: [
                             { label: "Quiet mode", detail: "Preview lower-noise values", icon: "weather-clear-night", action: "quiet" },
                             { label: "Lights out", detail: "Toggle the mock lighting state", icon: "brightness-low", action: "lights" },
-                            { label: "Device inventory", detail: "Browse capability-aware devices", icon: "drive-multidisk", action: "devices" },
+                            { label: "Manage profiles", detail: "Coordinate settings and launch rules", icon: "document-multiple", action: "profiles" },
                             { label: "Review alerts", detail: "No current mock warnings", icon: "notifications", action: "alerts" }
                         ]
 
@@ -305,6 +305,7 @@ Item {
                             onClicked: {
                                 if (modelData.action === "quiet") page.shell.previewMode("quiet")
                                 else if (modelData.action === "devices") page.shell.navigate("devices")
+                                else if (modelData.action === "profiles") page.shell.navigate("profiles")
                                 else if (modelData.action === "lights") {
                                     page.shell.lightsEnabled = !page.shell.lightsEnabled
                                     page.shell.showToast(

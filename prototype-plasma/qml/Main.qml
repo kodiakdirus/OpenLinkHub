@@ -17,6 +17,7 @@ ApplicationWindow {
     title: "OpenLinkHub — Plasma Prototype"
 
     property string activeSection: "overview"
+    property bool demoDialog: false
     property string activeMode: "balanced"
     property int selectedDeviceIndex: 0
     property bool pendingChanges: false
@@ -57,6 +58,16 @@ ApplicationWindow {
     readonly property color dangerColor: "#ee7278"
     readonly property var currentDevice: devices[selectedDeviceIndex]
 
+    onDemoDialogChanged: {
+        if (demoDialog) {
+            Qt.callLater(function() {
+                if (pageLoader.item && pageLoader.item.openPrimaryDialog) {
+                    pageLoader.item.openPrimaryDialog()
+                }
+            })
+        }
+    }
+
     palette.window: backgroundColor
     palette.windowText: primaryText
     palette.base: surface
@@ -72,6 +83,7 @@ ApplicationWindow {
 
     property var navItems: [
         { key: "overview", label: "Overview", icon: "view-grid" },
+        { key: "profiles", label: "Profiles", icon: "document-multiple" },
         { key: "devices", label: "Devices", icon: "drive-multidisk" },
         { key: "cooling", label: "Cooling", icon: "temperature-normal" },
         { key: "lighting", label: "Lighting", icon: "preferences-desktop-color" },
@@ -554,10 +566,6 @@ ApplicationWindow {
                 control("Display on", "Daily start time", "choice", "08:00", ["06:00", "08:00", "10:00"]),
                 control("Display off", "Daily end time", "choice", "23:30", ["22:00", "23:30", "00:00"])
             ], "Backend-supported"),
-            group("System mode rules", "system-run", "A useful client concept not present as a verified general rule engine.", [
-                control("Game detected", "Preview a Performance-mode transition", "toggle", false),
-                control("Return to Balanced", "When the game exits", "toggle", true)
-            ], "Concept only", true),
             group("Safety policy", "security-high", "Safety state is visible but remains owned by the service.", [
                 control("Coolant protection", "Independent backend behavior", "stat", "Armed", null, { accent: true }),
                 control("Failsafe output", "Critical-temperature response", "stat", "100%")
@@ -733,6 +741,7 @@ ApplicationWindow {
     function sectionSubtitle() {
         const subtitles = {
             overview: "Everything important, with the details one click away",
+            profiles: "Whole-system profiles and game/application launch rules",
             devices: "Connected hardware and its actual capabilities",
             cooling: "Profiles, channels, sensor sources, and safety behavior",
             lighting: "Scenes, zones, per-device effects, and hardware lighting",
@@ -1025,6 +1034,8 @@ ApplicationWindow {
                         currentIndex: ["quiet", "balanced", "performance", "custom"].indexOf(root.activeMode)
                         Layout.preferredWidth: 145
                         onActivated: root.previewMode(currentText.toLowerCase())
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Active global profile preview"
                     }
                 }
             }
@@ -1058,6 +1069,7 @@ ApplicationWindow {
                 sourceComponent: {
                     switch (root.activeSection) {
                     case "overview": return overviewPageComponent
+                    case "profiles": return profilesPageComponent
                     case "devices": return devicesPageComponent
                     case "cooling": return coolingPageComponent
                     case "lighting": return lightingPageComponent
@@ -1078,6 +1090,11 @@ ApplicationWindow {
     Component {
         id: devicesPageComponent
         DevicesPage { shell: root }
+    }
+
+    Component {
+        id: profilesPageComponent
+        ProfilesPage { shell: root }
     }
 
     Component {

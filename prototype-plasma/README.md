@@ -21,6 +21,7 @@ For a deterministic offscreen render:
 
 ```bash
 ./prototype-plasma/run.sh --page cooling \
+  --dialog \
   --screenshot /tmp/openlinkhub-plasma.png
 ```
 
@@ -35,10 +36,12 @@ window:
 
 - Native Breeze/Plasma controls and icon theme
 - Searchable global workspaces and device commands
+- Dedicated global profile library with game/application launch-rule concepts
 - Capability-aware device tabs
 - Mock Quiet, Balanced, Performance, and Custom operating modes
-- Cooling profile controls with pending Apply/Revert state
-- Lighting scenes, targets, brightness, and hardware-lighting controls
+- Interactive cooling-curve profile manager
+- Custom lighting-scene editor, targets, brightness, and hardware-lighting controls
+- Display-idle lights-out automation concept
 - Keyboard, mouse, audio, display, automation, and integration surfaces
 - Theme, accent, density, corner, and sidebar presentation controls
 - Local notifications and explicit prototype/offline state

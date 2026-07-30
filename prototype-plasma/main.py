@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
         "--page",
         choices=[
             "overview",
+            "profiles",
             "devices",
             "cooling",
             "lighting",
@@ -39,6 +40,11 @@ def parse_args() -> argparse.Namespace:
             "device",
         ],
         help="open a specific workspace (useful with --screenshot)",
+    )
+    parser.add_argument(
+        "--dialog",
+        action="store_true",
+        help="open the primary editor dialog for the selected page",
     )
     return parser.parse_args()
 
@@ -73,6 +79,8 @@ def main() -> int:
 
     if args.page:
         engine.rootObjects()[0].setProperty("activeSection", args.page)
+    if args.dialog:
+        engine.rootObjects()[0].setProperty("demoDialog", True)
 
     if args.screenshot:
         destination = Path(args.screenshot).expanduser().resolve()
@@ -95,6 +103,7 @@ def main() -> int:
         window = engine.rootObjects()[0]
         sections = [
             "overview",
+            "profiles",
             "devices",
             "cooling",
             "lighting",

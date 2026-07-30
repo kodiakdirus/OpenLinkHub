@@ -10,6 +10,17 @@ Item {
     required property var shell
     property int selectedScene: 0
     property int brightnessValue: 70
+    property var scenes: [
+        { name: "Aurora", colors: ["#36d6c7", "#766bf0", "#274d9a"], detail: "Slow gradient" },
+        { name: "Static cyan", colors: ["#66d7c5", "#66d7c5", "#66d7c5"], detail: "Single color" },
+        { name: "Temperature", colors: ["#3fd076", "#f1c453", "#e45d64"], detail: "Sensor reactive" }
+    ]
+
+    function openPrimaryDialog() {
+        sceneEditor.editing = false
+        sceneEditor.initialName = ""
+        sceneEditor.open()
+    }
 
     ScrollView {
         id: scroll
@@ -26,7 +37,7 @@ Item {
                 ColumnLayout {
                     spacing: 2
                     Label {
-                        text: "Lighting scenes"
+                        text: "Lighting profiles & scenes"
                         color: page.shell.primaryText
                         font.pixelSize: 22
                         font.weight: Font.DemiBold
@@ -38,6 +49,31 @@ Item {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                Button {
+                    text: "Edit selected"
+                    icon.name: "document-edit"
+                    onClicked: {
+                        sceneEditor.editing = true
+                        sceneEditor.initialName = page.scenes[page.selectedScene].name
+                        sceneEditor.primaryColor = page.scenes[page.selectedScene].colors[0]
+                        sceneEditor.secondaryColor = page.scenes[page.selectedScene].colors[1]
+                        sceneEditor.open()
+                    }
+                }
+
+                Button {
+                    text: "New scene"
+                    icon.name: "list-add"
+                    highlighted: true
+                    onClicked: {
+                        sceneEditor.editing = false
+                        sceneEditor.initialName = ""
+                        sceneEditor.primaryColor = "#66d7c5"
+                        sceneEditor.secondaryColor = "#8b7cf6"
+                        sceneEditor.open()
+                    }
+                }
 
                 Switch {
                     text: page.shell.lightsEnabled ? "Lighting on" : "Lighting off"
@@ -51,23 +87,19 @@ Item {
 
             GridLayout {
                 Layout.fillWidth: true
-                columns: width > 1000 ? 4 : width > 620 ? 2 : 1
+                columns: width > 920 ? 3 : width > 620 ? 2 : 1
                 columnSpacing: page.shell.cardSpacing
                 rowSpacing: page.shell.cardSpacing
 
                 Repeater {
-                    model: [
-                        { name: "Aurora", colors: ["#36d6c7", "#766bf0", "#274d9a"], detail: "Slow gradient" },
-                        { name: "Static cyan", colors: ["#66d7c5", "#66d7c5", "#66d7c5"], detail: "Single color" },
-                        { name: "Temperature", colors: ["#3fd076", "#f1c453", "#e45d64"], detail: "Sensor reactive" },
-                        { name: "Lights out", colors: ["#1d252b", "#12181d", "#090d10"], detail: "All zones off" }
-                    ]
+                    model: page.scenes
 
                     delegate: AbstractButton {
                         required property var modelData
                         required property int index
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 150
+                        Layout.preferredHeight: 174
+                        padding: page.shell.contentPadding
                         hoverEnabled: true
                         onClicked: {
                             page.selectedScene = index
@@ -113,7 +145,7 @@ Item {
                                     }
                                 }
                                 Kirigami.Icon {
-                            visible: page.selectedScene === index
+                                    visible: page.selectedScene === index
                                     source: "dialog-ok"
                                     color: page.shell.accentColor
                                     Layout.preferredWidth: 20
@@ -206,6 +238,39 @@ Item {
                             Layout.fillWidth: true
                         }
                     }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: page.shell.outline
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Desktop behavior"
+                            color: page.shell.primaryText
+                            font.pixelSize: 16
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                        }
+                        StatusBadge {
+                            shell: page.shell
+                            text: "Prototype concept"
+                            badgeColor: page.shell.warningColor
+                        }
+                    }
+
+                    ControlRow {
+                        shell: page.shell
+                        showDivider: false
+                        feature: ({
+                            title: "Lights out when displays sleep",
+                            description: "Automatically disable decorative lighting when Plasma turns the monitors off after idle; restore the prior scene when they wake.",
+                            kind: "toggle",
+                            value: false
+                        })
+                    }
                 }
             }
 
@@ -263,6 +328,27 @@ Item {
             }
 
             Item { Layout.preferredHeight: 1 }
+        }
+    }
+
+    LightingSceneDialog {
+        id: sceneEditor
+        shell: page.shell
+
+        onSceneSaved: (name, effect, primary, secondary, editing) => {
+            const scene = {
+                name: name,
+                colors: [primary, secondary, primary],
+                detail: effect
+            }
+            if (editing) {
+                const updated = page.scenes.slice()
+                updated[page.selectedScene] = scene
+                page.scenes = updated
+            } else {
+                page.scenes = page.scenes.concat([scene])
+                page.selectedScene = page.scenes.length - 1
+            }
         }
     }
 }

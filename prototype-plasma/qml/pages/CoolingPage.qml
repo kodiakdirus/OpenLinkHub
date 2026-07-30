@@ -9,6 +9,10 @@ Item {
 
     required property var shell
 
+    function openPrimaryDialog() {
+        coolingProfiles.open()
+    }
+
     ScrollView {
         id: scroll
         anchors.fill: parent
@@ -36,6 +40,13 @@ Item {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                Button {
+                    text: "Manage cooling profiles"
+                    icon.name: "document-edit"
+                    highlighted: true
+                    onClicked: coolingProfiles.open()
+                }
 
                 ComboBox {
                     model: ["iCUE LINK System Hub", "TITAN 360 LCD"]
@@ -89,6 +100,64 @@ Item {
                             }
                             Item { Layout.fillWidth: true }
                         }
+                    }
+                }
+            }
+
+            Panel {
+                shell: page.shell
+                Layout.fillWidth: true
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 14
+
+                    Kirigami.Icon {
+                        source: "office-chart-line"
+                        color: page.shell.accentColor
+                        Layout.preferredWidth: 27
+                        Layout.preferredHeight: 27
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Label {
+                            text: "Cooling profile library"
+                            color: page.shell.primaryText
+                            font.pixelSize: 18
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            text: "Create reusable fan and pump curves, then assign them to channels below."
+                            color: page.shell.mutedText
+                            font.pixelSize: 12
+                        }
+                    }
+
+                    Flow {
+                        spacing: 6
+                        StatusBadge {
+                            shell: page.shell
+                            text: "Radiator 20"
+                            badgeColor: page.shell.accentColor
+                        }
+                        StatusBadge {
+                            shell: page.shell
+                            text: "GPU Quiet"
+                            badgeColor: page.shell.accentColor
+                        }
+                        StatusBadge {
+                            shell: page.shell
+                            text: "TITAN Balanced"
+                            badgeColor: page.shell.accentColor
+                        }
+                    }
+
+                    Button {
+                        text: "Open curve editor"
+                        icon.name: "document-edit"
+                        onClicked: coolingProfiles.open()
                     }
                 }
             }
@@ -366,5 +435,10 @@ Item {
 
             Item { Layout.preferredHeight: 1 }
         }
+    }
+
+    CoolingProfilesDialog {
+        id: coolingProfiles
+        shell: page.shell
     }
 }

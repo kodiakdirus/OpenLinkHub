@@ -37,6 +37,10 @@ AbstractButton {
     contentItem: RowLayout {
         spacing: 12
 
+        Item {
+            Layout.preferredWidth: 7
+        }
+
         Kirigami.Icon {
                             source: button.iconName
             color: button.selected ? shell.accentColor : shell.mutedText
