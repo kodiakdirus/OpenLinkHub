@@ -265,22 +265,25 @@ Item {
                             contentItem: RowLayout {
                                 spacing: 12
 
-                                Kirigami.Icon {
-                            source: zoneButton.zone.icon
+                                IconSlot {
+                                    source: zoneButton.zone.icon
                                     color: page.shell.accentColor
-                                    Layout.preferredWidth: 24
-                                    Layout.preferredHeight: 24
+                                    iconSize: 24
                                 }
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
                                     Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignLeft
                                         text: zoneButton.zone.name
                                         color: page.shell.primaryText
                                         font.weight: Font.DemiBold
                                     }
                                     Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignLeft
                                         text: zoneButton.zone.source
                                             + " source · " + zoneButton.zone.profile
                                         color: page.shell.mutedText
@@ -298,7 +301,7 @@ Item {
                                 }
 
                                 Kirigami.Icon {
-                            source: "go-next"
+                                    source: "go-next"
                                     color: page.shell.mutedText
                                     Layout.preferredWidth: 18
                                     Layout.preferredHeight: 18
@@ -367,22 +370,25 @@ Item {
                             contentItem: RowLayout {
                                 spacing: 12
 
-                                Kirigami.Icon {
-                            source: deviceButton.device.icon
+                                IconSlot {
+                                    source: deviceButton.device.icon
                                     color: page.shell.secondaryText
-                                    Layout.preferredWidth: 27
-                                    Layout.preferredHeight: 27
+                                    iconSize: 27
                                 }
 
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
                                     Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignLeft
                                         text: deviceButton.device.name
                                         color: page.shell.primaryText
                                         font.weight: Font.DemiBold
                                     }
                                     Label {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignLeft
                                         text: deviceButton.device.subtitle
                                         color: page.shell.mutedText
                                         font.pixelSize: 11

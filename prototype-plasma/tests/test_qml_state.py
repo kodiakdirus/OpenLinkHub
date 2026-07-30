@@ -64,6 +64,7 @@ class QmlStateTests(unittest.TestCase):
         overview = (QML_ROOT / "pages" / "OverviewPage.qml").read_text(encoding="utf-8")
         service = (QML_ROOT / "pages" / "ServicePage.qml").read_text(encoding="utf-8")
         panel_header = (QML_ROOT / "components" / "PanelHeader.qml").read_text(encoding="utf-8")
+        icon_slot = (QML_ROOT / "components" / "IconSlot.qml").read_text(encoding="utf-8")
         self.assertEqual(
             overview.count("leftPadding: page.shell.compactMode ? 12 : 16"),
             2,
@@ -74,6 +75,11 @@ class QmlStateTests(unittest.TestCase):
         )
         self.assertEqual(service.count("PanelHeader {"), 4)
         self.assertGreaterEqual(panel_header.count("Layout.alignment: Qt.AlignTop"), 3)
+        self.assertEqual(overview.count("IconSlot {"), 2)
+        self.assertEqual(overview.count("horizontalAlignment: Text.AlignLeft"), 4)
+        self.assertIn("Layout.minimumWidth: slotSize", icon_slot)
+        self.assertIn("Layout.maximumWidth: slotSize", icon_slot)
+        self.assertIn("Layout.alignment: Qt.AlignVCenter", icon_slot)
         self.assertIn('Accessible.name: "Show sidebar labels"', service)
 
 
