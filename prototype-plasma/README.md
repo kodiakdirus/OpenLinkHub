@@ -42,6 +42,8 @@ window:
 - Interactive cooling-curve profile manager
 - Custom lighting-scene editor, targets, brightness, and hardware-lighting controls
 - Display-idle lights-out automation concept
+- Configurable Plasma System Monitor sensor-export concept for coolant, pump,
+  fan, battery, and other read-only Corsair telemetry
 - Keyboard, mouse, audio, display, automation, and integration surfaces
 - Theme, accent, density, corner, and sidebar presentation controls
 - Local notifications and explicit prototype/offline state

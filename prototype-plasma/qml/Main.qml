@@ -749,7 +749,7 @@ ApplicationWindow {
             audio: "Headset audio, controls, equalizers, and routing",
             displays: "LCD layouts, media, sensors, brightness, and placement",
             automations: "Schedules and clearly-labelled future rules",
-            integrations: "OpenRGB, hardware, desktop, and metrics",
+            integrations: "OpenRGB, Plasma system sensors, desktop, and metrics",
             service: "Presentation preferences and future service administration"
         }
         return activeSection === "device" ? currentDevice.subtitle : subtitles[activeSection]
@@ -832,6 +832,10 @@ ApplicationWindow {
                 AbstractButton {
                     Layout.fillWidth: true
                     implicitHeight: root.sidebarLabels ? 62 : 48
+                    leftPadding: 14
+                    rightPadding: 12
+                    topPadding: 10
+                    bottomPadding: 10
                     hoverEnabled: true
                     onClicked: root.navigate("service")
 
@@ -1073,6 +1077,7 @@ ApplicationWindow {
                     case "devices": return devicesPageComponent
                     case "cooling": return coolingPageComponent
                     case "lighting": return lightingPageComponent
+                    case "integrations": return integrationsPageComponent
                     case "service": return servicePageComponent
                     case "device": return devicePageComponent
                     default: return featurePageComponent
@@ -1105,6 +1110,11 @@ ApplicationWindow {
     Component {
         id: lightingPageComponent
         LightingPage { shell: root }
+    }
+
+    Component {
+        id: integrationsPageComponent
+        IntegrationsPage { shell: root }
     }
 
     Component {
