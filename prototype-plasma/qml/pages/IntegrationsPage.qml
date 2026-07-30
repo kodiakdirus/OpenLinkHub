@@ -181,7 +181,7 @@ Item {
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -218,7 +218,7 @@ Item {
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
 
                     RowLayout {
                         Layout.fillWidth: true

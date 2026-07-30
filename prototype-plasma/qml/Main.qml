@@ -18,7 +18,8 @@ ApplicationWindow {
 
     property string activeSection: "overview"
     property bool demoDialog: false
-    property string activeMode: "balanced"
+    property bool demoArrange: false
+    property string activeGlobalProfile: "balanced"
     property int selectedDeviceIndex: 0
     property bool pendingChanges: false
     property bool lightsEnabled: true
@@ -68,6 +69,16 @@ ApplicationWindow {
         }
     }
 
+    onDemoArrangeChanged: {
+        if (demoArrange) {
+            Qt.callLater(function() {
+                if (pageLoader.item && pageLoader.item.openLayoutEditor) {
+                    pageLoader.item.openLayoutEditor()
+                }
+            })
+        }
+    }
+
     palette.window: backgroundColor
     palette.windowText: primaryText
     palette.base: surface
@@ -102,7 +113,46 @@ ApplicationWindow {
         { key: "acoustics", label: "Acoustics", detail: "Estimated from mock curves", icon: "audio-volume-low", state: "Good" }
     ]
 
-    property var modeProfiles: ({
+    property var globalProfiles: [
+        {
+            key: "quiet",
+            name: "Quiet Focus",
+            description: "Low-noise cooling, dim static lighting, and desktop device profiles",
+            color: "#7aa8ff",
+            automatic: false,
+            sections: ["Cooling", "Lighting", "Input", "Audio"],
+            composition: "TitanQuiet · Static cyan · Desktop devices"
+        },
+        {
+            key: "balanced",
+            name: "Balanced",
+            description: "Everyday cooling, Aurora lighting, and standard peripheral settings",
+            color: "#66d7c5",
+            automatic: true,
+            sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"],
+            composition: "Balanced cooling · Aurora · Desktop devices"
+        },
+        {
+            key: "gaming",
+            name: "Gaming",
+            description: "Performance cooling, game lighting, and game-specific device profiles",
+            color: "#ee876f",
+            automatic: true,
+            sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"],
+            composition: "Performance cooling · Temperature · Gaming devices"
+        },
+        {
+            key: "creator",
+            name: "Creator",
+            description: "Balanced cooling, neutral lighting, productivity mappings, and display metrics",
+            color: "#e8bd57",
+            automatic: false,
+            sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"],
+            composition: "Balanced cooling · Static cyan · Creator devices"
+        }
+    ]
+
+    property var profileTelemetry: ({
         quiet: {
             cpu: "49°C", gpu: "54°C", coolant: "39°C", acoustics: "Very quiet",
             radiator: "610 RPM", case: "0 RPM", pump: "1,420 RPM"
@@ -111,11 +161,11 @@ ApplicationWindow {
             cpu: "47°C", gpu: "51°C", coolant: "38°C", acoustics: "Quiet",
             radiator: "720 RPM", case: "0 RPM", pump: "1,460 RPM"
         },
-        performance: {
+        gaming: {
             cpu: "42°C", gpu: "46°C", coolant: "35°C", acoustics: "Audible",
             radiator: "1,180 RPM", case: "920 RPM", pump: "1,890 RPM"
         },
-        custom: {
+        creator: {
             cpu: "46°C", gpu: "50°C", coolant: "37°C", acoustics: "Custom",
             radiator: "760 RPM", case: "0 RPM", pump: "1,500 RPM"
         }
@@ -628,18 +678,25 @@ ApplicationWindow {
     }
 
     function metricValue(key) {
-        return modeProfiles[activeMode][key] || "—"
+        return profileTelemetry[activeGlobalProfile][key] || "—"
     }
 
     function zoneRpm(key) {
-        return modeProfiles[activeMode][key] || "—"
+        return profileTelemetry[activeGlobalProfile][key] || "—"
     }
 
-    function previewMode(mode) {
-        activeMode = mode
+    function previewGlobalProfile(profileKey) {
+        activeGlobalProfile = profileKey
+        let displayName = profileKey
+        for (let i = 0; i < globalProfiles.length; ++i) {
+            if (globalProfiles[i].key === profileKey) {
+                displayName = globalProfiles[i].name
+                break
+            }
+        }
         showToast(
-            mode.charAt(0).toUpperCase() + mode.slice(1) + " mode previewed",
-            "Temperatures and RPM changed only in the mock interface."
+            displayName + " global profile previewed",
+            "Cooling, lighting, device-profile, and telemetry previews changed only in the mock interface."
         )
     }
 
@@ -1033,13 +1090,19 @@ ApplicationWindow {
                     }
 
                     ComboBox {
-                        id: modeCombo
-                        model: ["Quiet", "Balanced", "Performance", "Custom"]
-                        currentIndex: ["quiet", "balanced", "performance", "custom"].indexOf(root.activeMode)
-                        Layout.preferredWidth: 145
-                        onActivated: root.previewMode(currentText.toLowerCase())
+                        id: globalProfileCombo
+                        model: root.globalProfiles
+                        textRole: "name"
+                        valueRole: "key"
+                        displayText: "Global · " + currentText
+                        currentIndex: root.globalProfiles
+                            .map(profile => profile.key)
+                            .indexOf(root.activeGlobalProfile)
+                        Layout.preferredWidth: 190
+                        onActivated: root.previewGlobalProfile(currentValue)
                         ToolTip.visible: hovered
-                        ToolTip.text: "Active global profile preview"
+                        ToolTip.text: "Active global profile · coordinates saved cooling, lighting, and device profiles"
+                        Accessible.name: "Active global profile"
                     }
                 }
             }

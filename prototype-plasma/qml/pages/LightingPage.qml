@@ -10,6 +10,9 @@ Item {
     required property var shell
     property int selectedScene: 0
     property int brightnessValue: 70
+    property bool layoutEditing: false
+    property bool targetsFirst: false
+    property bool stackControlCells: false
     property var scenes: [
         { name: "Aurora", colors: ["#36d6c7", "#766bf0", "#274d9a"], detail: "Slow gradient" },
         { name: "Static cyan", colors: ["#66d7c5", "#66d7c5", "#66d7c5"], detail: "Single color" },
@@ -20,6 +23,10 @@ Item {
         sceneEditor.editing = false
         sceneEditor.initialName = ""
         sceneEditor.open()
+    }
+
+    function openLayoutEditor() {
+        layoutEditing = true
     }
 
     ScrollView {
@@ -49,6 +56,12 @@ Item {
                 }
 
                 Item { Layout.fillWidth: true }
+
+                Button {
+                    text: page.layoutEditing ? "Done arranging" : "Arrange cells"
+                    icon.name: page.layoutEditing ? "dialog-ok" : "transform-move"
+                    onClicked: page.layoutEditing = !page.layoutEditing
+                }
 
                 Button {
                     text: "Edit selected"
@@ -81,6 +94,29 @@ Item {
                     onToggled: {
                         page.shell.lightsEnabled = checked
                         page.shell.markDirty("Global lighting")
+                    }
+                }
+            }
+
+            Panel {
+                visible: page.layoutEditing
+                shell: page.shell
+                Layout.fillWidth: true
+                color: page.shell.surfaceAlt
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Kirigami.Icon {
+                        source: "view-grid"
+                        color: page.shell.accentColor
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Scene cards remain a uniform library row. Configuration cells may swap order or switch together between equal two-column and full-width stacked layouts."
+                        color: page.shell.secondaryText
+                        wrapMode: Text.WordWrap
                     }
                 }
             }
@@ -158,20 +194,54 @@ Item {
             }
 
             GridLayout {
+                id: lightingControlGrid
                 Layout.fillWidth: true
-                columns: width > 920 ? 2 : 1
+                columns: width > 920 && !page.stackControlCells ? 2 : 1
                 columnSpacing: page.shell.cardSpacing
                 rowSpacing: page.shell.cardSpacing
 
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.row: lightingControlGrid.columns === 1
+                        ? (page.targetsFirst ? 1 : 0)
+                        : 0
+                    Layout.column: lightingControlGrid.columns === 1
+                        ? 0
+                        : (page.targetsFirst ? 1 : 0)
 
-                    Label {
-                        text: "Scene controls"
-                        color: page.shell.primaryText
-                        font.pixelSize: 18
-                        font.weight: Font.DemiBold
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Scene controls"
+                            color: page.shell.primaryText
+                            font.pixelSize: 18
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                        }
+                        Button {
+                            visible: page.layoutEditing
+                            text: "Swap"
+                            onClicked: {
+                                page.targetsFirst = !page.targetsFirst
+                                page.shell.markDirty("Lighting cell order")
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Swap configuration cells"
+                        }
+                        Button {
+                            visible: page.layoutEditing
+                            text: page.stackControlCells ? "Columns" : "Stack"
+                            onClicked: {
+                                page.stackControlCells = !page.stackControlCells
+                                page.shell.markDirty("Lighting cell size")
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: page.stackControlCells
+                                ? "Use equal two-column cells"
+                                : "Stack both cells full width"
+                        }
                     }
 
                     ControlRow {
@@ -213,12 +283,45 @@ Item {
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.row: lightingControlGrid.columns === 1
+                        ? (page.targetsFirst ? 0 : 1)
+                        : 0
+                    Layout.column: lightingControlGrid.columns === 1
+                        ? 0
+                        : (page.targetsFirst ? 0 : 1)
 
-                    Label {
-                        text: "Targets"
-                        color: page.shell.primaryText
-                        font.pixelSize: 18
-                        font.weight: Font.DemiBold
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Targets"
+                            color: page.shell.primaryText
+                            font.pixelSize: 18
+                            font.weight: Font.DemiBold
+                            Layout.fillWidth: true
+                        }
+                        Button {
+                            visible: page.layoutEditing
+                            text: "Swap"
+                            onClicked: {
+                                page.targetsFirst = !page.targetsFirst
+                                page.shell.markDirty("Lighting cell order")
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Swap configuration cells"
+                        }
+                        Button {
+                            visible: page.layoutEditing
+                            text: page.stackControlCells ? "Columns" : "Stack"
+                            onClicked: {
+                                page.stackControlCells = !page.stackControlCells
+                                page.shell.markDirty("Lighting cell size")
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: page.stackControlCells
+                                ? "Use equal two-column cells"
+                                : "Stack both cells full width"
+                        }
                     }
 
                     Repeater {

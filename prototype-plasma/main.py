@@ -46,6 +46,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="open the primary editor dialog for the selected page",
     )
+    parser.add_argument(
+        "--arrange",
+        action="store_true",
+        help="open the selected page in cell-arrangement mode",
+    )
     return parser.parse_args()
 
 
@@ -81,6 +86,8 @@ def main() -> int:
         engine.rootObjects()[0].setProperty("activeSection", args.page)
     if args.dialog:
         engine.rootObjects()[0].setProperty("demoDialog", True)
+    if args.arrange:
+        engine.rootObjects()[0].setProperty("demoArrange", True)
 
     if args.screenshot:
         destination = Path(args.screenshot).expanduser().resolve()

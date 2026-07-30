@@ -10,6 +10,8 @@ Item {
     required property var shell
     required property var device
     property int selectedTab: 0
+    property bool layoutEditing: false
+    property var arrangedGroups: []
     readonly property var currentTab: device
         && device.tabs
         && selectedTab >= 0
@@ -17,7 +19,54 @@ Item {
         ? device.tabs[selectedTab]
         : ({ name: "", icon: "applications-system", groups: [] })
 
-    onDeviceChanged: selectedTab = 0
+    function resetLayout() {
+        arrangedGroups = (currentTab.groups || []).map(group => ({
+            title: group.title,
+            icon: group.icon,
+            description: group.description,
+            items: group.items,
+            wide: Boolean(group.wide)
+        }))
+    }
+
+    function openLayoutEditor() {
+        layoutEditing = true
+    }
+
+    function moveGroup(index, delta) {
+        const destination = index + delta
+        if (destination < 0 || destination >= arrangedGroups.length) return
+        const updated = arrangedGroups.slice()
+        const moved = updated[index]
+        updated[index] = updated[destination]
+        updated[destination] = moved
+        arrangedGroups = updated
+        shell.markDirty(device.name + " · " + currentTab.name + " cell order")
+    }
+
+    function toggleGroupWidth(index) {
+        const updated = arrangedGroups.slice()
+        const current = updated[index]
+        updated[index] = {
+            title: current.title,
+            icon: current.icon,
+            description: current.description,
+            items: current.items,
+            wide: !current.wide
+        }
+        arrangedGroups = updated
+        shell.markDirty(device.name + " · " + currentTab.name + " cell size")
+    }
+
+    onDeviceChanged: {
+        selectedTab = 0
+        resetLayout()
+    }
+    onSelectedTabChanged: {
+        layoutEditing = false
+    }
+    onCurrentTabChanged: resetLayout()
+    Component.onCompleted: resetLayout()
 
     ScrollView {
         id: scroll
@@ -80,6 +129,12 @@ Item {
                         }
                     }
 
+                    Button {
+                        text: page.layoutEditing ? "Done arranging" : "Arrange tab cells"
+                        icon.name: page.layoutEditing ? "dialog-ok" : "transform-move"
+                        onClicked: page.layoutEditing = !page.layoutEditing
+                    }
+
                     StatusBadge {
                         shell: page.shell
                         text: "Connected · mock"
@@ -105,6 +160,35 @@ Item {
                 }
             }
 
+            Panel {
+                visible: page.layoutEditing
+                shell: page.shell
+                Layout.fillWidth: true
+                color: page.shell.surfaceAlt
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Kirigami.Icon {
+                        source: "view-grid"
+                        color: page.shell.accentColor
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "This layout belongs to " + page.device.name + " · " + page.currentTab.name
+                            + ". Cells snap to half or full width, preserve their internal controls, and match the height of a half-width neighbor."
+                        color: page.shell.secondaryText
+                        wrapMode: Text.WordWrap
+                    }
+                    Button {
+                        text: "Reset tab layout"
+                        icon.name: "edit-undo"
+                        onClicked: page.resetLayout()
+                    }
+                }
+            }
+
             GridLayout {
                 id: contentGrid
                 Layout.fillWidth: true
@@ -113,13 +197,15 @@ Item {
                 rowSpacing: page.shell.cardSpacing
 
                 Repeater {
-                    model: page.currentTab.groups
+                    model: page.arrangedGroups
 
                     delegate: Panel {
                         required property var modelData
+                        required property int index
                         shell: page.shell
                         Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
+                        Layout.fillHeight: true
+                        Layout.columnSpan: modelData.wide ? contentGrid.columns : 1
 
                         RowLayout {
                             Layout.fillWidth: true
@@ -145,6 +231,34 @@ Item {
                                     font.pixelSize: 12
                                     wrapMode: Text.WordWrap
                                     Layout.fillWidth: true
+                                }
+                            }
+
+                            RowLayout {
+                                visible: page.layoutEditing
+                                spacing: 2
+                                Button {
+                                    text: "←"
+                                    implicitWidth: 32
+                                    enabled: index > 0
+                                    onClicked: page.moveGroup(index, -1)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Move cell earlier"
+                                }
+                                Button {
+                                    text: "→"
+                                    implicitWidth: 32
+                                    enabled: index < page.arrangedGroups.length - 1
+                                    onClicked: page.moveGroup(index, 1)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Move cell later"
+                                }
+                                Button {
+                                    visible: contentGrid.columns > 1
+                                    text: modelData.wide ? "Half" : "Full"
+                                    onClicked: page.toggleGroupWidth(index)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: modelData.wide ? "Use half width" : "Span full row"
                                 }
                             }
                         }

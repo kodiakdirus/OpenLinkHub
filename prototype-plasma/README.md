@@ -23,6 +23,10 @@ For a deterministic offscreen render:
 ./prototype-plasma/run.sh --page cooling \
   --dialog \
   --screenshot /tmp/openlinkhub-plasma.png
+
+./prototype-plasma/run.sh --page input \
+  --arrange \
+  --screenshot /tmp/openlinkhub-layout.png
 ```
 
 To instantiate every workspace and device shell without opening a visible
@@ -37,6 +41,8 @@ window:
 - Native Breeze/Plasma controls and icon theme
 - Searchable global workspaces and device commands
 - Dedicated global profile library with game/application launch-rule concepts
+- Persistent global-profile selector and a composition editor that references
+  saved cooling, lighting, keyboard, mouse, controller, audio, and LCD profiles
 - Capability-aware device tabs
 - Mock Quiet, Balanced, Performance, and Custom operating modes
 - Interactive cooling-curve profile manager
@@ -46,6 +52,8 @@ window:
   fan, battery, and other read-only Corsair telemetry
 - Keyboard, mouse, audio, display, automation, and integration surfaces
 - Theme, accent, density, corner, and sidebar presentation controls
+- Constrained per-workspace and per-device-tab cell ordering with half/full-row
+  sizing and equal-height neighbors to prevent masonry-style gaps
 - Local notifications and explicit prototype/offline state
 
 All values reset when the application exits. There is intentionally no
@@ -64,3 +72,12 @@ OpenLinkHub service/API
 Device behavior, validation, safety policy, and persistent state stay in the
 service. This prototype explores only the native client's information
 architecture and interaction model.
+
+The existing WebUI is served by the OpenLinkHub Go service and uses same-origin
+HTTP requests to `/api/...`. A production native client should use a typed
+loopback HTTP/JSON client against the same API: `GET` for inventory, capability,
+profile, and telemetry state; `POST`, `PUT`, and `DELETE` for validated changes.
+It should never access Corsair USB devices or edit service-owned profile files
+directly. Global profiles will require a backend-owned composition contract so
+their cooling, lighting, and per-device references can be applied and recovered
+as one operation rather than as an unsafe chain of unrelated requests.

@@ -10,36 +10,6 @@ Item {
     required property var shell
     property int selectedProfile: 1
     property int activeTab: 0
-    property var profiles: [
-        {
-            name: "Quiet Focus",
-            description: "Low-noise cooling, dim static lighting, desktop input mappings",
-            color: "#7aa8ff",
-            automatic: false,
-            sections: ["Cooling", "Lighting", "Input", "Audio"]
-        },
-        {
-            name: "Balanced",
-            description: "Everyday cooling, Aurora lighting, standard peripheral settings",
-            color: "#66d7c5",
-            automatic: true,
-            sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"]
-        },
-        {
-            name: "Gaming",
-            description: "Performance cooling, game lighting, game-specific input profiles",
-            color: "#ee876f",
-            automatic: true,
-            sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"]
-        },
-        {
-            name: "Creator",
-            description: "Balanced cooling, neutral lighting, productivity input mappings, display metrics",
-            color: "#e8bd57",
-            automatic: false,
-            sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"]
-        }
-    ]
     property var launchRules: [
         {
             program: "Cyberpunk 2077",
@@ -182,7 +152,7 @@ Item {
                         rowSpacing: page.shell.cardSpacing
 
                         Repeater {
-                            model: page.profiles
+                            model: page.shell.globalProfiles
 
                             delegate: AbstractButton {
                                 required property var modelData
@@ -258,6 +228,14 @@ Item {
                                         }
                                     }
 
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.composition
+                                        color: page.shell.secondaryText
+                                        font.pixelSize: 12
+                                        elide: Text.ElideRight
+                                    }
+
                                     Item { Layout.fillHeight: true }
 
                                     Rectangle {
@@ -280,28 +258,26 @@ Item {
                                             text: "Duplicate"
                                             icon.name: "edit-copy"
                                             onClicked: {
-                                                page.profiles = page.profiles.concat([{
+                                                page.shell.globalProfiles = page.shell.globalProfiles.concat([{
+                                                    key: modelData.key + "-copy-" + Date.now(),
                                                     name: modelData.name + " copy",
                                                     description: modelData.description,
                                                     color: modelData.color,
                                                     automatic: false,
-                                                    sections: modelData.sections
+                                                    sections: modelData.sections,
+                                                    composition: modelData.composition
                                                 }])
                                                 page.shell.markDirty("Global profile copy")
                                             }
                                         }
                                         Item { Layout.fillWidth: true }
                                         Button {
-                                            text: page.selectedProfile === index ? "Active" : "Activate"
-                                            icon.name: page.selectedProfile === index ? "dialog-ok" : "media-playback-start"
-                                            highlighted: page.selectedProfile === index
+                                            text: page.shell.activeGlobalProfile === modelData.key ? "Active" : "Activate"
+                                            icon.name: page.shell.activeGlobalProfile === modelData.key ? "dialog-ok" : "media-playback-start"
+                                            highlighted: page.shell.activeGlobalProfile === modelData.key
                                             onClicked: {
                                                 page.selectedProfile = index
-                                                page.shell.previewMode(
-                                                    modelData.name === "Gaming" ? "performance"
-                                                    : modelData.name === "Quiet Focus" ? "quiet"
-                                                    : "balanced"
-                                                )
+                                                page.shell.previewGlobalProfile(modelData.key)
                                             }
                                         }
                                     }
@@ -430,7 +406,7 @@ Item {
                                 }
 
                                 ComboBox {
-                                    model: page.profiles.map(profile => profile.name)
+                                    model: page.shell.globalProfiles.map(profile => profile.name)
                                     currentIndex: Math.max(0, model.indexOf(modelData.profile))
                                     Layout.preferredWidth: 190
                                     onActivated: page.shell.markDirty(modelData.program + " rule")
@@ -508,54 +484,211 @@ Item {
         id: profileDialog
         parent: Overlay.overlay
         anchors.centerIn: parent
-        width: Math.min(620, parent.width - 60)
+        width: Math.min(820, parent.width - 60)
+        height: Math.min(760, parent.height - 60)
         modal: true
         title: profileName.text.length > 0 ? "Edit global profile" : "New global profile"
         standardButtons: Dialog.Save | Dialog.Cancel
 
-        ColumnLayout {
-            width: parent.width
-            spacing: page.shell.cardSpacing
+        ScrollView {
+            anchors.fill: parent
+            contentWidth: availableWidth
 
-            Label {
-                Layout.fillWidth: true
-                text: "Global profiles reference purpose-specific cooling, lighting, input, audio, and display profiles."
-                color: page.shell.mutedText
-                wrapMode: Text.WordWrap
+            ColumnLayout {
+                width: parent.width
+                spacing: page.shell.cardSpacing
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: compositionIntro.implicitHeight + page.shell.contentPadding * 2
+                    radius: page.shell.cornerRadius
+                    color: Qt.rgba(page.shell.accentColor.r, page.shell.accentColor.g, page.shell.accentColor.b, 0.08)
+                    border.color: page.shell.accentColor
+
+                    RowLayout {
+                        id: compositionIntro
+                        anchors.fill: parent
+                        anchors.margins: page.shell.contentPadding
+                        spacing: 12
+
+                        Kirigami.Icon {
+                            source: "document-multiple"
+                            color: page.shell.accentColor
+                            Layout.preferredWidth: 30
+                            Layout.preferredHeight: 30
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Label {
+                                text: "Compose one global profile from saved purpose-specific profiles"
+                                color: page.shell.primaryText
+                                font.weight: Font.DemiBold
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: "The global object references existing cooling, lighting, and per-device profiles; it does not merge them into one ambiguous profile type."
+                                color: page.shell.mutedText
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: page.shell.cardSpacing
+                    rowSpacing: 10
+
+                    Label { text: "Global profile name"; color: page.shell.secondaryText }
+                    TextField {
+                        id: profileName
+                        Layout.fillWidth: true
+                        placeholderText: "Example: Simulation"
+                    }
+
+                    Label { text: "Starting point"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: startingPoint
+                        Layout.fillWidth: true
+                        model: page.shell.globalProfiles.map(profile => profile.name).concat(["Blank profile"])
+                    }
+                }
+
+                Label {
+                    text: "Cooling and lighting"
+                    color: page.shell.primaryText
+                    font.pixelSize: 17
+                    font.weight: Font.DemiBold
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: page.shell.cardSpacing
+                    rowSpacing: 10
+
+                    Label { text: "Cooling assignments"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: coolingComposition
+                        Layout.fillWidth: true
+                        model: [
+                            "Balanced cooling",
+                            "TitanQuiet + Radiator20 + CaseGPU",
+                            "Performance cooling",
+                            "Keep current assignments"
+                        ]
+                    }
+
+                    Label { text: "Lighting profile / scene"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: lightingComposition
+                        Layout.fillWidth: true
+                        model: ["Aurora", "Static cyan", "Temperature reactive", "Keep current scene"]
+                    }
+                }
+
+                Label {
+                    text: "Per-device profiles"
+                    color: page.shell.primaryText
+                    font.pixelSize: 17
+                    font.weight: Font.DemiBold
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: page.shell.cardSpacing
+                    rowSpacing: 10
+
+                    Label { text: "K100 AIR RGB"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: keyboardComposition
+                        Layout.fillWidth: true
+                        model: ["Desktop", "Palworld", "Creator", "Keep current"]
+                    }
+
+                    Label { text: "Scimitar RGB Elite"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: mouseComposition
+                        Layout.fillWidth: true
+                        model: ["Desktop", "MMO", "Precision", "Keep current"]
+                    }
+
+                    Label { text: "Virtuoso Wireless"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: audioComposition
+                        Layout.fillWidth: true
+                        model: ["Pure Direct", "Competitive", "Media", "Keep current"]
+                    }
+
+                    Label { text: "SCUF Envision Pro"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: controllerComposition
+                        Layout.fillWidth: true
+                        model: ["Default", "Shooter", "Racing", "Keep current"]
+                    }
+
+                    Label { text: "TITAN 360 LCD"; color: page.shell.secondaryText }
+                    ComboBox {
+                        id: displayComposition
+                        Layout.fillWidth: true
+                        model: ["Liquid temperature", "Dual sensor", "Clock", "Keep current"]
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Kirigami.Icon {
+                        source: "dialog-information"
+                        color: page.shell.warningColor
+                        Layout.preferredWidth: 22
+                        Layout.preferredHeight: 22
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Production needs a backend-owned global-profile contract so applying this composition is validated and recoverable as one operation."
+                        color: page.shell.mutedText
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
-
-            Label { text: "Profile name"; font.weight: Font.DemiBold }
-            TextField {
-                id: profileName
-                Layout.fillWidth: true
-                placeholderText: "Example: Simulation"
-            }
-
-            Label { text: "Starting point"; font.weight: Font.DemiBold }
-            ComboBox {
-                id: startingPoint
-                Layout.fillWidth: true
-                model: ["Quiet Focus", "Balanced", "Gaming", "Blank profile"]
-            }
-
-            CheckBox { text: "Include cooling-profile assignments"; checked: true }
-            CheckBox { text: "Include lighting scene and brightness"; checked: true }
-            CheckBox { text: "Include keyboard, mouse, and controller profiles"; checked: true }
-            CheckBox { text: "Include audio and display settings"; checked: true }
         }
 
         onAccepted: {
             const name = profileName.text.trim().length > 0
                 ? profileName.text.trim()
                 : "Untitled profile"
-            if (page.profiles.map(item => item.name).indexOf(name) < 0) {
-                page.profiles = page.profiles.concat([{
+            const composition = coolingComposition.currentText
+                + " · " + lightingComposition.currentText
+                + " · " + keyboardComposition.currentText
+                + " / " + mouseComposition.currentText
+                + " / " + audioComposition.currentText
+            const existingIndex = page.shell.globalProfiles.map(item => item.name).indexOf(name)
+            if (existingIndex < 0) {
+                page.shell.globalProfiles = page.shell.globalProfiles.concat([{
+                    key: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
                     name: name,
                     description: "Custom global profile created in the prototype",
                     color: page.shell.accentColor,
                     automatic: false,
-                    sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"]
+                    sections: ["Cooling", "Lighting", "Input", "Audio", "Displays"],
+                    composition: composition
                 }])
+            } else {
+                const updated = page.shell.globalProfiles.slice()
+                const existing = updated[existingIndex]
+                updated[existingIndex] = {
+                    key: existing.key,
+                    name: existing.name,
+                    description: existing.description,
+                    color: existing.color,
+                    automatic: existing.automatic,
+                    sections: existing.sections,
+                    composition: composition
+                }
+                page.shell.globalProfiles = updated
             }
             page.shell.markDirty("Global profile")
         }
@@ -599,7 +732,7 @@ Item {
             ComboBox {
                 id: ruleProfile
                 Layout.fillWidth: true
-                model: page.profiles.map(profile => profile.name)
+                model: page.shell.globalProfiles.map(profile => profile.name)
             }
 
             CheckBox {

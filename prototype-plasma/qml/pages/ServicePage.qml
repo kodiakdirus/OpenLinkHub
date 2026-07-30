@@ -8,6 +8,36 @@ Item {
     id: page
 
     required property var shell
+    property bool layoutEditing: false
+    property bool appearanceFirst: true
+    property bool connectionFirst: true
+    property bool stackCells: false
+
+    function cellIndex(name) {
+        const order = appearanceFirst
+            ? ["appearance", "layout"]
+            : ["layout", "appearance"]
+        if (connectionFirst) {
+            order.push("connection")
+            order.push("features")
+        } else {
+            order.push("features")
+            order.push("connection")
+        }
+        return order.indexOf(name)
+    }
+
+    function openLayoutEditor() {
+        layoutEditing = true
+    }
+
+    function cellRow(name, columns) {
+        return columns === 1 ? cellIndex(name) : Math.floor(cellIndex(name) / 2)
+    }
+
+    function cellColumn(name, columns) {
+        return columns === 1 ? 0 : cellIndex(name) % 2
+    }
 
     ScrollView {
         id: scroll
@@ -52,6 +82,12 @@ Item {
                         }
                     }
 
+                    Button {
+                        text: page.layoutEditing ? "Done arranging" : "Arrange cells"
+                        icon.name: page.layoutEditing ? "dialog-ok" : "transform-move"
+                        onClicked: page.layoutEditing = !page.layoutEditing
+                    }
+
                     StatusBadge {
                         shell: page.shell
                         text: "0 API calls"
@@ -61,16 +97,67 @@ Item {
                 }
             }
 
-            GridLayout {
+            Panel {
+                visible: page.layoutEditing
+                shell: page.shell
                 Layout.fillWidth: true
-                columns: width > 1000 ? 2 : 1
+                color: page.shell.surfaceAlt
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Kirigami.Icon {
+                        source: "view-grid"
+                        color: page.shell.accentColor
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Service cells use the same constrained grid: paired cells share equal row height, and full-width mode stacks every cell without arbitrary gaps."
+                        color: page.shell.secondaryText
+                        wrapMode: Text.WordWrap
+                    }
+                    Button {
+                        text: "Swap top pair"
+                        icon.name: "object-flip-horizontal"
+                        onClicked: {
+                            page.appearanceFirst = !page.appearanceFirst
+                            page.shell.markDirty("Service cell order")
+                        }
+                    }
+                    Button {
+                        text: "Swap bottom pair"
+                        icon.name: "object-flip-horizontal"
+                        onClicked: {
+                            page.connectionFirst = !page.connectionFirst
+                            page.shell.markDirty("Service cell order")
+                        }
+                    }
+                    Button {
+                        text: page.stackCells ? "Two columns" : "Stack full width"
+                        icon.name: page.stackCells ? "view-restore" : "view-fullscreen"
+                        onClicked: {
+                            page.stackCells = !page.stackCells
+                            page.shell.markDirty("Service cell size")
+                        }
+                    }
+                }
+            }
+
+            GridLayout {
+                id: serviceGrid
+                Layout.fillWidth: true
+                columns: width > 1000 && !page.stackCells ? 2 : 1
                 columnSpacing: page.shell.cardSpacing
                 rowSpacing: page.shell.cardSpacing
 
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
+                    Layout.row: page.cellRow("appearance", serviceGrid.columns)
+                    Layout.column: page.cellColumn("appearance", serviceGrid.columns)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -194,7 +281,9 @@ Item {
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
+                    Layout.row: page.cellRow("layout", serviceGrid.columns)
+                    Layout.column: page.cellColumn("layout", serviceGrid.columns)
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -273,10 +362,12 @@ Item {
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
+                    Layout.row: page.cellRow("connection", serviceGrid.columns)
+                    Layout.column: page.cellColumn("connection", serviceGrid.columns)
 
                     Label {
-                        text: "Future service connection"
+                        text: "Future client connection"
                         color: page.shell.primaryText
                         font.pixelSize: 19
                         font.weight: Font.DemiBold
@@ -284,7 +375,7 @@ Item {
 
                     Label {
                         Layout.fillWidth: true
-                        text: "Shown for architecture review only. The controls are intentionally disabled in this build."
+                        text: "The production native client would use the same loopback HTTP API as the WebUI. This prototype intentionally leaves that transport disabled."
                         color: page.shell.mutedText
                         wrapMode: Text.WordWrap
                     }
@@ -296,6 +387,33 @@ Item {
                             description: "Loopback-only production default",
                             kind: "stat",
                             value: "127.0.0.1:27003"
+                        })
+                    }
+                    ControlRow {
+                        shell: page.shell
+                        feature: ({
+                            title: "Transport",
+                            description: "Typed client layer over the existing local API",
+                            kind: "stat",
+                            value: "HTTP + JSON"
+                        })
+                    }
+                    ControlRow {
+                        shell: page.shell
+                        feature: ({
+                            title: "Read path",
+                            description: "Inventory, capabilities, profiles, and telemetry",
+                            kind: "stat",
+                            value: "GET"
+                        })
+                    }
+                    ControlRow {
+                        shell: page.shell
+                        feature: ({
+                            title: "Write path",
+                            description: "Validated profile and device commands",
+                            kind: "stat",
+                            value: "POST / PUT / DELETE"
                         })
                     }
                     ControlRow {
@@ -322,7 +440,9 @@ Item {
                 Panel {
                     shell: page.shell
                     Layout.fillWidth: true
-                    Layout.alignment: Qt.AlignTop
+                    Layout.fillHeight: true
+                    Layout.row: page.cellRow("features", serviceGrid.columns)
+                    Layout.column: page.cellColumn("features", serviceGrid.columns)
 
                     Label {
                         text: "Service feature map"

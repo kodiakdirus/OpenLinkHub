@@ -111,7 +111,7 @@ Item {
                                 font.weight: Font.DemiBold
                             }
                             Label {
-                                text: "Mock values follow the selected operating mode"
+                                text: "Mock values follow the active global profile"
                                 color: page.shell.mutedText
                                 font.pixelSize: 12
                             }
@@ -169,7 +169,7 @@ Item {
 
                                 Label {
                                     text: page.shell.zoneRpm(modelData.key)
-                                    color: modelData.key === "case" && page.shell.activeMode !== "performance"
+                                    color: modelData.key === "case" && page.shell.activeGlobalProfile !== "gaming"
                                         ? page.shell.accentColor
                                         : page.shell.primaryText
                                     font.weight: Font.DemiBold
@@ -290,7 +290,7 @@ Item {
 
                     Repeater {
                         model: [
-                            { label: "Quiet mode", detail: "Preview lower-noise values", icon: "weather-clear-night", action: "quiet" },
+                            { label: "Quiet Focus", detail: "Activate the complete quiet global profile", icon: "weather-clear-night", action: "quiet" },
                             { label: "Lights out", detail: "Toggle the mock lighting state", icon: "brightness-low", action: "lights" },
                             { label: "Manage profiles", detail: "Coordinate settings and launch rules", icon: "document-multiple", action: "profiles" },
                             { label: "Review alerts", detail: "No current mock warnings", icon: "notifications", action: "alerts" }
@@ -303,7 +303,7 @@ Item {
                             text: modelData.label
                             icon.name: modelData.icon
                             onClicked: {
-                                if (modelData.action === "quiet") page.shell.previewMode("quiet")
+                                if (modelData.action === "quiet") page.shell.previewGlobalProfile("quiet")
                                 else if (modelData.action === "devices") page.shell.navigate("devices")
                                 else if (modelData.action === "profiles") page.shell.navigate("profiles")
                                 else if (modelData.action === "lights") {
