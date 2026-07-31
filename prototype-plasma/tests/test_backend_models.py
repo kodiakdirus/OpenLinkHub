@@ -41,6 +41,18 @@ class EnvelopeTests(unittest.TestCase):
             kind="snapshot",
         )
         self.assertEqual(document.revision, 4)
+        self.assertEqual(document.telemetry_revision, 4)
+        split_document = VersionedDocument.from_mapping(
+            {
+                "apiVersion": "1.0",
+                "kind": "snapshot",
+                "revision": 4,
+                "telemetryRevision": 9,
+                "data": {},
+            },
+            kind="snapshot",
+        )
+        self.assertEqual(split_document.telemetry_revision, 9)
         with self.assertRaises(PayloadError):
             VersionedDocument.from_mapping(
                 {"code": 200, "device": {}},

@@ -204,6 +204,37 @@ func TestRevisionTrackerIsStableAndMonotonic(t *testing.T) {
 	}
 }
 
+func TestStateAndTelemetryRevisionsAreIndependent(t *testing.T) {
+	snapshot := BuildSnapshot(fixtureInput())
+	var state RevisionTracker
+	var telemetry RevisionTracker
+
+	if got := state.Observe(StateRevisionValue(snapshot)); got != 1 {
+		t.Fatalf("first state revision = %d, want 1", got)
+	}
+	if got := telemetry.Observe(TelemetryRevisionValue(snapshot)); got != 1 {
+		t.Fatalf("first telemetry revision = %d, want 1", got)
+	}
+
+	snapshot.System.CPU.Value = 53.5
+	snapshot.Devices[0].Channels[0].Speed.Value = 625
+	snapshot.Devices[0].Online = false
+	if got := state.Observe(StateRevisionValue(snapshot)); got != 1 {
+		t.Fatalf("telemetry changed state revision to %d", got)
+	}
+	if got := telemetry.Observe(TelemetryRevisionValue(snapshot)); got != 2 {
+		t.Fatalf("telemetry revision = %d, want 2", got)
+	}
+
+	snapshot.Devices[0].Channels[0].CoolingProfile = &ProfileReference{
+		ID:   "Performance",
+		Name: "Performance",
+	}
+	if got := state.Observe(StateRevisionValue(snapshot)); got != 2 {
+		t.Fatalf("configuration revision = %d, want 2", got)
+	}
+}
+
 func hasCapability(capabilities []Capability, id string, available bool) bool {
 	for _, capability := range capabilities {
 		if capability.ID == id && capability.Available == available {

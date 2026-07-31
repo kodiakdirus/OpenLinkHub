@@ -73,7 +73,7 @@ func BuildService(input ServiceInput, deviceCount int) ServiceDescriptor {
 		ManualMode:     input.ManualMode,
 		SystemService:  input.SystemService,
 		DeviceCount:    deviceCount,
-		Persistence:    "available",
+		Persistence:    "unknown",
 		MutationAccess: "legacy-only",
 		Features:       features,
 		Warnings:       warnings,

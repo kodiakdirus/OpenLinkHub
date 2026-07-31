@@ -69,6 +69,8 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   summaries, normalized devices/channels/profiles, and monotonic revisions
 - One-request contract snapshot refresh with strict version/kind validation and
   an explicit legacy compatibility fallback for deployed older services
+- Separate configuration and telemetry revisions, strong ETag revalidation,
+  and no model replacement on `304 Not Modified`
 - Legacy response normalization for product-specific hub, keyboard, mouse, and
   other device payloads
 - Read-only live CPU, GPU, coolant, fan/pump RPM, firmware, battery, channel,
@@ -89,6 +91,8 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Sanitized response fixtures, GET-only reconnect/failure tests, a GUI-wide
   refresh-state exercise, and a static guard against binding live arrays
   directly to stateful controls
+- A machine-readable contract schema plus a bounded golden snapshot covering
+  controller/cooling, keyboard, mouse, and receiver presentation families
 - Mock Quiet, Balanced, Performance, and Custom operating modes
 - Interactive cooling-curve profile manager
 - Custom lighting-scene editor, targets, brightness, and hardware-lighting controls
@@ -126,6 +130,7 @@ The source-derived production plan is documented in:
 
 - [Backend integration plan](docs/BACKEND_INTEGRATION_PLAN.md)
 - [Complete backend route inventory](docs/BACKEND_ROUTE_INVENTORY.md)
+- [Versioned read contract](docs/CONTRACT_V1.md)
 
 The existing WebUI is served by the OpenLinkHub Go service and uses same-origin
 HTTP requests to `/api/...`. The Phase 2 client first reads

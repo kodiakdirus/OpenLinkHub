@@ -13,49 +13,96 @@ import (
 	"OpenLinkHub/src/temperatures"
 	"OpenLinkHub/src/version"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
+	"strings"
+	"time"
 )
 
-var apiV1Revision contractv1.RevisionTracker
+var apiV1StateRevision contractv1.RevisionTracker
+var apiV1TelemetryRevision contractv1.RevisionTracker
 var apiV1Input = collectV1Input
 
-func getServiceV1(w http.ResponseWriter, _ *http.Request) {
+func getServiceV1(w http.ResponseWriter, request *http.Request) {
 	input := apiV1Input()
 	snapshot := contractv1.BuildSnapshot(input)
-	sendV1(w, contractv1.Wrap(
+	revision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(snapshot))
+	document := contractv1.Wrap(
 		"service",
-		apiV1Revision.Observe(snapshot),
+		revision,
 		snapshot.Service,
-	))
+	)
+	sendV1(w, request, document, contractETag("service", revision, 0))
 }
 
-func getCapabilitiesV1(w http.ResponseWriter, _ *http.Request) {
+func getCapabilitiesV1(w http.ResponseWriter, request *http.Request) {
 	input := apiV1Input()
 	snapshot := contractv1.BuildSnapshot(input)
-	sendV1(w, contractv1.Wrap(
+	revision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(snapshot))
+	document := contractv1.Wrap(
 		"capabilities",
-		apiV1Revision.Observe(snapshot),
+		revision,
 		contractv1.BuildManifest(input),
-	))
+	)
+	sendV1(w, request, document, contractETag("capabilities", revision, 0))
 }
 
-func getSnapshotV1(w http.ResponseWriter, _ *http.Request) {
+func getSnapshotV1(w http.ResponseWriter, request *http.Request) {
 	input := apiV1Input()
 	snapshot := contractv1.BuildSnapshot(input)
-	sendV1(w, contractv1.Wrap(
-		"snapshot",
-		apiV1Revision.Observe(snapshot),
-		snapshot,
-	))
+	revision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(snapshot))
+	telemetryRevision := apiV1TelemetryRevision.Observe(
+		contractv1.TelemetryRevisionValue(snapshot),
+	)
+	document := contractv1.WrapSnapshot(revision, telemetryRevision, snapshot)
+	sendV1(
+		w,
+		request,
+		document,
+		contractETag("snapshot", revision, telemetryRevision),
+	)
 }
 
-func sendV1(w http.ResponseWriter, document contractv1.Document) {
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
+func sendV1(
+	w http.ResponseWriter,
+	request *http.Request,
+	document contractv1.Document,
+	etag string,
+) {
+	w.Header().Set("Cache-Control", "private, no-cache")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Vary", "Accept")
+	w.Header().Set("ETag", etag)
+	if etagMatches(request.Header.Get("If-None-Match"), etag) {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(document)
+}
+
+func contractETag(kind string, revision, telemetryRevision uint64) string {
+	if telemetryRevision == 0 {
+		return fmt.Sprintf("\"olh-v1-%s-s%d\"", kind, revision)
+	}
+	return fmt.Sprintf(
+		"\"olh-v1-%s-s%d-t%d\"",
+		kind,
+		revision,
+		telemetryRevision,
+	)
+}
+
+func etagMatches(header, current string) bool {
+	for _, candidate := range strings.Split(header, ",") {
+		if strings.TrimSpace(candidate) == current ||
+			strings.TrimSpace(candidate) == "*" {
+			return true
+		}
+	}
+	return false
 }
 
 func collectV1Input() contractv1.Input {
@@ -107,7 +154,7 @@ func collectV1Input() contractv1.Input {
 	input.GPUTemperature = &gpu
 
 	batteries := stats.GetBatteryStats()
-	lighting := devices.GetRgbProfiles()
+	lighting := apiV1Lighting.get(time.Now(), devices.GetRgbProfiles)
 	deviceMap := devices.GetDevices()
 	deviceIDs := make([]string, 0, len(deviceMap))
 	for id := range deviceMap {

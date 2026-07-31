@@ -65,6 +65,8 @@ class BackendController(QObject):
         self._contract_version = ""
         self._contract_source = "Demo data"
         self._contract_revision = 0
+        self._telemetry_revision = 0
+        self._snapshot_etag = ""
         self._refreshing = False
         self._api_call_count = 0
         self._generation = 0
@@ -118,6 +120,10 @@ class BackendController(QObject):
     def contractRevision(self) -> int:
         return self._contract_revision
 
+    @pyqtProperty(int, notify=connectionChanged)
+    def telemetryRevision(self) -> int:
+        return self._telemetry_revision
+
     @pyqtProperty(bool, notify=connectionChanged)
     def connected(self) -> bool:
         return self._connection_state in {"connected", "degraded"}
@@ -162,7 +168,8 @@ class BackendController(QObject):
             self._timer.stop()
             self._generation += 1
             self._set_refreshing(False)
-            self._set_contract("", "Demo data", 0)
+            self._set_contract("", "Demo data", 0, 0)
+            self._snapshot_etag = ""
             self._set_connection("demo", "Demo data", "")
             return
 
@@ -192,6 +199,7 @@ class BackendController(QObject):
                 payload,
                 error,
             ),
+            etag=self._snapshot_etag,
         )
 
     def _accept_contract(
@@ -201,6 +209,15 @@ class BackendController(QObject):
         _error: str | None,
     ) -> None:
         if generation != self._generation:
+            return
+        if payload is not None and payload.get("_notModified") is True:
+            self._last_updated = QDateTime.currentDateTime().toString("HH:mm:ss")
+            self._set_connection(
+                "connected",
+                f"Live · {len(self._devices)} devices",
+                "",
+            )
+            self._set_refreshing(False)
             return
         if payload is not None:
             try:
@@ -212,6 +229,7 @@ class BackendController(QObject):
             except (PayloadError, TypeError, ValueError):
                 pass
             else:
+                self._snapshot_etag = str(payload.get("_etag", ""))
                 self._finish_contract(snapshot, document)
                 return
 
@@ -346,10 +364,18 @@ class BackendController(QObject):
 
         reply.finished.connect(finished)
 
-    def _get_document(self, path: str, callback: JsonCallback) -> None:
+    def _get_document(
+        self,
+        path: str,
+        callback: JsonCallback,
+        *,
+        etag: str = "",
+    ) -> None:
         request = QNetworkRequest(QUrl(self._endpoint + path))
         request.setRawHeader(b"Accept", b"application/json")
         request.setRawHeader(b"User-Agent", b"OpenLinkHub-Plasma-Phase2")
+        if etag:
+            request.setRawHeader(b"If-None-Match", etag.encode("ascii"))
         request.setTransferTimeout(4500)
         reply = self._manager.get(request)
         self._api_call_count += 1
@@ -360,8 +386,15 @@ class BackendController(QObject):
             body = bytes(reply.readAll())
             network_error = reply.error()
             network_message = reply.errorString()
+            response_etag = bytes(reply.rawHeader(b"ETag")).decode(
+                "ascii",
+                errors="ignore",
+            )
             reply.deleteLater()
 
+            if status == 304:
+                callback({"_notModified": True, "_etag": response_etag}, None)
+                return
             if network_error != QNetworkReply.NetworkError.NoError:
                 callback(None, f"{network_message} ({status or 'no HTTP status'})")
                 return
@@ -376,6 +409,7 @@ class BackendController(QObject):
             if not isinstance(decoded, dict):
                 callback(None, "The service response is not a JSON object.")
                 return
+            decoded["_etag"] = response_etag
             callback(decoded, None)
 
         reply.finished.connect(finished)
@@ -395,6 +429,7 @@ class BackendController(QObject):
             document.api_version,
             "Versioned service contract",
             document.revision,
+            document.telemetry_revision,
         )
         self.dataChanged.emit()
         self._set_connection(
@@ -437,7 +472,8 @@ class BackendController(QObject):
         self._cooling_zones = snapshot["coolingZones"]
         self._zone_values = snapshot["zoneValues"]
         self._last_updated = QDateTime.currentDateTime().toString("HH:mm:ss")
-        self._set_contract("", "Legacy compatibility adapter", 0)
+        self._set_contract("", "Legacy compatibility adapter", 0, 0)
+        self._snapshot_etag = ""
         self.dataChanged.emit()
 
         if errors:
@@ -466,15 +502,23 @@ class BackendController(QObject):
         if changed:
             self.connectionChanged.emit()
 
-    def _set_contract(self, version: str, source: str, revision: int) -> None:
+    def _set_contract(
+        self,
+        version: str,
+        source: str,
+        revision: int,
+        telemetry_revision: int,
+    ) -> None:
         changed = (
             version != self._contract_version
             or source != self._contract_source
             or revision != self._contract_revision
+            or telemetry_revision != self._telemetry_revision
         )
         self._contract_version = version
         self._contract_source = source
         self._contract_revision = revision
+        self._telemetry_revision = telemetry_revision
         if changed:
             self.connectionChanged.emit()
 

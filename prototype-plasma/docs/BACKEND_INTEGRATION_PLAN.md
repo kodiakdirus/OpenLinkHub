@@ -1,7 +1,7 @@
 # OpenLinkHub Plasma Backend Integration Plan
 
-Status: Phase 2 additive read contract implemented; hardware mutation callbacks
-remain unauthorized.
+Status: Phase 2 additive read contract and Phase 2.5 contract hardening
+implemented; hardware mutation callbacks remain unauthorized.
 
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules
@@ -20,13 +20,22 @@ Phase 2 is implemented as an additive contract:
 - Raw product structures are converted inside the service. The versioned
   response deliberately excludes filesystem paths, logs, HID instances,
   secrets, and the catch-all mutation payload.
-- A process-local revision remains stable for identical normalized state and
-  increases when that state changes.
+- Independent process-local state and telemetry revisions remain stable for
+  identical normalized projections. Live measurements cannot invalidate the
+  state revision reserved for future optimistic write commands.
+- Strong ETags and `If-None-Match` return `304 Not Modified` for unchanged
+  snapshots. The native client retains its current model on 304 instead of
+  rebuilding QML-facing collections.
+- The expensive device-filtered RGB library is cached for 30 seconds. A future
+  RGB mutation must invalidate that cache before its verification read.
 - The native client requests only `/api/v1/snapshot` when contract 1.0 is
   present. Strict version/kind validation recognizes older services whose
   catch-all `/api/` handler returns a legacy payload for that path, then falls
   back to the Phase 1 GET set.
 - Existing legacy routes and the Web UI remain unchanged.
+- The structural schema and sanitized golden snapshot cover hub/cooling,
+  keyboard, mouse, and receiver presentation families without exposing raw
+  configuration paths or HID internals.
 
 Phase 1 is implemented as an opt-in read-only client:
 
@@ -388,9 +397,10 @@ device states are visible and cannot trigger a write.
 Exit: device tabs and valid controls are derived entirely from semantic
 capabilities.
 
-Checkpoint: implemented for read-only device tabs and snapshot state. Change
-events remain a later optimization; polling uses the monotonic snapshot
-revision and legacy fallback remains supported.
+Checkpoint: implemented for read-only device tabs and snapshot state. Polling
+uses separate state/telemetry revisions and conditional GETs; event-driven
+change delivery remains a later optimization and legacy fallback remains
+supported.
 
 ### Phase 3 — low-risk mutations and profile editors
 

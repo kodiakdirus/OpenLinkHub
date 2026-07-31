@@ -7,10 +7,11 @@ package contractv1
 const APIVersion = "1.0"
 
 type Document struct {
-	APIVersion string `json:"apiVersion"`
-	Kind       string `json:"kind"`
-	Revision   uint64 `json:"revision"`
-	Data       any    `json:"data"`
+	APIVersion        string `json:"apiVersion"`
+	Kind              string `json:"kind"`
+	Revision          uint64 `json:"revision"`
+	TelemetryRevision uint64 `json:"telemetryRevision,omitempty"`
+	Data              any    `json:"data"`
 }
 
 func Wrap(kind string, revision uint64, data any) Document {
@@ -19,6 +20,16 @@ func Wrap(kind string, revision uint64, data any) Document {
 		Kind:       kind,
 		Revision:   revision,
 		Data:       data,
+	}
+}
+
+func WrapSnapshot(revision, telemetryRevision uint64, data Snapshot) Document {
+	return Document{
+		APIVersion:        APIVersion,
+		Kind:              "snapshot",
+		Revision:          revision,
+		TelemetryRevision: telemetryRevision,
+		Data:              data,
 	}
 }
 

@@ -57,6 +57,7 @@ class VersionedDocument:
     api_version: str
     kind: str
     revision: int
+    telemetry_revision: int
     data: Mapping[str, Any]
 
     @classmethod
@@ -79,17 +80,23 @@ class VersionedDocument:
         api_version = decoded.get("apiVersion")
         response_kind = decoded.get("kind")
         revision = decoded.get("revision")
+        telemetry_revision = decoded.get("telemetryRevision", revision)
         data = decoded.get("data")
         if api_version != "1.0" or response_kind != kind:
             raise PayloadError("The service does not support contract 1.0.")
         if not isinstance(revision, int) or revision < 1:
             raise PayloadError("The versioned response has an invalid revision.")
+        if not isinstance(telemetry_revision, int) or telemetry_revision < 1:
+            raise PayloadError(
+                "The versioned response has an invalid telemetry revision."
+            )
         if not isinstance(data, Mapping):
             raise PayloadError("The versioned response has an invalid data object.")
         return cls(
             api_version=api_version,
             kind=response_kind,
             revision=revision,
+            telemetry_revision=telemetry_revision,
             data=data,
         )
 

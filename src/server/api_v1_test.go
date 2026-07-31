@@ -10,6 +10,8 @@ import (
 
 func TestSnapshotV1DocumentAndReadOnlyMethodBoundary(t *testing.T) {
 	originalInput := apiV1Input
+	apiV1StateRevision = contractv1.RevisionTracker{}
+	apiV1TelemetryRevision = contractv1.RevisionTracker{}
 	apiV1Input = func() contractv1.Input {
 		return contractv1.Input{
 			Service: contractv1.ServiceInput{
@@ -19,7 +21,11 @@ func TestSnapshotV1DocumentAndReadOnlyMethodBoundary(t *testing.T) {
 			},
 		}
 	}
-	t.Cleanup(func() { apiV1Input = originalInput })
+	t.Cleanup(func() {
+		apiV1Input = originalInput
+		apiV1StateRevision = contractv1.RevisionTracker{}
+		apiV1TelemetryRevision = contractv1.RevisionTracker{}
+	})
 
 	handler := setRoutes()
 
@@ -30,8 +36,12 @@ func TestSnapshotV1DocumentAndReadOnlyMethodBoundary(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET status = %d, want 200", response.Code)
 	}
-	if response.Header().Get("Cache-Control") != "no-store" {
-		t.Fatalf("missing no-store cache boundary")
+	if response.Header().Get("Cache-Control") != "private, no-cache" {
+		t.Fatalf("missing revalidation cache boundary")
+	}
+	etag := response.Header().Get("ETag")
+	if etag == "" {
+		t.Fatalf("missing snapshot ETag")
 	}
 	document := map[string]any{}
 	if err := json.Unmarshal(response.Body.Bytes(), &document); err != nil {
@@ -42,6 +52,17 @@ func TestSnapshotV1DocumentAndReadOnlyMethodBoundary(t *testing.T) {
 	}
 	if revision, ok := document["revision"].(float64); !ok || revision < 1 {
 		t.Fatalf("invalid contract revision: %#v", document["revision"])
+	}
+	if revision, ok := document["telemetryRevision"].(float64); !ok || revision < 1 {
+		t.Fatalf("invalid telemetry revision: %#v", document["telemetryRevision"])
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/v1/snapshot", nil)
+	request.Header.Set("If-None-Match", etag)
+	response = httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusNotModified || response.Body.Len() != 0 {
+		t.Fatalf("conditional GET = %d with %d bytes, want 304/empty", response.Code, response.Body.Len())
 	}
 
 	request = httptest.NewRequest(http.MethodPost, "/api/v1/snapshot", nil)

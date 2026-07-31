@@ -27,10 +27,20 @@ class FixtureHandler(BaseHTTPRequestHandler):
     fail_inventory = False
     support_contract = False
     contract_payload: dict = {}
+    contract_etag = '"fixture-s7-t11"'
 
     def do_GET(self) -> None:
         type(self).requests.append(f"GET {self.path}")
         if self.path == "/api/v1/snapshot":
+            if (
+                type(self).support_contract
+                and self.headers.get("If-None-Match")
+                == type(self).contract_etag
+            ):
+                self.send_response(304)
+                self.send_header("ETag", type(self).contract_etag)
+                self.end_headers()
+                return
             payload = (
                 type(self).contract_payload
                 if type(self).support_contract
@@ -65,6 +75,8 @@ class FixtureHandler(BaseHTTPRequestHandler):
         encoded = json.dumps(payload).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        if self.path == "/api/v1/snapshot" and type(self).support_contract:
+            self.send_header("ETag", type(self).contract_etag)
         self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
         self.wfile.write(encoded)
@@ -97,6 +109,7 @@ class BackendControllerTests(unittest.TestCase):
             "apiVersion": "1.0",
             "kind": "snapshot",
             "revision": 7,
+            "telemetryRevision": 11,
             "data": {
                 "service": {"contract": "1.0"},
                 "system": {
@@ -229,11 +242,27 @@ class BackendControllerTests(unittest.TestCase):
         self.assertEqual(FixtureHandler.requests, ["GET /api/v1/snapshot"])
         self.assertEqual(self.controller.contractVersion, "1.0")
         self.assertEqual(self.controller.contractRevision, 7)
+        self.assertEqual(self.controller.telemetryRevision, 11)
         self.assertEqual(
             self.controller.contractSource,
             "Versioned service contract",
         )
         self.assertEqual(self.controller.devices[0]["capabilities"], ["DPI"])
+
+        changes = 0
+
+        def record_change() -> None:
+            nonlocal changes
+            changes += 1
+
+        self.controller.dataChanged.connect(record_change)
+        self.controller.refresh()
+        self.wait_until(lambda: not self.controller.refreshing)
+        self.assertEqual(changes, 0)
+        self.assertEqual(
+            FixtureHandler.requests,
+            ["GET /api/v1/snapshot", "GET /api/v1/snapshot"],
+        )
 
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:
         self.controller.setMode("live")

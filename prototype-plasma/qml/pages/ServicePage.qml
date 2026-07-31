@@ -378,7 +378,8 @@ Item {
                             title: "Contract source",
                             description: page.shell.backendClient.contractVersion.length > 0
                                 ? "OpenLinkHub contract " + page.shell.backendClient.contractVersion
-                                    + " · revision " + page.shell.backendClient.contractRevision
+                                    + " · state " + page.shell.backendClient.contractRevision
+                                    + " · telemetry " + page.shell.backendClient.telemetryRevision
                                 : "The installed service does not publish contract 1.0",
                             kind: "stat",
                             value: page.shell.backendClient.contractSource
