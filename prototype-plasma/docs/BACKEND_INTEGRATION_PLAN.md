@@ -1,13 +1,32 @@
 # OpenLinkHub Plasma Backend Integration Plan
 
-Status: Phase 1 loopback read client implemented; hardware mutation callbacks
+Status: Phase 2 additive read contract implemented; hardware mutation callbacks
 remain unauthorized.
 
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
-`src/config/config.go`, `src/devices/`, and the service-owned profile modules at
-OpenLinkHub commit `9c242a17`.
+`src/config/config.go`, `src/devices/`, and the service-owned profile modules
+on the current implementation branch.
 
 ## Implementation checkpoint
+
+Phase 2 is implemented as an additive contract:
+
+- `GET /api/v1/service`, `/api/v1/capabilities`, and `/api/v1/snapshot`
+  publish strict `apiVersion`, `kind`, `revision`, and `data` documents.
+- The snapshot normalizes service/build/listener flags, CPU/GPU telemetry,
+  device identity and semantic capabilities, channels, cooling profile
+  summaries, RGB effect libraries and targets, scheduler state, safe dashboard
+  preferences, display geometry, and LCD inventories.
+- Raw product structures are converted inside the service. The versioned
+  response deliberately excludes filesystem paths, logs, HID instances,
+  secrets, and the catch-all mutation payload.
+- A process-local revision remains stable for identical normalized state and
+  increases when that state changes.
+- The native client requests only `/api/v1/snapshot` when contract 1.0 is
+  present. Strict version/kind validation recognizes older services whose
+  catch-all `/api/` handler returns a legacy payload for that path, then falls
+  back to the Phase 1 GET set.
+- Existing legacy routes and the Web UI remain unchanged.
 
 Phase 1 is implemented as an opt-in read-only client:
 
@@ -38,8 +57,8 @@ Phase 1 is implemented as an opt-in read-only client:
 - QML still treats every interactive control and global profile as a local
   preview; no POST, PUT, DELETE, HID, configuration, or persistence path exists.
 
-The capability inference in this slice is explicitly provisional. The additive
-versioned capability manifest remains the next backend contract milestone.
+Capability inference remains only in the legacy compatibility path. Contract
+1.0 device tabs are generated from backend-published semantic capabilities.
 
 The legacy Lighting write surface is deliberately not flattened into one
 generic Apply call. The current Web UI assigns an effect with
@@ -77,11 +96,11 @@ service-owned feature has one documented disposition:
 4. an intentionally unavailable control with a reason; or
 5. a backend contract gap that must be filled before the UI can expose it.
 
-It does not mean making 155 raw API operations into 155 buttons.
+It does not mean making 158 raw API operations into 158 buttons.
 
 ## Source-derived API facts
 
-- The service currently registers 155 `/api` routes: 42 `GET`, 100 `POST`,
+- The service currently registers 158 `/api` routes: 45 `GET`, 100 `POST`,
   7 `PUT`, and 6 `DELETE`. `/api/metrics` is one of those routes but is
   conditional on `config.metrics`; 154 routes are unconditional.
 - The default listener is `127.0.0.1:27003`. The current API has no
@@ -229,12 +248,12 @@ opaque duplicate.
 
 ## Registered route-family disposition
 
-The detailed 155-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
+The detailed 158-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
 user-facing disposition is:
 
 | Route family | Count | Disposition |
 |---|---:|---|
-| Root, CPU/GPU/storage, battery | 10 | Background read models for Overview and monitoring; formatted and clean temperature duplicates collapse into one typed value |
+| Versioned contract, root, CPU/GPU/storage, battery | 13 | Contract-first service/capability/snapshot reads plus compatibility/background telemetry; formatted and clean temperature duplicates collapse into one typed value |
 | `devices`, `label`, `position`, `operatingMode` | 8 | Device inventory/topology and capability-gated device or cooling controls |
 | `temperatures`, `speed`, `psu` | 10 | Cooling workspace; manual speed is a protected diagnostic session |
 | `color`, `brightness`, `argb`, `hub`, `led`, `misc`, `scheduler` | 32 | Lighting editor, topology, hardware lighting, brightness, and Automations; helper reads stay internal |
@@ -342,7 +361,7 @@ not depend on that choice.
 - Define normalized models and error taxonomy.
 - Keep the prototype offline.
 
-Exit: all 155 current routes are classified and representative payloads parse
+Exit: all 158 current routes are classified and representative payloads parse
 without QML involvement.
 
 ### Phase 1 — read-only legacy client
@@ -368,6 +387,10 @@ device states are visible and cannot trigger a write.
 
 Exit: device tabs and valid controls are derived entirely from semantic
 capabilities.
+
+Checkpoint: implemented for read-only device tabs and snapshot state. Change
+events remain a later optimization; polling uses the monotonic snapshot
+revision and legacy fallback remains supported.
 
 ### Phase 3 — low-risk mutations and profile editors
 

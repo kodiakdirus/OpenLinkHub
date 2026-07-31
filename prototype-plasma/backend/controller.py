@@ -1,7 +1,8 @@
-"""Asynchronous, GET-only Qt transport for OpenLinkHub Phase 1."""
+"""Asynchronous, GET-only Qt transport for OpenLinkHub."""
 
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Mapping
 from urllib.parse import urlsplit
 
@@ -20,7 +21,13 @@ from PyQt6.QtNetwork import (
     QNetworkRequest,
 )
 
-from .models import ApiEnvelope, LegacySnapshot, PayloadError
+from .models import (
+    ApiEnvelope,
+    ContractSnapshot,
+    LegacySnapshot,
+    PayloadError,
+    VersionedDocument,
+)
 
 
 JsonCallback = Callable[[dict[str, Any] | None, str | None], None]
@@ -55,6 +62,9 @@ class BackendController(QObject):
         self._status_text = "Demo data"
         self._error_message = ""
         self._last_updated = ""
+        self._contract_version = ""
+        self._contract_source = "Demo data"
+        self._contract_revision = 0
         self._refreshing = False
         self._api_call_count = 0
         self._generation = 0
@@ -95,6 +105,18 @@ class BackendController(QObject):
     @pyqtProperty(str, notify=connectionChanged)
     def lastUpdated(self) -> str:
         return self._last_updated
+
+    @pyqtProperty(str, notify=connectionChanged)
+    def contractVersion(self) -> str:
+        return self._contract_version
+
+    @pyqtProperty(str, notify=connectionChanged)
+    def contractSource(self) -> str:
+        return self._contract_source
+
+    @pyqtProperty(int, notify=connectionChanged)
+    def contractRevision(self) -> int:
+        return self._contract_revision
 
     @pyqtProperty(bool, notify=connectionChanged)
     def connected(self) -> bool:
@@ -140,6 +162,7 @@ class BackendController(QObject):
             self._timer.stop()
             self._generation += 1
             self._set_refreshing(False)
+            self._set_contract("", "Demo data", 0)
             self._set_connection("demo", "Demo data", "")
             return
 
@@ -162,6 +185,42 @@ class BackendController(QObject):
         if not self._devices or self._connection_state in {"demo", "offline"}:
             self._set_connection("connecting", "Connecting…", "")
 
+        self._get_document(
+            "/api/v1/snapshot",
+            lambda payload, error: self._accept_contract(
+                generation,
+                payload,
+                error,
+            ),
+        )
+
+    def _accept_contract(
+        self,
+        generation: int,
+        payload: dict[str, Any] | None,
+        _error: str | None,
+    ) -> None:
+        if generation != self._generation:
+            return
+        if payload is not None:
+            try:
+                document = VersionedDocument.from_mapping(
+                    payload,
+                    kind="snapshot",
+                )
+                snapshot = ContractSnapshot(document.data).build()
+            except (PayloadError, TypeError, ValueError):
+                pass
+            else:
+                self._finish_contract(snapshot, document)
+                return
+
+        # OpenLinkHub releases before contract 1.0 route this path through the
+        # generic /api/ handler and return a valid but incompatible legacy
+        # payload. Strict document validation makes that a silent fallback.
+        self._refresh_legacy(generation)
+
+    def _refresh_legacy(self, generation: int) -> None:
         results: dict[str, Any] = {}
         errors: list[str] = []
         pending_base = {"inventory", "battery", "cpu", "gpu"}
@@ -287,6 +346,64 @@ class BackendController(QObject):
 
         reply.finished.connect(finished)
 
+    def _get_document(self, path: str, callback: JsonCallback) -> None:
+        request = QNetworkRequest(QUrl(self._endpoint + path))
+        request.setRawHeader(b"Accept", b"application/json")
+        request.setRawHeader(b"User-Agent", b"OpenLinkHub-Plasma-Phase2")
+        request.setTransferTimeout(4500)
+        reply = self._manager.get(request)
+        self._api_call_count += 1
+        self.apiCallCountChanged.emit()
+
+        def finished() -> None:
+            status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+            body = bytes(reply.readAll())
+            network_error = reply.error()
+            network_message = reply.errorString()
+            reply.deleteLater()
+
+            if network_error != QNetworkReply.NetworkError.NoError:
+                callback(None, f"{network_message} ({status or 'no HTTP status'})")
+                return
+            if not isinstance(status, int) or status < 200 or status >= 300:
+                callback(None, f"HTTP {status or 'unknown'}")
+                return
+            try:
+                decoded = json.loads(body)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                callback(None, "The service returned malformed JSON.")
+                return
+            if not isinstance(decoded, dict):
+                callback(None, "The service response is not a JSON object.")
+                return
+            callback(decoded, None)
+
+        reply.finished.connect(finished)
+
+    def _finish_contract(
+        self,
+        snapshot: Mapping[str, Any],
+        document: VersionedDocument,
+    ) -> None:
+        self._devices = list(snapshot["devices"])
+        self._telemetry = dict(snapshot["telemetry"])
+        self._overview_metrics = list(snapshot["overviewMetrics"])
+        self._cooling_zones = list(snapshot["coolingZones"])
+        self._zone_values = dict(snapshot["zoneValues"])
+        self._last_updated = QDateTime.currentDateTime().toString("HH:mm:ss")
+        self._set_contract(
+            document.api_version,
+            "Versioned service contract",
+            document.revision,
+        )
+        self.dataChanged.emit()
+        self._set_connection(
+            "connected",
+            f"Live · {len(self._devices)} devices",
+            "",
+        )
+        self._set_refreshing(False)
+
     def _finish_refresh(self, results: dict[str, Any], errors: list[str]) -> None:
         inventory = results.get("inventory")
         if not isinstance(inventory, dict) or not isinstance(inventory.get("devices"), dict):
@@ -320,6 +437,7 @@ class BackendController(QObject):
         self._cooling_zones = snapshot["coolingZones"]
         self._zone_values = snapshot["zoneValues"]
         self._last_updated = QDateTime.currentDateTime().toString("HH:mm:ss")
+        self._set_contract("", "Legacy compatibility adapter", 0)
         self.dataChanged.emit()
 
         if errors:
@@ -345,6 +463,18 @@ class BackendController(QObject):
         self._connection_state = state
         self._status_text = status
         self._error_message = error
+        if changed:
+            self.connectionChanged.emit()
+
+    def _set_contract(self, version: str, source: str, revision: int) -> None:
+        changed = (
+            version != self._contract_version
+            or source != self._contract_source
+            or revision != self._contract_revision
+        )
+        self._contract_version = version
+        self._contract_source = source
+        self._contract_revision = revision
         if changed:
             self.connectionChanged.emit()
 

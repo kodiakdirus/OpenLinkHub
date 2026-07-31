@@ -70,7 +70,7 @@ Item {
                         spacing: 2
                         Label {
                             text: page.shell.liveMode
-                                ? "Phase 1 — read-only backend connection"
+                                ? "Phase 2 — versioned read-only backend connection"
                                 : "Demo mode — no backend connection"
                             color: page.shell.primaryText
                             font.pixelSize: 18
@@ -79,7 +79,7 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: page.shell.liveMode
-                                ? "Only GET requests are implemented. Live inventory and telemetry are normalized by a typed Qt client; every control mutation remains a local preview."
+                                ? "The client prefers contract 1.0 and falls back to the legacy GET adapter when needed; every control mutation remains a local preview."
                                 : "Controls use local demo state and reset when the window closes."
                             color: page.shell.secondaryText
                             wrapMode: Text.WordWrap
@@ -350,7 +350,7 @@ Item {
                         iconName: "network-connect"
                         title: "Client connection"
                         subtitle: page.shell.liveMode
-                            ? "The Phase 1 transport uses asynchronous GET-only loopback requests. QML receives normalized models and never constructs URLs or parses arbitrary JSON."
+                            ? "The Phase 2 transport prefers one versioned snapshot request, with an explicit legacy compatibility fallback. QML receives stable normalized models."
                             : "Choose Live in the top bar to use the GET-only loopback transport. Demo mode opens no socket."
                     }
 
@@ -375,17 +375,31 @@ Item {
                     ControlRow {
                         shell: page.shell
                         feature: ({
+                            title: "Contract source",
+                            description: page.shell.backendClient.contractVersion.length > 0
+                                ? "OpenLinkHub contract " + page.shell.backendClient.contractVersion
+                                    + " · revision " + page.shell.backendClient.contractRevision
+                                : "The installed service does not publish contract 1.0",
+                            kind: "stat",
+                            value: page.shell.backendClient.contractSource
+                        })
+                    }
+                    ControlRow {
+                        shell: page.shell
+                        feature: ({
                             title: "Read path",
                             description: "Inventory, capabilities, profiles, and telemetry",
                             kind: "stat",
-                            value: "GET"
+                            value: page.shell.backendClient.contractVersion.length > 0
+                                ? "GET /api/v1/snapshot"
+                                : "Legacy GET set"
                         })
                     }
                     ControlRow {
                         shell: page.shell
                         feature: ({
                             title: "Write path",
-                            description: "Not implemented in Phase 1",
+                            description: "Not implemented in Phase 2",
                             kind: "stat",
                             value: "Unavailable"
                         })

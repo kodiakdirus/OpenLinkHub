@@ -10,7 +10,13 @@ PROTOTYPE_ROOT = Path(__file__).resolve().parents[1]
 if str(PROTOTYPE_ROOT) not in sys.path:
     sys.path.insert(0, str(PROTOTYPE_ROOT))
 
-from backend.models import ApiEnvelope, LegacySnapshot, PayloadError  # noqa: E402
+from backend.models import (  # noqa: E402
+    ApiEnvelope,
+    ContractSnapshot,
+    LegacySnapshot,
+    PayloadError,
+    VersionedDocument,
+)
 
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "legacy_snapshot.json"
@@ -28,6 +34,18 @@ class EnvelopeTests(unittest.TestCase):
             ApiEnvelope.from_bytes(b"not json")
         with self.assertRaises(PayloadError):
             ApiEnvelope.from_bytes(b"[]")
+
+    def test_versioned_document_requires_exact_contract_and_kind(self) -> None:
+        document = VersionedDocument.from_bytes(
+            b'{"apiVersion":"1.0","kind":"snapshot","revision":4,"data":{}}',
+            kind="snapshot",
+        )
+        self.assertEqual(document.revision, 4)
+        with self.assertRaises(PayloadError):
+            VersionedDocument.from_mapping(
+                {"code": 200, "device": {}},
+                kind="snapshot",
+            )
 
 
 class LegacySnapshotTests(unittest.TestCase):
@@ -134,6 +152,96 @@ class LegacySnapshotTests(unittest.TestCase):
         self.assertEqual(self.snapshot["zoneValues"]["pump"], "1,500 RPM")
         self.assertEqual(self.snapshot["zoneValues"]["radiator"], "600 RPM")
         self.assertEqual(self.snapshot["zoneValues"]["case"], "0 RPM")
+
+
+class ContractSnapshotTests(unittest.TestCase):
+    def test_backend_capabilities_drive_tabs_without_raw_field_inference(self) -> None:
+        snapshot = ContractSnapshot(
+            {
+                "system": {
+                    "cpu": {"value": 51.25, "unit": "celsius"},
+                    "gpu": {"value": 44.0, "unit": "celsius"},
+                },
+                "devices": [
+                    {
+                        "id": "receiver",
+                        "product": "SLIPSTREAM",
+                        "productId": 1,
+                        "productType": 998,
+                        "deviceType": "receiver",
+                        "online": True,
+                        "hidden": True,
+                        "transport": "receiver",
+                        "profile": {"active": "", "savedCount": 0},
+                        "capabilities": [
+                            {
+                                "id": "overview",
+                                "label": "Overview",
+                                "available": True,
+                            },
+                            {
+                                "id": "wireless",
+                                "label": "Wireless",
+                                "available": True,
+                            },
+                            {
+                                "id": "pairing",
+                                "label": "Pairing",
+                                "available": False,
+                                "reason": "Paired-device inventory is unavailable.",
+                            },
+                        ],
+                        "channels": [],
+                    },
+                    {
+                        "id": "mouse",
+                        "product": "SCIMITAR ELITE",
+                        "productId": 2,
+                        "productType": 2,
+                        "deviceType": "mouse",
+                        "online": True,
+                        "hidden": False,
+                        "transport": "usb",
+                        "profile": {"active": "Desktop", "savedCount": 2},
+                        "capabilities": [
+                            {
+                                "id": "overview",
+                                "label": "Overview",
+                                "available": True,
+                            },
+                            {
+                                "id": "dpi",
+                                "label": "DPI",
+                                "available": True,
+                                "options": {
+                                    "stageCount": 5,
+                                    "minimum": 100,
+                                    "maximum": 26000,
+                                },
+                            },
+                        ],
+                        "channels": [],
+                    },
+                ],
+            }
+        ).build()
+
+        devices = {device["name"]: device for device in snapshot["devices"]}
+        self.assertEqual(devices["SCIMITAR ELITE"]["capabilities"], ["DPI"])
+        self.assertNotIn(
+            "Cooling",
+            [tab["name"] for tab in devices["SCIMITAR ELITE"]["tabs"]],
+        )
+        receiver = devices["Slipstream Receiver"]
+        pairing = next(tab for tab in receiver["tabs"] if tab["name"] == "Pairing")
+        capability_rows = receiver["tabs"][0]["groups"][1]["items"]
+        self.assertEqual(capability_rows[1]["value"], "Unavailable")
+        self.assertIn(
+            "Paired-device inventory",
+            capability_rows[1]["description"],
+        )
+        self.assertEqual(pairing["name"], "Pairing")
+        self.assertEqual(snapshot["telemetry"]["cpu"], "51.2°C")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,214 @@
+package contractv1
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func fixtureInput() Input {
+	cpu := 52.25
+	gpu := 47.0
+	return Input{
+		Service: ServiceInput{
+			Version:         "0.8.9",
+			BuildRevision:   "abc1234",
+			ListenAddress:   "127.0.0.1",
+			ListenPort:      27003,
+			Frontend:        true,
+			Metrics:         true,
+			SystemService:   true,
+			Gamepad:         true,
+			DisplayGeometry: true,
+		},
+		CPUTemperature: &cpu,
+		GPUTemperature: &gpu,
+		Devices: []DeviceInput{
+			{
+				ID:          "hub",
+				Product:     "iCUE LINK System Hub",
+				ProductID:   1,
+				ProductType: 0,
+				DeviceType:  "cooler",
+				Firmware:    "3.10.636",
+				Detail: map[string]any{
+					"ConfigPath": "/etc/OpenLinkHub",
+					"Connected":  true,
+					"Usb":        true,
+					"devices": map[string]any{
+						"1": map[string]any{
+							"name":        "Radiator",
+							"description": "Fan channel",
+							"HasSpeed":    true,
+							"rpm":         600,
+							"profile":     "Balanced",
+							"rgb":         "static",
+							"portId":      1,
+						},
+						"2": map[string]any{
+							"name":        "Pump",
+							"description": "AIO pump",
+							"HasSpeed":    true,
+							"HasTemps":    true,
+							"AIO":         true,
+							"rpm":         1500,
+							"temperature": 38.5,
+							"profile":     "Pump",
+							"rgb":         "liquid-temperature",
+							"portId":      2,
+						},
+					},
+				},
+				LightingData: map[string]any{
+					"device": "hub",
+					"profiles": map[string]any{
+						"static": map[string]any{
+							"profileName": "Static",
+							"brightness":  0.7,
+							"start": map[string]any{
+								"red":   0,
+								"green": 120,
+								"blue":  212,
+							},
+						},
+						"liquid-temperature": map[string]any{
+							"profileName": "Liquid Temperature",
+							"maxTemp":     60,
+						},
+					},
+				},
+			},
+			{
+				ID:          "receiver",
+				Product:     "SLIPSTREAM",
+				ProductID:   2,
+				ProductType: 998,
+				DeviceType:  "unknown",
+				Hidden:      true,
+				Detail:      map[string]any{},
+			},
+			{
+				ID:          "cluster",
+				Product:     "Cluster",
+				ProductType: 999,
+				DeviceType:  "virtual",
+				Hidden:      true,
+				Detail:      map[string]any{},
+			},
+		},
+		CoolingProfiles: map[string]any{
+			"Balanced": map[string]any{
+				"sensor":       0,
+				"sensorString": "CPU",
+				"zeroRpm":      false,
+				"linear":       true,
+				"points": map[string]any{
+					"0": []any{20, 30},
+					"1": []any{40, 50},
+				},
+			},
+		},
+		Scheduler: map[string]any{
+			"rgbControl": true,
+			"rgbOff":     "23:00",
+			"rgbOn":      "07:00",
+			"lcdControl": true,
+			"LightsOut":  false,
+		},
+		Displays: []any{
+			map[string]any{
+				"Index":  0,
+				"Name":   "Primary",
+				"Width":  2560,
+				"Height": 1440,
+			},
+		},
+		Dashboard: map[string]any{
+			"celsius":     true,
+			"showCpu":     true,
+			"showGpu":     true,
+			"showDevices": true,
+		},
+		LCDImages: []any{
+			map[string]any{"Name": "logo.gif", "Frames": 12},
+		},
+		CustomLCDProfiles: map[string]any{"100": map[string]any{}},
+	}
+}
+
+func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
+	snapshot := BuildSnapshot(fixtureInput())
+	if snapshot.Service.Listener.Scope != "loopback" {
+		t.Fatalf("listener scope = %q, want loopback", snapshot.Service.Listener.Scope)
+	}
+	if snapshot.Service.DeviceCount != 2 {
+		t.Fatalf("device count = %d, want 2 visible devices", snapshot.Service.DeviceCount)
+	}
+	if snapshot.System.CPU == nil || snapshot.System.CPU.Value != 52.25 {
+		t.Fatalf("CPU measurement was not normalized: %#v", snapshot.System.CPU)
+	}
+	if len(snapshot.Devices) != 3 || snapshot.Devices[1].Transport != "receiver" {
+		t.Fatalf("device ordering or receiver normalization failed: %#v", snapshot.Devices)
+	}
+
+	hub := snapshot.Devices[0]
+	if len(hub.Channels) != 2 || hub.Channels[1].Role != "pump" {
+		t.Fatalf("channel normalization failed: %#v", hub.Channels)
+	}
+	if hub.Lighting == nil || hub.Lighting.ProfileCount != 2 {
+		t.Fatalf("lighting library was not normalized: %#v", hub.Lighting)
+	}
+	if !hasCapability(hub.Capabilities, "cooling", true) ||
+		!hasCapability(hub.Capabilities, "sensors", true) ||
+		!hasCapability(hub.Capabilities, "lighting", true) {
+		t.Fatalf("capability inference failed: %#v", hub.Capabilities)
+	}
+	if !hasCapability(snapshot.Devices[1].Capabilities, "pairing", false) {
+		t.Fatalf("receiver pairing limitation was not explicit: %#v", snapshot.Devices[1])
+	}
+	if len(snapshot.CoolingProfiles) != 1 ||
+		snapshot.CoolingProfiles[0].PointCount != 4 {
+		t.Fatalf("cooling profiles were not summarized: %#v", snapshot.CoolingProfiles)
+	}
+	if len(snapshot.Displays) != 1 || snapshot.Displays[0].Width != 2560 {
+		t.Fatalf("display geometry was not normalized: %#v", snapshot.Displays)
+	}
+	if len(snapshot.LCDAssets) != 1 || len(snapshot.LCDProfiles) != 1 {
+		t.Fatalf("LCD inventory was not normalized")
+	}
+}
+
+func TestSnapshotDoesNotLeakRawPathsOrInternalObjects(t *testing.T) {
+	payload, err := json.Marshal(BuildSnapshot(fixtureInput()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(payload)
+	for _, forbidden := range []string{"ConfigPath", "/etc/OpenLinkHub", "Instance"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("contract payload leaked %q: %s", forbidden, text)
+		}
+	}
+}
+
+func TestRevisionTrackerIsStableAndMonotonic(t *testing.T) {
+	var tracker RevisionTracker
+	if got := tracker.Observe(map[string]any{"value": 1}); got != 1 {
+		t.Fatalf("first revision = %d, want 1", got)
+	}
+	if got := tracker.Observe(map[string]any{"value": 1}); got != 1 {
+		t.Fatalf("stable revision = %d, want 1", got)
+	}
+	if got := tracker.Observe(map[string]any{"value": 2}); got != 2 {
+		t.Fatalf("changed revision = %d, want 2", got)
+	}
+}
+
+func hasCapability(capabilities []Capability, id string, available bool) bool {
+	for _, capability := range capabilities {
+		if capability.ID == id && capability.Available == available {
+			return true
+		}
+	}
+	return false
+}

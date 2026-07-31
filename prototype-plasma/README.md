@@ -1,10 +1,10 @@
 # OpenLinkHub Plasma Prototype
 
 This is a native Qt 6/Kirigami prototype for an OpenLinkHub desktop client.
-It starts in self-contained Demo mode. Phase 1 adds an opt-in, GET-only
-connection to the loopback OpenLinkHub service for device inventory and
-telemetry, plus each device's filtered RGB effect library; no hardware mutation
-callback or persistence path is implemented.
+It starts in self-contained Demo mode. Phase 2 adds an opt-in, GET-only
+connection that prefers OpenLinkHub's additive contract 1.0 snapshot and
+explicitly falls back to the legacy loopback reads on older services. No
+hardware mutation callback or persistence path is implemented.
 
 ## Run
 
@@ -64,6 +64,11 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Capability-aware device tabs
 - Asynchronous GET-only loopback transport with explicit connection, degraded,
   stale-data, refresh, and Demo/Live states
+- Additive `GET /api/v1/service`, `/api/v1/capabilities`, and
+  `/api/v1/snapshot` documents with semantic capabilities, safe configuration
+  summaries, normalized devices/channels/profiles, and monotonic revisions
+- One-request contract snapshot refresh with strict version/kind validation and
+  an explicit legacy compatibility fallback for deployed older services
 - Legacy response normalization for product-specific hub, keyboard, mouse, and
   other device payloads
 - Read-only live CPU, GPU, coolant, fan/pump RPM, firmware, battery, channel,
@@ -101,7 +106,7 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 
 Demo values and local control previews reset when the application exits. Live
 values are read from the service and never written back. `POST`, `PUT`, and
-`DELETE` transport methods do not exist in Phase 1.
+`DELETE` transport methods do not exist in Phase 2.
 
 ## Architecture boundary
 
@@ -123,9 +128,10 @@ The source-derived production plan is documented in:
 - [Complete backend route inventory](docs/BACKEND_ROUTE_INVENTORY.md)
 
 The existing WebUI is served by the OpenLinkHub Go service and uses same-origin
-HTTP requests to `/api/...`. The Phase 1 client reads legacy inventory, device
-detail, battery, CPU temperature, GPU temperature, and `/api/color/` filtered
-RGB-library data through a typed adapter. It never accesses Corsair USB devices
-or service-owned files. Global profiles still require a backend-owned
-composition contract so their cooling, lighting, and per-device references can
-eventually be validated, applied, and recovered as one operation.
+HTTP requests to `/api/...`. The Phase 2 client first reads
+`/api/v1/snapshot`; strict contract validation rejects the generic legacy
+`/api/` response returned by older services and selects the typed compatibility
+adapter instead. It never accesses Corsair USB devices or service-owned files.
+Global profiles still require a backend-owned composition contract so their
+cooling, lighting, and per-device references can eventually be validated,
+applied, and recovered as one operation.

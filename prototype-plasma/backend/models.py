@@ -1,4 +1,4 @@
-"""Pure legacy-API adapters used by the read-only Plasma client."""
+"""Pure API adapters used by the read-only Plasma client."""
 
 from __future__ import annotations
 
@@ -27,7 +27,11 @@ class ApiEnvelope:
             decoded = json.loads(payload)
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise PayloadError("The service returned malformed JSON.") from error
-        if not isinstance(decoded, dict):
+        return cls.from_mapping(decoded)
+
+    @classmethod
+    def from_mapping(cls, decoded: Any) -> "ApiEnvelope":
+        if not isinstance(decoded, Mapping):
             raise PayloadError("The service response is not a JSON object.")
 
         code = decoded.get("code", 0)
@@ -45,6 +49,48 @@ class ApiEnvelope:
             device=decoded.get("device"),
             devices=decoded.get("devices"),
             dashboard=decoded.get("dashboard"),
+        )
+
+
+@dataclass(frozen=True)
+class VersionedDocument:
+    api_version: str
+    kind: str
+    revision: int
+    data: Mapping[str, Any]
+
+    @classmethod
+    def from_bytes(cls, payload: bytes, *, kind: str) -> "VersionedDocument":
+        try:
+            decoded = json.loads(payload)
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise PayloadError("The service returned malformed JSON.") from error
+        return cls.from_mapping(decoded, kind=kind)
+
+    @classmethod
+    def from_mapping(
+        cls,
+        decoded: Any,
+        *,
+        kind: str,
+    ) -> "VersionedDocument":
+        if not isinstance(decoded, Mapping):
+            raise PayloadError("The versioned response is not a JSON object.")
+        api_version = decoded.get("apiVersion")
+        response_kind = decoded.get("kind")
+        revision = decoded.get("revision")
+        data = decoded.get("data")
+        if api_version != "1.0" or response_kind != kind:
+            raise PayloadError("The service does not support contract 1.0.")
+        if not isinstance(revision, int) or revision < 1:
+            raise PayloadError("The versioned response has an invalid revision.")
+        if not isinstance(data, Mapping):
+            raise PayloadError("The versioned response has an invalid data object.")
+        return cls(
+            api_version=api_version,
+            kind=response_kind,
+            revision=revision,
+            data=data,
         )
 
 
@@ -848,3 +894,262 @@ class LegacySnapshot:
             zones.append(group)
             values[group["key"]] = _format_rpm(average)
         return zones, values
+
+
+def _contract_color(value: Any) -> dict[str, int]:
+    text = _text(value).lstrip("#")
+    if len(text) != 6:
+        return {"red": 0, "green": 0, "blue": 0}
+    try:
+        return {
+            "red": int(text[0:2], 16),
+            "green": int(text[2:4], 16),
+            "blue": int(text[4:6], 16),
+        }
+    except ValueError:
+        return {"red": 0, "green": 0, "blue": 0}
+
+
+def _legacy_lighting_from_contract(value: Any) -> dict[str, Any]:
+    lighting = _mapping(value)
+    profiles: dict[str, Any] = {}
+    raw_profiles = lighting.get("profiles")
+    if isinstance(raw_profiles, list):
+        for raw in raw_profiles:
+            profile = _mapping(raw)
+            profile_id = _text(profile.get("id"))
+            if not profile_id:
+                continue
+            gradients = {
+                str(index): _contract_color(color)
+                for index, color in enumerate(profile.get("gradientColors", []))
+            }
+            profiles[profile_id] = {
+                "profileName": _text(profile.get("name"), profile_id),
+                "speed": _number(profile.get("speed")) or 0,
+                "brightness": (_number(profile.get("brightness")) or 0) / 100,
+                "smoothness": _number(profile.get("smoothness")) or 0,
+                "start": _contract_color(profile.get("startColor")),
+                "middle": _contract_color(profile.get("middleColor")),
+                "end": _contract_color(profile.get("endColor")),
+                "gradients": gradients,
+                "minTemp": _number(profile.get("minTemperature")) or 0,
+                "maxTemp": _number(profile.get("maxTemperature")) or 0,
+                "rgbDirection": _number(profile.get("direction")) or 0,
+                "alternateColors": bool(profile.get("alternateColors")),
+                "perLed": bool(profile.get("perLed")),
+            }
+    return {
+        "device": _text(lighting.get("device")),
+        "defaultColor": _contract_color(lighting.get("defaultColor")),
+        "profiles": profiles,
+    }
+
+
+class ContractSnapshot:
+    """Adapt a validated version 1 snapshot to the stable QML presentation model."""
+
+    def __init__(self, data: Mapping[str, Any]) -> None:
+        self.data = data
+
+    def build(self) -> dict[str, Any]:
+        raw_devices = self.data.get("devices")
+        if not isinstance(raw_devices, list):
+            raise PayloadError("The contract snapshot has no device inventory.")
+
+        inventory: dict[str, Any] = {"devices": {}}
+        details: dict[str, Mapping[str, Any]] = {}
+        batteries: dict[str, Any] = {}
+        lighting_profiles: dict[str, Any] = {}
+        capabilities_by_id: dict[str, list[Mapping[str, Any]]] = {}
+
+        for raw in raw_devices:
+            device = _mapping(raw)
+            device_id = _text(device.get("id"))
+            if not device_id:
+                continue
+            product = _text(device.get("product"), "Unknown device")
+            transport = _text(device.get("transport"), "usb")
+            hidden = bool(device.get("hidden")) or transport in {
+                "receiver",
+                "internal",
+            }
+            channels: dict[str, Any] = {}
+            raw_channels = device.get("channels")
+            if isinstance(raw_channels, list):
+                for raw_channel in raw_channels:
+                    channel = _mapping(raw_channel)
+                    channel_id = _text(channel.get("id"))
+                    if not channel_id:
+                        continue
+                    speed = _mapping(channel.get("speed"))
+                    temperature = _mapping(channel.get("temperature"))
+                    cooling_profile = _mapping(channel.get("coolingProfile"))
+                    lighting_effect = _mapping(channel.get("lightingEffect"))
+                    channels[channel_id] = {
+                        "name": _text(channel.get("name")),
+                        "label": _text(channel.get("label")),
+                        "description": _text(channel.get("description")),
+                        "portId": channel.get("port"),
+                        "HasSpeed": bool(channel.get("hasSpeed")),
+                        "HasTemps": bool(channel.get("hasTemperature")),
+                        "IsTemperatureProbe": channel.get("role") == "probe",
+                        "AIO": channel.get("role") == "pump",
+                        "rpm": speed.get("value"),
+                        "temperature": temperature.get("value"),
+                        "profile": _text(cooling_profile.get("id")),
+                        "rgb": _text(lighting_effect.get("id")),
+                    }
+
+            profile = _mapping(device.get("profile"))
+            detail: dict[str, Any] = {
+                "Connected": bool(device.get("online", True)),
+                "Usb": transport == "usb",
+                "firmware": _text(device.get("firmware")),
+                "devices": channels,
+                "DeviceProfile": {"Profile": _text(profile.get("active"))},
+                "userProfiles": [
+                    {}
+                    for _ in range(max(0, round(_number(profile.get("savedCount")) or 0)))
+                ],
+            }
+
+            raw_capabilities = device.get("capabilities")
+            capabilities = (
+                [
+                    capability
+                    for capability in raw_capabilities
+                    if isinstance(capability, Mapping)
+                ]
+                if isinstance(raw_capabilities, list)
+                else []
+            )
+            capabilities_by_id[device_id] = capabilities
+            for capability in capabilities:
+                capability_id = _text(capability.get("id"))
+                options = _mapping(capability.get("options"))
+                if capability_id == "dpi":
+                    detail["DPIAmount"] = options.get("stageCount")
+                    detail["MinDPI"] = options.get("minimum")
+                    detail["MaxDPI"] = options.get("maximum")
+                elif capability_id == "performance":
+                    rates = options.get("pollingRates")
+                    if isinstance(rates, list):
+                        detail["PollingRates"] = {
+                            str(index): rate for index, rate in enumerate(rates)
+                        }
+                elif capability_id == "display":
+                    detail["HasLCD"] = True
+                    detail["LCDBrightnessLevels"] = [
+                        {}
+                        for _ in range(
+                            max(
+                                0,
+                                round(
+                                    _number(options.get("brightnessModeCount")) or 0
+                                ),
+                            )
+                        )
+                    ]
+
+            inventory["devices"][device_id] = {
+                "Product": product,
+                "ProductType": device.get("productType"),
+                "ProductId": device.get("productId"),
+                "Firmware": _text(device.get("firmware")),
+                "Hidden": hidden,
+                "GetDevice": detail,
+            }
+            details[device_id] = detail
+
+            battery = _mapping(device.get("battery"))
+            if _number(battery.get("value")) is not None:
+                batteries[device_id] = {"Level": battery.get("value")}
+
+            lighting = _mapping(device.get("lighting"))
+            if lighting:
+                converted = _legacy_lighting_from_contract(lighting)
+                lighting_profiles[device_id] = converted
+                targets = lighting.get("targets")
+                if isinstance(targets, list):
+                    for target in targets:
+                        target_data = _mapping(target)
+                        target_id = _text(target_data.get("id"))
+                        if target_id in channels:
+                            channels[target_id]["rgb"] = _text(
+                                target_data.get("activeProfile")
+                            )
+                        elif target_id == "device":
+                            detail["DeviceProfile"]["RGBProfile"] = _text(
+                                target_data.get("activeProfile")
+                            )
+
+        system = _mapping(self.data.get("system"))
+        cpu = _mapping(system.get("cpu")).get("value")
+        gpu = _mapping(system.get("gpu")).get("value")
+        snapshot = LegacySnapshot(
+            inventory=inventory,
+            details=details,
+            batteries=batteries,
+            lighting_profiles=lighting_profiles,
+            cpu_temperature=cpu,
+            gpu_temperature=gpu,
+        ).build()
+
+        for device in snapshot["devices"]:
+            device_id = device["id"]
+            capabilities = capabilities_by_id.get(device_id, [])
+            labels = [
+                _text(capability.get("label"), _text(capability.get("id")).title())
+                for capability in capabilities
+                if _text(capability.get("id")) != "overview"
+            ]
+            contract_detail = details.get(device_id, {})
+            contract_channels = _items(contract_detail.get("devices"))
+            battery = _number(_mapping(batteries.get(device_id)).get("Level"))
+            lighting = _mapping(lighting_profiles.get(device_id))
+            transport = device["source"] == "live-transport"
+            device["capabilities"] = labels
+            device["tabs"] = _build_tabs(
+                _text(
+                    _mapping(inventory["devices"].get(device_id)).get("Product"),
+                    device["name"],
+                ),
+                _text(contract_detail.get("firmware")),
+                labels,
+                contract_detail,
+                contract_channels,
+                battery,
+                lighting,
+                transport=transport,
+            )
+            device["source"] = (
+                "contract-transport" if transport else "contract-v1"
+            )
+            overview = device["tabs"][0]
+            overview["groups"][0]["description"] = (
+                "This tab is normalized from the version 1 read-only contract."
+            )
+            overview["groups"][0]["items"][3] = _stat(
+                "Capability source",
+                "Versioned contract 1.0",
+                "Backend-published semantic capabilities",
+                accent=True,
+            )
+            overview["groups"][1]["description"] = (
+                "Published by the backend rather than inferred from raw fields."
+            )
+            for item, capability in zip(
+                overview["groups"][1]["items"],
+                [
+                    capability
+                    for capability in capabilities
+                    if _text(capability.get("id")) != "overview"
+                ],
+                strict=False,
+            ):
+                if not bool(capability.get("available", True)):
+                    item["value"] = "Unavailable"
+                    item["description"] = _text(capability.get("reason"))
+
+        return snapshot

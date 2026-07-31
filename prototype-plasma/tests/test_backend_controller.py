@@ -25,15 +25,22 @@ class FixtureHandler(BaseHTTPRequestHandler):
     fixture: dict = {}
     requests: list[str] = []
     fail_inventory = False
+    support_contract = False
+    contract_payload: dict = {}
 
     def do_GET(self) -> None:
         type(self).requests.append(f"GET {self.path}")
-        if self.path == "/api/devices/" and type(self).fail_inventory:
+        if self.path == "/api/v1/snapshot":
+            payload = (
+                type(self).contract_payload
+                if type(self).support_contract
+                else type(self).fixture["inventory"]
+            )
+        elif self.path == "/api/devices/" and type(self).fail_inventory:
             self.send_response(503)
             self.end_headers()
             return
-
-        if self.path == "/api/devices/":
+        elif self.path == "/api/devices/":
             payload = type(self).fixture["inventory"]
         elif self.path == "/api/batteryStats":
             payload = type(self).fixture["battery"]
@@ -86,6 +93,60 @@ class BackendControllerTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QCoreApplication.instance() or QCoreApplication([])
         FixtureHandler.fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+        FixtureHandler.contract_payload = {
+            "apiVersion": "1.0",
+            "kind": "snapshot",
+            "revision": 7,
+            "data": {
+                "service": {"contract": "1.0"},
+                "system": {
+                    "cpu": {"value": 50.5, "unit": "celsius"},
+                    "gpu": {"value": 45.0, "unit": "celsius"},
+                },
+                "devices": [
+                    {
+                        "id": "mouse-1",
+                        "product": "SCIMITAR ELITE",
+                        "productId": 1,
+                        "productType": 1,
+                        "deviceType": "mouse",
+                        "firmware": "5.6.28",
+                        "online": True,
+                        "hidden": False,
+                        "transport": "usb",
+                        "profile": {"active": "Desktop", "savedCount": 1},
+                        "capabilities": [
+                            {
+                                "id": "overview",
+                                "label": "Overview",
+                                "available": True,
+                                "access": "read",
+                                "operations": ["read"],
+                            },
+                            {
+                                "id": "dpi",
+                                "label": "DPI",
+                                "available": True,
+                                "access": "read",
+                                "operations": ["read"],
+                                "options": {
+                                    "stageCount": 5,
+                                    "minimum": 100,
+                                    "maximum": 26000,
+                                },
+                            },
+                        ],
+                        "channels": [],
+                    }
+                ],
+                "coolingProfiles": [],
+                "scheduler": {},
+                "displays": [],
+                "dashboard": {},
+                "lcdAssets": [],
+                "lcdProfiles": [],
+            },
+        }
         FixtureHandler.requests = []
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler)
         cls.thread = Thread(target=cls.server.serve_forever, daemon=True)
@@ -100,6 +161,7 @@ class BackendControllerTests(unittest.TestCase):
     def setUp(self) -> None:
         FixtureHandler.requests = []
         FixtureHandler.fail_inventory = False
+        FixtureHandler.support_contract = False
         endpoint = f"http://127.0.0.1:{self.server.server_port}"
         self.controller = BackendController(
             endpoint=endpoint,
@@ -151,6 +213,27 @@ class BackendControllerTests(unittest.TestCase):
             all(request.startswith("GET ") for request in FixtureHandler.requests)
         )
         self.assertIn("GET /api/color/", FixtureHandler.requests)
+        self.assertEqual(
+            self.controller.contractSource,
+            "Legacy compatibility adapter",
+        )
+
+    def test_versioned_snapshot_uses_one_request_and_skips_legacy_fanout(self) -> None:
+        FixtureHandler.support_contract = True
+        self.controller.setMode("live")
+        self.wait_until(
+            lambda: not self.controller.refreshing
+            and self.controller.connectionState == "connected"
+        )
+
+        self.assertEqual(FixtureHandler.requests, ["GET /api/v1/snapshot"])
+        self.assertEqual(self.controller.contractVersion, "1.0")
+        self.assertEqual(self.controller.contractRevision, 7)
+        self.assertEqual(
+            self.controller.contractSource,
+            "Versioned service contract",
+        )
+        self.assertEqual(self.controller.devices[0]["capabilities"], ["DPI"])
 
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:
         self.controller.setMode("live")

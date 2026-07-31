@@ -2529,6 +2529,9 @@ func setRoutes() http.Handler {
 	r.Handle("/static/", http.StripPrefix("/static/", fs))
 
 	// GET
+	handleFunc(r, "/api/v1/service", http.MethodGet, getServiceV1)
+	handleFunc(r, "/api/v1/capabilities", http.MethodGet, getCapabilitiesV1)
+	handleFunc(r, "/api/v1/snapshot", http.MethodGet, getSnapshotV1)
 	handleFunc(r, "/api/", http.MethodGet, homePage)
 	handleFunc(r, "/api/cpuTemp", http.MethodGet, getCpuTemperature)
 	handleFunc(r, "/api/cpuTemp/clean", http.MethodGet, getCpuTemperatureClean)
