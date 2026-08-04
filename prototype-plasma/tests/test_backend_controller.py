@@ -369,6 +369,24 @@ class BackendControllerTests(unittest.TestCase):
             "Desk Mouse",
         )
 
+        self.controller.updateLabel("mouse-1", "device", "")
+        self.wait_until(
+            lambda: not self.controller.commandBusy
+            and self.controller.commandStatus == "succeeded"
+            and not self.controller.refreshing
+            and self.controller.devices[0]["labelTargets"][0]["label"] == ""
+        )
+        self.assertEqual(
+            FixtureHandler.label_commands[-1],
+            {
+                "expectedRevision": 8,
+                "deviceId": "mouse-1",
+                "targetId": "device",
+                "label": "",
+            },
+        )
+        self.assertEqual(self.controller.contractRevision, 9)
+
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:
         self.controller.setMode("live")
         self.wait_until(lambda: self.controller.connectionState == "connected")

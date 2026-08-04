@@ -199,6 +199,54 @@ func TestDeviceLabelV1RejectsStaleAndInvalidCommands(t *testing.T) {
 	}
 }
 
+func TestDeviceLabelV1ClearsPublishedLabel(t *testing.T) {
+	originalInput := apiV1Input
+	originalApply := apiV1ApplyLabel
+	apiV1StateRevision = contractv1.RevisionTracker{}
+	apiV1TelemetryRevision = contractv1.RevisionTracker{}
+	label := "Rear Radiator"
+	apiV1Input = func() contractv1.Input { return labelInput(label) }
+	applyCalls := 0
+	apiV1ApplyLabel = func(deviceID string, target contractv1.LabelTarget, value string) bool {
+		applyCalls++
+		if deviceID != "hub" || target.ID != "channel:7" || value != "" {
+			t.Fatalf("unexpected clear request: %q %#v %q", deviceID, target, value)
+		}
+		label = value
+		return true
+	}
+	t.Cleanup(func() {
+		apiV1Input = originalInput
+		apiV1ApplyLabel = originalApply
+		apiV1StateRevision = contractv1.RevisionTracker{}
+		apiV1TelemetryRevision = contractv1.RevisionTracker{}
+	})
+
+	body := `{"expectedRevision":1,"deviceId":"hub","targetId":"channel:7","label":""}`
+	request := httptest.NewRequest(http.MethodPut, "/api/v1/devices/label", strings.NewReader(body))
+	response := httptest.NewRecorder()
+	setRoutes().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("PUT status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if applyCalls != 1 || label != "" {
+		t.Fatalf("apply calls = %d, label = %q", applyCalls, label)
+	}
+	var document struct {
+		Revision uint64                        `json:"revision"`
+		Kind     string                        `json:"kind"`
+		Data     contractv1.LabelCommandResult `json:"data"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Kind != "command-result" || document.Revision != 2 ||
+		document.Data.Status != "succeeded" || !document.Data.Changed ||
+		document.Data.Target == nil || document.Data.Target.Label != "" {
+		t.Fatalf("unexpected clear result: %#v", document)
+	}
+}
+
 func TestDeviceLabelV1DoesNotClaimUnverifiedSuccess(t *testing.T) {
 	originalInput := apiV1Input
 	originalApply := apiV1ApplyLabel

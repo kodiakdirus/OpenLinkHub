@@ -195,9 +195,9 @@ func validateLabelCommand(command contractv1.LabelCommand) []contractv1.CommandI
 	if command.TargetID == "" {
 		issues = append(issues, contractv1.CommandIssue{Field: "targetId", Code: "required", Message: "Choose a published label target."})
 	}
-	if command.Label == "" || len(command.Label) > 64 {
-		issues = append(issues, contractv1.CommandIssue{Field: "label", Code: "length", Message: "Use between 1 and 64 characters."})
-	} else if !common.AlphanumericDisplayName.MatchString(command.Label) {
+	if len(command.Label) > 64 {
+		issues = append(issues, contractv1.CommandIssue{Field: "label", Code: "length", Message: "Use no more than 64 characters."})
+	} else if command.Label != "" && !common.AlphanumericDisplayName.MatchString(command.Label) {
 		issues = append(issues, contractv1.CommandIssue{Field: "label", Code: "characters", Message: "Use letters, numbers, spaces, and # . : _ - only."})
 	}
 	return issues

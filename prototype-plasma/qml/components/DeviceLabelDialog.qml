@@ -121,10 +121,10 @@ Dialog {
         TextField {
             id: labelField
             Layout.fillWidth: true
-            placeholderText: "Enter a descriptive label"
+            placeholderText: "Enter a label, or leave blank to clear"
             maximumLength: 64
             validator: RegularExpressionValidator {
-                regularExpression: /^[A-Za-z0-9#.:_ -]{1,64}$/
+                regularExpression: /^[A-Za-z0-9#.:_ -]{0,64}$/
             }
             Accessible.name: "New device label"
             onTextEdited: dialog.errorMessage = ""
@@ -134,7 +134,7 @@ Dialog {
             Layout.fillWidth: true
             text: dialog.errorMessage.length > 0
                 ? dialog.errorMessage
-                : "Allowed: letters, numbers, spaces, and # . : _ -"
+                : "Allowed: letters, numbers, spaces, and # . : _ -. Leave blank to clear."
             color: dialog.errorMessage.length > 0
                 ? dialog.shell.dangerColor
                 : dialog.shell.mutedText

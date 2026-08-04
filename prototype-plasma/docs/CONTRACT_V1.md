@@ -30,10 +30,12 @@ only for a `labelTargets` entry published on the selected device:
 }
 ```
 
-The service rejects unknown fields and malformed, empty, overlong, or
-unsupported labels. `expectedRevision` must equal the current state revision;
-otherwise the command returns HTTP `409` and never reaches a device driver.
-Supported targets use `device` or `channel:<id>` stable IDs.
+The service rejects unknown fields and malformed, overlong, or unsupported
+labels. An empty label explicitly clears the selected published target, which
+allows clients to restore an originally unlabeled device after a reversible
+test. `expectedRevision` must equal the current state revision; otherwise the
+command returns HTTP `409` and never reaches a device driver. Supported
+targets use `device` or `channel:<id>` stable IDs.
 
 A successful driver return is not sufficient. The service rebuilds the
 normalized snapshot and confirms that the requested label appears on the same

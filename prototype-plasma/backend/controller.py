@@ -233,8 +233,8 @@ class BackendController(QObject):
             )
             return
         cleaned = label.strip()
-        if not cleaned or len(cleaned) > 64:
-            self._set_command(False, "rejected", "Use a label between 1 and 64 characters.")
+        if len(cleaned) > 64:
+            self._set_command(False, "rejected", "Use no more than 64 characters.")
             return
 
         self._set_command(True, "working", "Applying label…")

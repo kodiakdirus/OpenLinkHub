@@ -69,6 +69,8 @@ class QmlStateTests(unittest.TestCase):
         self.assertIn('text: "Edit labels"', device_page)
         self.assertIn("expected state revision", dialog.lower())
         self.assertIn("reads this label back", dialog.lower())
+        self.assertIn("leave blank to clear", dialog.lower())
+        self.assertIn("{0,64}", dialog)
         self.assertIn("backendClient.updateLabel", dialog)
         self.assertIn('"expectedRevision": self._contract_revision', controller)
         self.assertIn('kind="command-result"', controller)
