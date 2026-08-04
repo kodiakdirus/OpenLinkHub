@@ -32,10 +32,10 @@ class RouteInventoryTests(unittest.TestCase):
             re.findall(r"`(GET|POST|PUT|DELETE) (/api[^` ]*)`", documentation)
         )
 
-        self.assertEqual(len(registered), 158)
+        self.assertEqual(len(registered), 159)
         self.assertEqual(
             Counter(method.upper() for method, _path in registered),
-            Counter({"GET": 45, "POST": 100, "PUT": 7, "DELETE": 6}),
+            Counter({"GET": 45, "POST": 100, "PUT": 8, "DELETE": 6}),
         )
         missing = {
             (method.upper(), path)

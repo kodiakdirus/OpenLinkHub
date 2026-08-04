@@ -46,8 +46,12 @@ class ContractSchemaTests(unittest.TestCase):
             self.assertEqual(len(capability_ids), len(set(capability_ids)))
             for capability in device["capabilities"]:
                 if capability["available"]:
-                    self.assertEqual(capability["access"], "read")
-                    self.assertEqual(capability["operations"], ["read"])
+                    if "update-label" in capability["operations"]:
+                        self.assertEqual(capability["access"], "read-write")
+                        self.assertEqual(capability["operations"], ["read", "update-label"])
+                    else:
+                        self.assertEqual(capability["access"], "read")
+                        self.assertEqual(capability["operations"], ["read"])
                 else:
                     self.assertEqual(capability["access"], "unavailable")
                     self.assertEqual(capability["operations"], [])
@@ -97,6 +101,8 @@ class ContractSchemaTests(unittest.TestCase):
             item for item in snapshot["devices"] if item["id"] == "mouse-1"
         )
         self.assertNotIn("Cooling", normalized_mouse["capabilities"])
+        self.assertTrue(normalized_mouse["canEditLabels"])
+        self.assertEqual(normalized_mouse["labelTargets"][0]["id"], "device")
         self.assertEqual(document.revision, 7)
         self.assertEqual(document.telemetry_revision, 11)
 

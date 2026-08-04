@@ -60,6 +60,19 @@ class QmlStateTests(unittest.TestCase):
                 self.assertIn(color, main)
         self.assertIn('model: ["Dark Modern", "Midnight", "Dim", "Light"]', service)
 
+    def test_guarded_label_editor_discloses_revision_and_verification(self) -> None:
+        prototype = QML_ROOT.parent
+        device_page = (QML_ROOT / "pages" / "DevicePage.qml").read_text(encoding="utf-8")
+        dialog = (QML_ROOT / "components" / "DeviceLabelDialog.qml").read_text(encoding="utf-8")
+        controller = (prototype / "backend" / "controller.py").read_text(encoding="utf-8")
+
+        self.assertIn('text: "Edit labels"', device_page)
+        self.assertIn("expected state revision", dialog.lower())
+        self.assertIn("reads this label back", dialog.lower())
+        self.assertIn("backendClient.updateLabel", dialog)
+        self.assertIn('"expectedRevision": self._contract_revision', controller)
+        self.assertIn('kind="command-result"', controller)
+
     def test_overview_and_service_alignment_contracts(self) -> None:
         overview = (QML_ROOT / "pages" / "OverviewPage.qml").read_text(encoding="utf-8")
         service = (QML_ROOT / "pages" / "ServicePage.qml").read_text(encoding="utf-8")

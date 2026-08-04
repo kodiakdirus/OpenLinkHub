@@ -301,42 +301,53 @@ ApplicationWindow {
             id: "hub", name: "iCUE LINK System Hub", icon: "drive-multidisk",
             subtitle: "USB · Firmware 3.10.636 · 7 channels",
             capabilities: ["Cooling", "Lighting", "Topology", "Sensors"],
+            labelTargets: [
+                { id: "channel:13", scope: "channel", channelId: 13, name: "Radiator fan 1", label: "Radiator 1" },
+                { id: "channel:15", scope: "channel", channelId: 15, name: "Case fan 1", label: "Case 1" },
+                { id: "channel:2", scope: "channel", channelId: 2, name: "TITAN pump", label: "Pump" }
+            ],
             tabs: deviceTabs("hub")
         },
         {
             id: "titan", name: "TITAN 360 LCD", icon: "temperature-normal",
             subtitle: "LINK · Coolant 38°C · Pump 1,460 RPM",
             capabilities: ["Cooling", "LCD", "Lighting", "Protection"],
+            labelTargets: [{ id: "device", scope: "device", name: "Whole device", label: "TITAN 360" }],
             tabs: deviceTabs("titan")
         },
         {
             id: "keyboard", name: "K100 AIR RGB", icon: "input-keyboard",
             subtitle: "Wireless · Battery 82% · Active profile Desktop",
             capabilities: ["Keys", "Actuation", "Lighting", "Macros"],
+            labelTargets: [{ id: "device", scope: "device", name: "Whole device", label: "Keyboard" }],
             tabs: deviceTabs("keyboard")
         },
         {
             id: "mouse", name: "Scimitar RGB Elite", icon: "input-mouse",
             subtitle: "USB · 1,000 Hz · 1,600 DPI",
             capabilities: ["Buttons", "DPI", "Lighting", "Performance"],
+            labelTargets: [{ id: "device", scope: "device", name: "Whole device", label: "Mouse" }],
             tabs: deviceTabs("mouse")
         },
         {
             id: "headset", name: "Virtuoso Wireless", icon: "audio-headphones",
             subtitle: "Slipstream · Battery 68% · Stereo",
             capabilities: ["Audio", "Buttons", "Lighting", "Power"],
+            labelTargets: [{ id: "device", scope: "device", name: "Whole device", label: "Headset" }],
             tabs: deviceTabs("headset")
         },
         {
             id: "controller", name: "SCUF Envision Pro", icon: "input-gaming",
             subtitle: "USB · XInput emulation · Profile Default",
             capabilities: ["Controls", "Analog", "Vibration", "Lighting"],
+            labelTargets: [{ id: "device", scope: "device", name: "Whole device", label: "Controller" }],
             tabs: deviceTabs("controller")
         },
         {
             id: "receiver", name: "Slipstream Receiver", icon: "network-wireless",
             subtitle: "USB · 2 paired devices",
             capabilities: ["Pairing", "Wireless", "Battery"],
+            labelTargets: [],
             tabs: deviceTabs("receiver")
         }
     ]
@@ -797,7 +808,9 @@ ApplicationWindow {
     function baseStatusHint() {
         if (!liveMode) return "Demo controls remain local to this prototype"
         if (backendClient.connectionState === "connected") {
-            return "Live telemetry is read-only · updated " + backendClient.lastUpdated
+            return backendClient.contractVersion === "1.0"
+                ? "Live telemetry · guarded label writes · updated " + backendClient.lastUpdated
+                : "Live telemetry is read-only · updated " + backendClient.lastUpdated
         }
         if (backendClient.connectionState === "degraded") {
             return "Live telemetry is read-only · some data is stale or unavailable"
@@ -1058,7 +1071,9 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 0
                             Label {
-                                text: root.liveMode ? "Read-only live mode" : "Demo mode"
+                                text: root.liveMode && root.backendClient.contractVersion === "1.0"
+                                    ? "Guarded live mode"
+                                    : root.liveMode ? "Read-only live mode" : "Demo mode"
                                 color: root.primaryText
                                 font.weight: Font.DemiBold
                             }
@@ -1242,7 +1257,7 @@ ApplicationWindow {
                         Layout.preferredWidth: 108
                         onActivated: root.backendClient.setMode(currentValue)
                         ToolTip.visible: hovered
-                        ToolTip.text: "Demo uses local fixtures; Live performs GET-only loopback reads"
+                        ToolTip.text: "Demo uses local fixtures; Live reads loopback state and enables only backend-published guarded commands"
                         Accessible.name: "Data source"
                     }
 

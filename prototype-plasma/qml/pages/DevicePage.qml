@@ -22,9 +22,11 @@ Item {
         subtitle: ""
     })
     property var displayCapabilities: []
+    property var displayLabelTargets: []
     property var navigationTabs: []
     property string displayDeviceSignature: ""
     property string capabilitySignature: ""
+    property string labelTargetSignature: ""
     property string navigationSignature: ""
     readonly property int selectedTab: tabIndex(selectedTabKey)
     readonly property var currentTab: tabForKey(selectedTabKey)
@@ -80,6 +82,12 @@ Item {
         if (nextCapabilitySignature !== capabilitySignature) {
             capabilitySignature = nextCapabilitySignature
             displayCapabilities = capabilities
+        }
+        const labelTargets = source.labelTargets || []
+        const nextLabelTargetSignature = JSON.stringify(labelTargets)
+        if (nextLabelTargetSignature !== labelTargetSignature) {
+            labelTargetSignature = nextLabelTargetSignature
+            displayLabelTargets = labelTargets
         }
 
         const sourceTabs = source.tabs || []
@@ -148,6 +156,10 @@ Item {
 
     function openLayoutEditor() {
         layoutEditing = true
+    }
+
+    function openPrimaryDialog() {
+        if (displayLabelTargets.length > 0) labelDialog.openForDevice(device)
     }
 
     function moveGroup(index, delta) {
@@ -257,6 +269,13 @@ Item {
                     }
 
                     Button {
+                        visible: page.displayLabelTargets.length > 0
+                        text: "Edit labels"
+                        icon.name: "edit-rename"
+                        onClicked: labelDialog.openForDevice(page.device)
+                    }
+
+                    Button {
                         text: page.layoutEditing ? "Done arranging" : "Arrange tab cells"
                         icon.name: page.layoutEditing ? "dialog-ok" : "transform-move"
                         onClicked: page.layoutEditing = !page.layoutEditing
@@ -264,7 +283,9 @@ Item {
 
                     StatusBadge {
                         shell: page.shell
-                        text: page.shell.liveMode ? "Connected · read only" : "Connected · demo"
+                        text: page.shell.liveMode && page.displayLabelTargets.length > 0
+                            ? "Connected · guarded labels"
+                            : page.shell.liveMode ? "Connected · read only" : "Connected · demo"
                         badgeColor: page.device.connected === false
                             ? page.shell.warningColor
                             : page.shell.successColor
@@ -453,5 +474,10 @@ Item {
 
             Item { Layout.preferredHeight: 1 }
         }
+    }
+
+    DeviceLabelDialog {
+        id: labelDialog
+        shell: page.shell
     }
 }

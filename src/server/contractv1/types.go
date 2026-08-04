@@ -1,8 +1,8 @@
 package contractv1
 
-// Package contractv1 defines the additive, read-only API contract consumed by
-// presentation clients. It deliberately contains no hardware or persistence
-// operations.
+// Package contractv1 defines the additive API contract consumed by
+// presentation clients. Reads remain broad; mutations are introduced as
+// narrow, explicitly versioned commands.
 
 const APIVersion = "1.0"
 
@@ -207,6 +207,38 @@ type DeviceState struct {
 	Capabilities []Capability       `json:"capabilities"`
 	Channels     []Channel          `json:"channels"`
 	Lighting     *LightingCatalog   `json:"lighting,omitempty"`
+	LabelTargets []LabelTarget      `json:"labelTargets"`
+}
+
+type LabelTarget struct {
+	ID        string `json:"id"`
+	Scope     string `json:"scope"`
+	ChannelID *int   `json:"channelId,omitempty"`
+	Name      string `json:"name"`
+	Label     string `json:"label"`
+}
+
+type LabelCommand struct {
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	DeviceID         string `json:"deviceId"`
+	TargetID         string `json:"targetId"`
+	Label            string `json:"label"`
+}
+
+type CommandIssue struct {
+	Field   string `json:"field,omitempty"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type LabelCommandResult struct {
+	Operation       string         `json:"operation"`
+	Status          string         `json:"status"`
+	Message         string         `json:"message"`
+	Changed         bool           `json:"changed"`
+	RefreshRequired bool           `json:"refreshRequired"`
+	Target          *LabelTarget   `json:"target,omitempty"`
+	Issues          []CommandIssue `json:"issues"`
 }
 
 type DeviceCapability struct {

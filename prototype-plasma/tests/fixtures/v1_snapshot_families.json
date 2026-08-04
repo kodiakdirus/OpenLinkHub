@@ -36,7 +36,7 @@
         "transport": "usb",
         "profile": {"active": "Balanced", "savedCount": 2},
         "capabilities": [
-          {"id": "overview", "label": "Overview", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "overview", "label": "Overview", "available": true, "access": "read-write", "operations": ["read", "update-label"], "options": {"labelTargetCount": 2}},
           {"id": "cooling", "label": "Cooling", "available": true, "access": "read", "operations": ["read"], "options": {"channelCount": 2}},
           {"id": "sensors", "label": "Sensors", "available": true, "access": "read", "operations": ["read"], "options": {"channelCount": 1}},
           {"id": "lighting", "label": "Lighting", "available": true, "access": "read", "operations": ["read"], "options": {"effectCount": 2, "targetCount": 2}},
@@ -46,6 +46,7 @@
           {
             "id": "1",
             "name": "Radiator",
+            "label": "Top radiator",
             "description": "Fan channel",
             "role": "fan",
             "port": 1,
@@ -68,6 +69,10 @@
             "coolingProfile": {"id": "TitanQuiet", "name": "TitanQuiet"},
             "lightingEffect": {"id": "liquid-temperature", "name": "liquid-temperature"}
           }
+        ],
+        "labelTargets": [
+          {"id": "channel:1", "scope": "channel", "channelId": 1, "name": "Radiator", "label": "Top radiator"},
+          {"id": "channel:2", "scope": "channel", "channelId": 2, "name": "Pump", "label": "Pump"}
         ],
         "lighting": {
           "source": "OpenLinkHub versioned capability contract",
@@ -96,13 +101,14 @@
         "transport": "usb",
         "profile": {"active": "Desktop", "savedCount": 3},
         "capabilities": [
-          {"id": "overview", "label": "Overview", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "overview", "label": "Overview", "available": true, "access": "read-write", "operations": ["read", "update-label"], "options": {"labelTargetCount": 1}},
           {"id": "lighting", "label": "Lighting", "available": true, "access": "read", "operations": ["read"], "options": {"effectCount": 1, "targetCount": 1}},
           {"id": "keys", "label": "Keys", "available": true, "access": "read", "operations": ["read"]},
           {"id": "performance", "label": "Performance", "available": true, "access": "read", "operations": ["read"], "options": {"pollingRates": ["1000"]}},
           {"id": "profiles", "label": "Profiles", "available": true, "access": "read", "operations": ["read"], "options": {"savedCount": 3}}
         ],
         "channels": [],
+        "labelTargets": [{"id": "device", "scope": "device", "name": "Whole device", "label": "Keyboard"}],
         "lighting": {
           "source": "OpenLinkHub versioned capability contract",
           "device": "K100 AIR",
@@ -124,7 +130,7 @@
         "transport": "usb",
         "profile": {"active": "Desktop", "savedCount": 1},
         "capabilities": [
-          {"id": "overview", "label": "Overview", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "overview", "label": "Overview", "available": true, "access": "read-write", "operations": ["read", "update-label"], "options": {"labelTargetCount": 1}},
           {"id": "lighting", "label": "Lighting", "available": true, "access": "read", "operations": ["read"], "options": {"effectCount": 1, "targetCount": 1}},
           {"id": "buttons", "label": "Buttons", "available": true, "access": "read", "operations": ["read"]},
           {"id": "dpi", "label": "DPI", "available": true, "access": "read", "operations": ["read"], "options": {"stageCount": 5, "minimum": 100, "maximum": 26000}},
@@ -132,6 +138,7 @@
           {"id": "profiles", "label": "Profiles", "available": true, "access": "read", "operations": ["read"], "options": {"savedCount": 1}}
         ],
         "channels": [],
+        "labelTargets": [{"id": "device", "scope": "device", "name": "Whole device", "label": "Mouse"}],
         "lighting": {
           "source": "OpenLinkHub versioned capability contract",
           "device": "SCIMITAR ELITE",
@@ -156,7 +163,8 @@
           {"id": "wireless", "label": "Wireless", "available": true, "access": "read", "operations": ["read"]},
           {"id": "pairing", "label": "Pairing", "available": false, "access": "unavailable", "reason": "The current service does not publish paired-device inventory for this receiver.", "operations": []}
         ],
-        "channels": []
+        "channels": [],
+        "labelTargets": []
       }
     ],
     "coolingProfiles": [

@@ -1,10 +1,10 @@
 # OpenLinkHub Plasma Prototype
 
 This is a native Qt 6/Kirigami prototype for an OpenLinkHub desktop client.
-It starts in self-contained Demo mode. Phase 2 adds an opt-in, GET-only
-connection that prefers OpenLinkHub's additive contract 1.0 snapshot and
-explicitly falls back to the legacy loopback reads on older services. No
-hardware mutation callback or persistence path is implemented.
+It starts in self-contained Demo mode. Phase 3 retains the versioned read
+contract and adds one deliberately narrow label mutation. Device/channel labels
+use a typed command, expected state revision, backend persistence path, and
+read-back verification. Every hardware-affecting control remains unconnected.
 
 ## Run
 
@@ -18,7 +18,7 @@ The launcher checks for Python 3, PyQt6, and the system Kirigami QML module
 before starting. SparkleDog already has those dependencies through its Plasma
 installation.
 
-To start directly in read-only Live mode:
+To start directly in Live mode:
 
 ```bash
 ./prototype-plasma/run.sh --live
@@ -62,7 +62,7 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Persistent global-profile selector and a composition editor that references
   saved cooling, lighting, keyboard, mouse, controller, audio, and LCD profiles
 - Capability-aware device tabs
-- Asynchronous GET-only loopback transport with explicit connection, degraded,
+- Asynchronous loopback transport with explicit connection, degraded,
   stale-data, refresh, and Demo/Live states
 - Additive `GET /api/v1/service`, `/api/v1/capabilities`, and
   `/api/v1/snapshot` documents with semantic capabilities, safe configuration
@@ -71,6 +71,8 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   an explicit legacy compatibility fallback for deployed older services
 - Separate configuration and telemetry revisions, strong ETag revalidation,
   and no model replacement on `304 Not Modified`
+- Guarded `PUT /api/v1/devices/label` editing for backend-published device and
+  channel targets, including stale-revision rejection and verified read-back
 - Legacy response normalization for product-specific hub, keyboard, mouse, and
   other device payloads
 - Read-only live CPU, GPU, coolant, fan/pump RPM, firmware, battery, channel,
@@ -88,7 +90,7 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Stable Devices-page filter/card presentation with deterministic card ordering;
   user-relevant hidden wireless transports appear as receiver cards while
   internal cluster/helper records remain excluded
-- Sanitized response fixtures, GET-only reconnect/failure tests, a GUI-wide
+- Sanitized response fixtures, reconnect/failure and guarded-command tests, a GUI-wide
   refresh-state exercise, and a static guard against binding live arrays
   directly to stateful controls
 - A machine-readable contract schema plus a bounded golden snapshot covering
@@ -106,11 +108,13 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   icon/title/subtitle alignment across Service cards
 - Constrained per-workspace and per-device-tab cell ordering with half/full-row
   sizing and equal-height neighbors to prevent masonry-style gaps
-- Local notifications and explicit demo/read-only-live state
+- Local notifications and explicit Demo, legacy-read-only, and guarded-Live state
 
-Demo values and local control previews reset when the application exits. Live
-values are read from the service and never written back. `POST`, `PUT`, and
-`DELETE` transport methods do not exist in Phase 2.
+Demo values and local control previews reset when the application exits. In a
+contract-capable Live session, only published device/channel labels can be
+written. The client exposes no generic mutation method; cooling, lighting,
+input, audio, display, global-profile, and administrative changes remain local
+previews.
 
 ## Architecture boundary
 
@@ -133,7 +137,7 @@ The source-derived production plan is documented in:
 - [Versioned read contract](docs/CONTRACT_V1.md)
 
 The existing WebUI is served by the OpenLinkHub Go service and uses same-origin
-HTTP requests to `/api/...`. The Phase 2 client first reads
+HTTP requests to `/api/...`. The native client first reads
 `/api/v1/snapshot`; strict contract validation rejects the generic legacy
 `/api/` response returned by older services and selects the typed compatibility
 adapter instead. It never accesses Corsair USB devices or service-owned files.

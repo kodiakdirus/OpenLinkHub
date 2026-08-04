@@ -26,6 +26,7 @@ type stateDevice struct {
 	Capabilities []Capability       `json:"capabilities"`
 	Channels     []stateChannel     `json:"channels"`
 	Lighting     *LightingCatalog   `json:"lighting,omitempty"`
+	LabelTargets []LabelTarget      `json:"labelTargets"`
 }
 
 type stateProjection struct {
@@ -90,6 +91,7 @@ func StateRevisionValue(snapshot Snapshot) any {
 			Capabilities: device.Capabilities,
 			Channels:     channels,
 			Lighting:     device.Lighting,
+			LabelTargets: device.LabelTargets,
 		})
 	}
 	return stateProjection{

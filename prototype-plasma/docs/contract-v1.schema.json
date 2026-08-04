@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://openlinkhub.local/schema/contract-v1.json",
-  "title": "OpenLinkHub read-only contract 1.0 document",
+  "title": "OpenLinkHub contract 1.0 document",
   "type": "object",
   "additionalProperties": false,
   "required": ["apiVersion", "kind", "revision", "data"],
   "properties": {
     "apiVersion": {"const": "1.0"},
-    "kind": {"enum": ["service", "capabilities", "snapshot"]},
+    "kind": {"enum": ["service", "capabilities", "snapshot", "command-result"]},
     "revision": {"type": "integer", "minimum": 1},
     "telemetryRevision": {"type": "integer", "minimum": 1},
     "data": {"type": "object"}
@@ -71,11 +71,11 @@
         "id": {"type": "string", "minLength": 1},
         "label": {"type": "string", "minLength": 1},
         "available": {"type": "boolean"},
-        "access": {"enum": ["read", "unavailable"]},
+        "access": {"enum": ["read", "read-write", "unavailable"]},
         "reason": {"type": "string"},
         "operations": {
           "type": "array",
-          "items": {"enum": ["read"]},
+          "items": {"enum": ["read", "update-label"]},
           "uniqueItems": true
         },
         "options": {"type": "object"}
@@ -96,7 +96,7 @@
     },
     "device": {
       "type": "object",
-      "required": ["id", "product", "productId", "productType", "deviceType", "online", "hidden", "transport", "profile", "capabilities", "channels"],
+      "required": ["id", "product", "productId", "productType", "deviceType", "online", "hidden", "transport", "profile", "capabilities", "channels", "labelTargets"],
       "properties": {
         "id": {"type": "string", "minLength": 1},
         "product": {"type": "string", "minLength": 1},
@@ -110,8 +110,21 @@
         "profile": {"type": "object"},
         "capabilities": {"type": "array", "items": {"$ref": "#/$defs/capability"}},
         "channels": {"type": "array", "items": {"$ref": "#/$defs/channel"}},
+        "labelTargets": {"type": "array", "items": {"$ref": "#/$defs/labelTarget"}},
         "battery": {"$ref": "#/$defs/measurement"},
         "lighting": {"type": "object"}
+      }
+    },
+    "labelTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "scope", "name", "label"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "scope": {"enum": ["device", "channel"]},
+        "channelId": {"type": "integer", "minimum": 0},
+        "name": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "maxLength": 64}
       }
     }
   }

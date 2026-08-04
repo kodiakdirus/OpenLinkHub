@@ -14,15 +14,19 @@ import (
 	"OpenLinkHub/src/version"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 var apiV1StateRevision contractv1.RevisionTracker
 var apiV1TelemetryRevision contractv1.RevisionTracker
 var apiV1Input = collectV1Input
+var apiV1WriteMutex sync.Mutex
+var apiV1ApplyLabel = applyLabelV1
 
 func getServiceV1(w http.ResponseWriter, request *http.Request) {
 	input := apiV1Input()
@@ -62,6 +66,198 @@ func getSnapshotV1(w http.ResponseWriter, request *http.Request) {
 		document,
 		contractETag("snapshot", revision, telemetryRevision),
 	)
+}
+
+func putDeviceLabelV1(w http.ResponseWriter, request *http.Request) {
+	command := contractv1.LabelCommand{}
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&command); err != nil {
+		sendLabelCommandError(
+			w,
+			currentV1StateRevision(),
+			http.StatusBadRequest,
+			"The label request is not valid JSON.",
+			contractv1.CommandIssue{Field: "body", Code: "invalid-json", Message: err.Error()},
+		)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		sendLabelCommandError(
+			w,
+			currentV1StateRevision(),
+			http.StatusBadRequest,
+			"The label request must contain one JSON object.",
+			contractv1.CommandIssue{Field: "body", Code: "trailing-data", Message: "Remove content after the command object."},
+		)
+		return
+	}
+
+	command.DeviceID = strings.TrimSpace(command.DeviceID)
+	command.TargetID = strings.TrimSpace(command.TargetID)
+	command.Label = strings.TrimSpace(command.Label)
+	issues := validateLabelCommand(command)
+	if len(issues) > 0 {
+		sendLabelCommandErrors(
+			w,
+			currentV1StateRevision(),
+			http.StatusBadRequest,
+			"Correct the highlighted label fields and try again.",
+			issues,
+		)
+		return
+	}
+
+	apiV1WriteMutex.Lock()
+	defer apiV1WriteMutex.Unlock()
+
+	before := contractv1.BuildSnapshot(apiV1Input())
+	revision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(before))
+	if command.ExpectedRevision != revision {
+		sendLabelCommandError(
+			w,
+			revision,
+			http.StatusConflict,
+			"OpenLinkHub state changed after this editor was opened. Refresh and review the current label before applying.",
+			contractv1.CommandIssue{Field: "expectedRevision", Code: "stale-revision", Message: fmt.Sprintf("Expected revision %d; current revision is %d.", command.ExpectedRevision, revision)},
+		)
+		return
+	}
+
+	target, found := findLabelTarget(before, command.DeviceID, command.TargetID)
+	if !found {
+		sendLabelCommandError(
+			w,
+			revision,
+			http.StatusNotFound,
+			"That label target is unavailable or no longer connected.",
+			contractv1.CommandIssue{Field: "targetId", Code: "target-not-found", Message: "Refresh the device and choose a published label target."},
+		)
+		return
+	}
+	if target.Label == command.Label {
+		sendLabelCommandResult(w, http.StatusOK, revision, contractv1.LabelCommandResult{
+			Operation:       "device-label.update",
+			Status:          "succeeded",
+			Message:         "The requested label is already active.",
+			Changed:         false,
+			RefreshRequired: false,
+			Target:          &target,
+			Issues:          []contractv1.CommandIssue{},
+		})
+		return
+	}
+
+	if !apiV1ApplyLabel(command.DeviceID, target, command.Label) {
+		sendLabelCommandError(
+			w,
+			revision,
+			http.StatusUnprocessableEntity,
+			"OpenLinkHub could not apply the label to that target.",
+			contractv1.CommandIssue{Field: "targetId", Code: "apply-failed", Message: "The device driver rejected or does not implement this label operation."},
+		)
+		return
+	}
+
+	after := contractv1.BuildSnapshot(apiV1Input())
+	newRevision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(after))
+	verified, found := findLabelTarget(after, command.DeviceID, command.TargetID)
+	if !found || verified.Label != command.Label {
+		sendLabelCommandError(
+			w,
+			newRevision,
+			http.StatusInternalServerError,
+			"The device accepted the label request, but the refreshed service state did not confirm it.",
+			contractv1.CommandIssue{Field: "label", Code: "verification-failed", Message: "No success was reported because read-back verification failed."},
+		)
+		return
+	}
+
+	sendLabelCommandResult(w, http.StatusOK, newRevision, contractv1.LabelCommandResult{
+		Operation:       "device-label.update",
+		Status:          "succeeded",
+		Message:         "Label applied and verified from refreshed service state.",
+		Changed:         true,
+		RefreshRequired: false,
+		Target:          &verified,
+		Issues:          []contractv1.CommandIssue{},
+	})
+}
+
+func validateLabelCommand(command contractv1.LabelCommand) []contractv1.CommandIssue {
+	issues := make([]contractv1.CommandIssue, 0, 4)
+	if command.ExpectedRevision == 0 {
+		issues = append(issues, contractv1.CommandIssue{Field: "expectedRevision", Code: "required", Message: "A positive state revision is required."})
+	}
+	if command.DeviceID == "" || !common.AlphanumericDashSemiColon.MatchString(command.DeviceID) {
+		issues = append(issues, contractv1.CommandIssue{Field: "deviceId", Code: "invalid", Message: "Choose a device published by the current snapshot."})
+	}
+	if command.TargetID == "" {
+		issues = append(issues, contractv1.CommandIssue{Field: "targetId", Code: "required", Message: "Choose a published label target."})
+	}
+	if command.Label == "" || len(command.Label) > 64 {
+		issues = append(issues, contractv1.CommandIssue{Field: "label", Code: "length", Message: "Use between 1 and 64 characters."})
+	} else if !common.AlphanumericDisplayName.MatchString(command.Label) {
+		issues = append(issues, contractv1.CommandIssue{Field: "label", Code: "characters", Message: "Use letters, numbers, spaces, and # . : _ - only."})
+	}
+	return issues
+}
+
+func currentV1StateRevision() uint64 {
+	snapshot := contractv1.BuildSnapshot(apiV1Input())
+	return apiV1StateRevision.Observe(contractv1.StateRevisionValue(snapshot))
+}
+
+func findLabelTarget(snapshot contractv1.Snapshot, deviceID, targetID string) (contractv1.LabelTarget, bool) {
+	for _, device := range snapshot.Devices {
+		if device.ID != deviceID {
+			continue
+		}
+		for _, target := range device.LabelTargets {
+			if target.ID == targetID {
+				return target, true
+			}
+		}
+		return contractv1.LabelTarget{}, false
+	}
+	return contractv1.LabelTarget{}, false
+}
+
+func applyLabelV1(deviceID string, target contractv1.LabelTarget, label string) (success bool) {
+	channelID := -1
+	if target.ChannelID != nil {
+		channelID = *target.ChannelID
+	}
+	defer func() {
+		if recover() != nil {
+			success = false
+		}
+	}()
+	result := devices.CallDeviceMethod(deviceID, "UpdateDeviceLabel", channelID, label)
+	return len(result) > 0 && result[0].Uint() == 1
+}
+
+func sendLabelCommandError(w http.ResponseWriter, revision uint64, status int, message string, issue contractv1.CommandIssue) {
+	sendLabelCommandErrors(w, revision, status, message, []contractv1.CommandIssue{issue})
+}
+
+func sendLabelCommandErrors(w http.ResponseWriter, revision uint64, status int, message string, issues []contractv1.CommandIssue) {
+	sendLabelCommandResult(w, status, revision, contractv1.LabelCommandResult{
+		Operation:       "device-label.update",
+		Status:          "rejected",
+		Message:         message,
+		Changed:         false,
+		RefreshRequired: status == http.StatusConflict,
+		Issues:          issues,
+	})
+}
+
+func sendLabelCommandResult(w http.ResponseWriter, status int, revision uint64, result contractv1.LabelCommandResult) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(contractv1.Wrap("command-result", revision, result))
 }
 
 func sendV1(

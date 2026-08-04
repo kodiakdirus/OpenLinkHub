@@ -1,4 +1,4 @@
-"""Pure API adapters used by the read-only Plasma client."""
+"""Pure API adapters used by the Plasma client."""
 
 from __future__ import annotations
 
@@ -791,6 +791,8 @@ class LegacySnapshot:
                     ),
                     "connected": bool(detail.get("Connected", True)),
                     "source": "live-transport" if transport else "live",
+                    "labelTargets": [],
+                    "canEditLabels": False,
                 }
             )
 
@@ -969,6 +971,7 @@ class ContractSnapshot:
         batteries: dict[str, Any] = {}
         lighting_profiles: dict[str, Any] = {}
         capabilities_by_id: dict[str, list[Mapping[str, Any]]] = {}
+        label_targets_by_id: dict[str, list[dict[str, Any]]] = {}
 
         for raw in raw_devices:
             device = _mapping(raw)
@@ -1032,6 +1035,25 @@ class ContractSnapshot:
                 else []
             )
             capabilities_by_id[device_id] = capabilities
+
+            raw_label_targets = device.get("labelTargets")
+            label_targets: list[dict[str, Any]] = []
+            if isinstance(raw_label_targets, list):
+                for raw_target in raw_label_targets:
+                    target = _mapping(raw_target)
+                    target_id = _text(target.get("id"))
+                    if not target_id:
+                        continue
+                    label_targets.append(
+                        {
+                            "id": target_id,
+                            "scope": _text(target.get("scope")),
+                            "channelId": target.get("channelId"),
+                            "name": _text(target.get("name"), target_id),
+                            "label": _text(target.get("label")),
+                        }
+                    )
+            label_targets_by_id[device_id] = label_targets
             for capability in capabilities:
                 capability_id = _text(capability.get("id"))
                 options = _mapping(capability.get("options"))
@@ -1133,9 +1155,12 @@ class ContractSnapshot:
             device["source"] = (
                 "contract-transport" if transport else "contract-v1"
             )
+            device["labelTargets"] = label_targets_by_id.get(device_id, [])
+            device["canEditLabels"] = bool(device["labelTargets"])
             overview = device["tabs"][0]
+            overview["readOnly"] = not device["canEditLabels"]
             overview["groups"][0]["description"] = (
-                "This tab is normalized from the version 1 read-only contract."
+                "This tab is normalized from the version 1 service contract."
             )
             overview["groups"][0]["items"][3] = _stat(
                 "Capability source",

@@ -28,6 +28,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
     support_contract = False
     contract_payload: dict = {}
     contract_etag = '"fixture-s7-t11"'
+    label_commands: list[dict] = []
 
     def do_GET(self) -> None:
         type(self).requests.append(f"GET {self.path}")
@@ -88,8 +89,50 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         type(self).requests.append(f"PUT {self.path}")
-        self.send_response(405)
+        if self.path != "/api/v1/devices/label" or not type(self).support_contract:
+            self.send_response(405)
+            self.end_headers()
+            return
+
+        length = int(self.headers.get("Content-Length", "0"))
+        command = json.loads(self.rfile.read(length))
+        type(self).label_commands.append(command)
+        current_revision = type(self).contract_payload["revision"]
+        if command.get("expectedRevision") != current_revision:
+            status = 409
+            result_status = "rejected"
+            message = "State changed; refresh before applying."
+            changed = False
+        else:
+            status = 200
+            result_status = "succeeded"
+            message = "Label applied and verified from refreshed service state."
+            changed = True
+            type(self).contract_payload["revision"] += 1
+            current_revision += 1
+            target = type(self).contract_payload["data"]["devices"][0]["labelTargets"][0]
+            target["label"] = command["label"]
+            type(self).contract_etag = f'"fixture-s{current_revision}-t11"'
+
+        payload = {
+            "apiVersion": "1.0",
+            "kind": "command-result",
+            "revision": current_revision,
+            "data": {
+                "operation": "device-label.update",
+                "status": result_status,
+                "message": message,
+                "changed": changed,
+                "refreshRequired": status == 409,
+                "issues": [],
+            },
+        }
+        encoded = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(encoded)))
         self.end_headers()
+        self.wfile.write(encoded)
 
     def do_DELETE(self) -> None:
         type(self).requests.append(f"DELETE {self.path}")
@@ -133,8 +176,9 @@ class BackendControllerTests(unittest.TestCase):
                                 "id": "overview",
                                 "label": "Overview",
                                 "available": True,
-                                "access": "read",
-                                "operations": ["read"],
+                                "access": "read-write",
+                                "operations": ["read", "update-label"],
+                                "options": {"labelTargetCount": 1},
                             },
                             {
                                 "id": "dpi",
@@ -150,6 +194,14 @@ class BackendControllerTests(unittest.TestCase):
                             },
                         ],
                         "channels": [],
+                        "labelTargets": [
+                            {
+                                "id": "device",
+                                "scope": "device",
+                                "name": "Whole device",
+                                "label": "Mouse",
+                            }
+                        ],
                     }
                 ],
                 "coolingProfiles": [],
@@ -161,6 +213,7 @@ class BackendControllerTests(unittest.TestCase):
             },
         }
         FixtureHandler.requests = []
+        FixtureHandler.label_commands = []
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler)
         cls.thread = Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -173,8 +226,12 @@ class BackendControllerTests(unittest.TestCase):
 
     def setUp(self) -> None:
         FixtureHandler.requests = []
+        FixtureHandler.label_commands = []
         FixtureHandler.fail_inventory = False
         FixtureHandler.support_contract = False
+        FixtureHandler.contract_payload["revision"] = 7
+        FixtureHandler.contract_payload["data"]["devices"][0]["labelTargets"][0]["label"] = "Mouse"
+        FixtureHandler.contract_etag = '"fixture-s7-t11"'
         endpoint = f"http://127.0.0.1:{self.server.server_port}"
         self.controller = BackendController(
             endpoint=endpoint,
@@ -231,6 +288,20 @@ class BackendControllerTests(unittest.TestCase):
             "Legacy compatibility adapter",
         )
 
+    def test_legacy_mode_refuses_label_write_without_sending_request(self) -> None:
+        self.controller.setMode("live")
+        self.wait_until(
+            lambda: not self.controller.refreshing
+            and self.controller.connectionState == "connected"
+        )
+        before = list(FixtureHandler.requests)
+
+        self.controller.updateLabel("mouse-1", "device", "Desk Mouse")
+
+        self.assertEqual(self.controller.commandStatus, "rejected")
+        self.assertEqual(FixtureHandler.requests, before)
+        self.assertNotIn("PUT /api/v1/devices/label", FixtureHandler.requests)
+
     def test_versioned_snapshot_uses_one_request_and_skips_legacy_fanout(self) -> None:
         FixtureHandler.support_contract = True
         self.controller.setMode("live")
@@ -262,6 +333,40 @@ class BackendControllerTests(unittest.TestCase):
         self.assertEqual(
             FixtureHandler.requests,
             ["GET /api/v1/snapshot", "GET /api/v1/snapshot"],
+        )
+
+    def test_versioned_label_command_uses_revision_and_refreshes_verified_state(self) -> None:
+        FixtureHandler.support_contract = True
+        self.controller.setMode("live")
+        self.wait_until(
+            lambda: not self.controller.refreshing
+            and self.controller.connectionState == "connected"
+        )
+
+        self.assertTrue(self.controller.devices[0]["canEditLabels"])
+        self.controller.updateLabel("mouse-1", "device", "Desk Mouse")
+        self.wait_until(
+            lambda: not self.controller.commandBusy
+            and self.controller.commandStatus == "succeeded"
+            and not self.controller.refreshing
+            and self.controller.devices[0]["labelTargets"][0]["label"]
+            == "Desk Mouse"
+        )
+
+        self.assertEqual(
+            FixtureHandler.label_commands,
+            [{
+                "expectedRevision": 7,
+                "deviceId": "mouse-1",
+                "targetId": "device",
+                "label": "Desk Mouse",
+            }],
+        )
+        self.assertIn("PUT /api/v1/devices/label", FixtureHandler.requests)
+        self.assertEqual(self.controller.contractRevision, 8)
+        self.assertEqual(
+            self.controller.devices[0]["labelTargets"][0]["label"],
+            "Desk Mouse",
         )
 
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:

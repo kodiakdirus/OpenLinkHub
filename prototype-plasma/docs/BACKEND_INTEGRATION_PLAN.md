@@ -1,7 +1,8 @@
 # OpenLinkHub Plasma Backend Integration Plan
 
-Status: Phase 2 additive read contract and Phase 2.5 contract hardening
-implemented; hardware mutation callbacks remain unauthorized.
+Status: Phase 2 additive read contract and Phase 2.5 hardening implemented;
+Phase 3 now has one guarded, non-hardware label mutation. Hardware-affecting
+callbacks remain unauthorized.
 
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules
@@ -33,6 +34,10 @@ Phase 2 is implemented as an additive contract:
   catch-all `/api/` handler returns a legacy payload for that path, then falls
   back to the Phase 1 GET set.
 - Existing legacy routes and the Web UI remain unchanged.
+- Phase 3 adds `PUT /api/v1/devices/label` for backend-published device/channel
+  targets. It requires the current state revision, uses a narrow command type,
+  rejects stale or invalid input before dispatch, and verifies refreshed
+  normalized state before claiming success.
 - The structural schema and sanitized golden snapshot cover hub/cooling,
   keyboard, mouse, and receiver presentation families without exposing raw
   configuration paths or HID internals.
@@ -58,13 +63,15 @@ Phase 1 is implemented as an opt-in read-only client:
 - Hidden transport/cluster records are excluded from ordinary device cards.
 - Sanitized hub, keyboard, and mouse fixtures cover the device families
   currently connected on SparkleDog.
-- Tests prove loopback enforcement, zero Demo-mode requests, GET-only Live mode,
+- Tests prove loopback enforcement, zero Demo-mode requests, GET-only legacy
+  mode, one capability-gated versioned label command,
   capability relevance, stale-data preservation, reconnect recovery, RGB
   library normalization, and GUI-wide state persistence across refresh. A
   static QML guard also rejects direct live-array models on audited stateful
   controls.
-- QML still treats every interactive control and global profile as a local
-  preview; no POST, PUT, DELETE, HID, configuration, or persistence path exists.
+- QML still treats every control except published device/channel labels as a
+  local preview. It has no POST, DELETE, generic PUT, HID, direct file, cooling,
+  lighting, input, display, or global-profile mutation path.
 
 Capability inference remains only in the legacy compatibility path. Contract
 1.0 device tabs are generated from backend-published semantic capabilities.
@@ -73,7 +80,8 @@ The legacy Lighting write surface is deliberately not flattened into one
 generic Apply call. The current Web UI assigns an effect with
 `POST /api/color`, has separate adapter/global/zone paths, saves peripheral zone
 colors through device-family endpoints such as `/api/mouse/zoneColors`, and
-edits an existing effect definition with `PUT /api/color/change`. Phase 3 must
+edits an existing effect definition with `PUT /api/color/change`. A future
+guarded lighting slice must
 model target scope and operation type explicitly, validate the response
 envelope's `status` field even on HTTP 200, and refresh the affected target
 before claiming success.
@@ -105,13 +113,13 @@ service-owned feature has one documented disposition:
 4. an intentionally unavailable control with a reason; or
 5. a backend contract gap that must be filled before the UI can expose it.
 
-It does not mean making 158 raw API operations into 158 buttons.
+It does not mean making 159 raw API operations into 159 buttons.
 
 ## Source-derived API facts
 
-- The service currently registers 158 `/api` routes: 45 `GET`, 100 `POST`,
-  7 `PUT`, and 6 `DELETE`. `/api/metrics` is one of those routes but is
-  conditional on `config.metrics`; 154 routes are unconditional.
+- The service currently registers 159 `/api` routes: 45 `GET`, 100 `POST`,
+  8 `PUT`, and 6 `DELETE`. `/api/metrics` is one of those routes but is
+  conditional on `config.metrics`; 155 routes are unconditional.
 - The default listener is `127.0.0.1:27003`. The current API has no
   authentication boundary, so the desktop client must default to loopback and
   must not silently expose the listener on another interface.
@@ -257,7 +265,7 @@ opaque duplicate.
 
 ## Registered route-family disposition
 
-The detailed 158-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
+The detailed 159-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
 user-facing disposition is:
 
 | Route family | Count | Disposition |
@@ -370,7 +378,7 @@ not depend on that choice.
 - Define normalized models and error taxonomy.
 - Keep the prototype offline.
 
-Exit: all 158 current routes are classified and representative payloads parse
+Exit: all 159 current routes are classified and representative payloads parse
 without QML involvement.
 
 ### Phase 1 — read-only legacy client
@@ -411,6 +419,14 @@ supported.
 
 Exit: failures are actionable, stale writes are rejected, and controls never
   imply success from HTTP 200 alone.
+
+Checkpoint: the first end-to-end slice is implemented for device/channel
+labels. The snapshot publishes stable label targets and `update-label`
+capability authorization. The Qt editor submits a typed command with the
+current state revision; the service validates, dispatches through the existing
+device driver, rebuilds state, and reports success only after label read-back.
+HTTP 400/404/409/422/500 rejection paths remain explicit. Cooling, lighting,
+profile CRUD, and every hardware-affecting operation remain outside this slice.
 
 ### Phase 4 — cooling and hardware/offline behavior
 

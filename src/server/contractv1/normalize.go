@@ -74,7 +74,7 @@ func BuildService(input ServiceInput, deviceCount int) ServiceDescriptor {
 		SystemService:  input.SystemService,
 		DeviceCount:    deviceCount,
 		Persistence:    "unknown",
-		MutationAccess: "legacy-only",
+		MutationAccess: "guarded-labels",
 		Features:       features,
 		Warnings:       warnings,
 	}
@@ -193,6 +193,7 @@ func normalizeDevices(inputs []DeviceInput) []DeviceState {
 func normalizeDevice(input DeviceInput) DeviceState {
 	detail := mapping(input.Detail)
 	channels := normalizeChannels(detail)
+	labelTargets := normalizeLabelTargets(detail, channels)
 	transport := deviceTransport(input, detail)
 	online := true
 	if value, ok := booleanValue(lookup(detail, "Connected")); ok {
@@ -217,7 +218,14 @@ func normalizeDevice(input DeviceInput) DeviceState {
 		SavedCount: collectionLength(lookup(detail, "userProfiles")),
 	}
 	lighting := normalizeLighting(input.Product, detail, channels, input.LightingData)
-	capabilities := inferCapabilities(input, detail, channels, transport, lighting)
+	capabilities := inferCapabilities(
+		input,
+		detail,
+		channels,
+		transport,
+		lighting,
+		labelTargets,
+	)
 
 	return DeviceState{
 		ID:           input.ID,
@@ -234,7 +242,49 @@ func normalizeDevice(input DeviceInput) DeviceState {
 		Capabilities: capabilities,
 		Channels:     channels,
 		Lighting:     lighting,
+		LabelTargets: labelTargets,
 	}
+}
+
+func normalizeLabelTargets(detail map[string]any, channels []Channel) []LabelTarget {
+	targets := make([]LabelTarget, 0, len(channels)+1)
+	deviceProfile := mapping(lookup(detail, "DeviceProfile"))
+	deviceLabel := lookup(deviceProfile, "label")
+	if deviceLabel == nil {
+		deviceLabel = lookup(detail, "label")
+	}
+	if deviceLabel != nil {
+		targets = append(targets, LabelTarget{
+			ID:    "device",
+			Scope: "device",
+			Name:  "Whole device",
+			Label: textValue(deviceLabel),
+		})
+	}
+
+	rawChannels := mapping(lookup(detail, "devices"))
+	for _, channel := range channels {
+		raw := mapping(rawChannels[channel.ID])
+		if lookup(raw, "label") == nil {
+			continue
+		}
+		channelID, err := strconv.Atoi(channel.ID)
+		if err != nil {
+			continue
+		}
+		name := channel.Name
+		if name == "" {
+			name = "Channel " + channel.ID
+		}
+		targets = append(targets, LabelTarget{
+			ID:        "channel:" + channel.ID,
+			Scope:     "channel",
+			ChannelID: &channelID,
+			Name:      name,
+			Label:     channel.Label,
+		})
+	}
+	return targets
 }
 
 func normalizedDeviceType(deviceType, transport string) string {
@@ -349,8 +399,14 @@ func inferCapabilities(
 	channels []Channel,
 	transport string,
 	lighting *LightingCatalog,
+	labelTargets []LabelTarget,
 ) []Capability {
 	result := []Capability{newCapability("overview", nil)}
+	if len(labelTargets) > 0 {
+		result[0].Access = "read-write"
+		result[0].Operations = []string{"read", "update-label"}
+		result[0].Options = map[string]any{"labelTargetCount": len(labelTargets)}
+	}
 	if transport == "internal" {
 		return result
 	}

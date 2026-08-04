@@ -38,6 +38,7 @@ func fixtureInput() Input {
 					"devices": map[string]any{
 						"1": map[string]any{
 							"name":        "Radiator",
+							"label":       "Top radiator",
 							"description": "Fan channel",
 							"HasSpeed":    true,
 							"rpm":         600,
@@ -155,6 +156,13 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 	if len(hub.Channels) != 2 || hub.Channels[1].Role != "pump" {
 		t.Fatalf("channel normalization failed: %#v", hub.Channels)
 	}
+	if len(hub.LabelTargets) != 1 || hub.LabelTargets[0].ID != "channel:1" ||
+		hub.LabelTargets[0].Label != "Top radiator" {
+		t.Fatalf("label targets were not normalized: %#v", hub.LabelTargets)
+	}
+	if !hasOperation(hub.Capabilities, "overview", "update-label") {
+		t.Fatalf("label mutation capability was not published: %#v", hub.Capabilities)
+	}
 	if hub.Lighting == nil || hub.Lighting.ProfileCount != 2 {
 		t.Fatalf("lighting library was not normalized: %#v", hub.Lighting)
 	}
@@ -175,6 +183,15 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 	}
 	if len(snapshot.LCDAssets) != 1 || len(snapshot.LCDProfiles) != 1 {
 		t.Fatalf("LCD inventory was not normalized")
+	}
+}
+
+func TestDeviceProfileLabelPublishesWholeDeviceTarget(t *testing.T) {
+	targets := normalizeLabelTargets(map[string]any{
+		"DeviceProfile": map[string]any{"Label": "Keyboard"},
+	}, nil)
+	if len(targets) != 1 || targets[0].ID != "device" || targets[0].Label != "Keyboard" {
+		t.Fatalf("whole-device label target was not normalized: %#v", targets)
 	}
 }
 
@@ -239,6 +256,20 @@ func hasCapability(capabilities []Capability, id string, available bool) bool {
 	for _, capability := range capabilities {
 		if capability.ID == id && capability.Available == available {
 			return true
+		}
+	}
+	return false
+}
+
+func hasOperation(capabilities []Capability, id, operation string) bool {
+	for _, capability := range capabilities {
+		if capability.ID != id {
+			continue
+		}
+		for _, candidate := range capability.Operations {
+			if candidate == operation {
+				return true
+			}
 		}
 	}
 	return false

@@ -1,4 +1,4 @@
-"""Asynchronous, GET-only Qt transport for OpenLinkHub."""
+"""Asynchronous Qt transport for OpenLinkHub's versioned client contract."""
 
 from __future__ import annotations
 
@@ -34,13 +34,14 @@ JsonCallback = Callable[[dict[str, Any] | None, str | None], None]
 
 
 class BackendController(QObject):
-    """Own the read-only loopback connection and normalized QML state."""
+    """Own the loopback connection and normalized QML state."""
 
     modeChanged = pyqtSignal()
     connectionChanged = pyqtSignal()
     dataChanged = pyqtSignal()
     refreshChanged = pyqtSignal()
     apiCallCountChanged = pyqtSignal()
+    commandChanged = pyqtSignal()
 
     def __init__(
         self,
@@ -69,6 +70,10 @@ class BackendController(QObject):
         self._snapshot_etag = ""
         self._refreshing = False
         self._api_call_count = 0
+        self._command_busy = False
+        self._command_status = "idle"
+        self._command_message = ""
+        self._refresh_after_command = False
         self._generation = 0
         self._refresh_cycle = 0
         self._devices: list[dict[str, Any]] = []
@@ -136,6 +141,18 @@ class BackendController(QObject):
     def apiCallCount(self) -> int:
         return self._api_call_count
 
+    @pyqtProperty(bool, notify=commandChanged)
+    def commandBusy(self) -> bool:
+        return self._command_busy
+
+    @pyqtProperty(str, notify=commandChanged)
+    def commandStatus(self) -> str:
+        return self._command_status
+
+    @pyqtProperty(str, notify=commandChanged)
+    def commandMessage(self) -> str:
+        return self._command_message
+
     @pyqtProperty("QVariantList", notify=dataChanged)
     def devices(self) -> list[dict[str, Any]]:
         return self._devices
@@ -170,6 +187,8 @@ class BackendController(QObject):
             self._set_refreshing(False)
             self._set_contract("", "Demo data", 0, 0)
             self._snapshot_etag = ""
+            self._refresh_after_command = False
+            self._set_command(False, "idle", "")
             self._set_connection("demo", "Demo data", "")
             return
 
@@ -201,6 +220,60 @@ class BackendController(QObject):
             ),
             etag=self._snapshot_etag,
         )
+
+    @pyqtSlot(str, str, str)
+    def updateLabel(self, device_id: str, target_id: str, label: str) -> None:
+        if self._command_busy:
+            return
+        if self._mode != "live" or self._contract_version != "1.0":
+            self._set_command(
+                False,
+                "rejected",
+                "Label editing requires an OpenLinkHub service with the versioned write contract.",
+            )
+            return
+        cleaned = label.strip()
+        if not cleaned or len(cleaned) > 64:
+            self._set_command(False, "rejected", "Use a label between 1 and 64 characters.")
+            return
+
+        self._set_command(True, "working", "Applying label…")
+        self._put_document(
+            "/api/v1/devices/label",
+            {
+                "expectedRevision": self._contract_revision,
+                "deviceId": device_id,
+                "targetId": target_id,
+                "label": cleaned,
+            },
+            self._accept_label_command,
+        )
+
+    def _accept_label_command(
+        self,
+        payload: dict[str, Any] | None,
+        error: str | None,
+    ) -> None:
+        if payload is None:
+            self._set_command(False, "rejected", error or "The label request failed.")
+            return
+        try:
+            document = VersionedDocument.from_mapping(payload, kind="command-result")
+        except (PayloadError, TypeError, ValueError) as parse_error:
+            self._set_command(False, "rejected", str(parse_error))
+            return
+
+        result = document.data
+        status = str(result.get("status", "rejected"))
+        message = str(result.get("message", "The label request was rejected."))
+        self._contract_revision = document.revision
+        self.connectionChanged.emit()
+        self._set_command(False, status, message)
+        self._snapshot_etag = ""
+        self._refresh_after_command = True
+        if not self._refreshing:
+            self._refresh_after_command = False
+            QTimer.singleShot(0, self.refresh)
 
     def _accept_contract(
         self,
@@ -414,6 +487,46 @@ class BackendController(QObject):
 
         reply.finished.connect(finished)
 
+    def _put_document(
+        self,
+        path: str,
+        payload: Mapping[str, Any],
+        callback: JsonCallback,
+    ) -> None:
+        request = QNetworkRequest(QUrl(self._endpoint + path))
+        request.setRawHeader(b"Accept", b"application/json")
+        request.setRawHeader(b"Content-Type", b"application/json")
+        request.setRawHeader(b"User-Agent", b"OpenLinkHub-Plasma-Phase3")
+        request.setTransferTimeout(4500)
+        reply = self._manager.put(
+            request,
+            json.dumps(payload, separators=(",", ":")).encode("utf-8"),
+        )
+        self._api_call_count += 1
+        self.apiCallCountChanged.emit()
+
+        def finished() -> None:
+            status = reply.attribute(QNetworkRequest.Attribute.HttpStatusCodeAttribute)
+            body = bytes(reply.readAll())
+            network_error = reply.error()
+            network_message = reply.errorString()
+            reply.deleteLater()
+
+            if network_error != QNetworkReply.NetworkError.NoError and not body:
+                callback(None, f"{network_message} ({status or 'no HTTP status'})")
+                return
+            try:
+                decoded = json.loads(body)
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                callback(None, f"The service returned malformed JSON (HTTP {status or 'unknown'}).")
+                return
+            if not isinstance(decoded, dict):
+                callback(None, "The service response is not a JSON object.")
+                return
+            callback(decoded, None)
+
+        reply.finished.connect(finished)
+
     def _finish_contract(
         self,
         snapshot: Mapping[str, Any],
@@ -527,6 +640,21 @@ class BackendController(QObject):
             return
         self._refreshing = refreshing
         self.refreshChanged.emit()
+        if not refreshing and self._refresh_after_command:
+            self._refresh_after_command = False
+            QTimer.singleShot(0, self.refresh)
+
+    def _set_command(self, busy: bool, status: str, message: str) -> None:
+        changed = (
+            busy != self._command_busy
+            or status != self._command_status
+            or message != self._command_message
+        )
+        self._command_busy = busy
+        self._command_status = status
+        self._command_message = message
+        if changed:
+            self.commandChanged.emit()
 
 
 def _data_mapping(envelope: Any) -> Mapping[str, Any]:
