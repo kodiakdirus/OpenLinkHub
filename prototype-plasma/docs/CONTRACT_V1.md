@@ -11,6 +11,7 @@ legacy `/api/...` routes.
 | `GET /api/v1/capabilities` | `capabilities` | Semantic device/environment capability manifest |
 | `GET /api/v1/snapshot` | `snapshot` | Normalized state plus current measurements |
 | `PUT /api/v1/devices/label` | `command-result` | Guarded device/channel label update |
+| `PUT /api/v1/lighting/assignment` | `command-result` | Guarded existing-profile assignment for an authorized lighting target |
 
 Every successful response contains `apiVersion`, `kind`, a positive
 `revision`, and object `data`. Snapshot documents also contain a positive
@@ -44,6 +45,28 @@ target before returning `status: succeeded`. Responses use the common
 the resulting revision, and the verified target. Command responses are
 `Cache-Control: no-store`.
 
+## Guarded lighting assignment
+
+The first hardware-affecting command assigns an existing backend profile only
+when the selected target publishes `assign-profile`:
+
+```json
+{
+  "expectedRevision": 12,
+  "deviceId": "device-serial",
+  "targetId": "channel:13",
+  "profileId": "static"
+}
+```
+
+This checkpoint authorizes only channel targets on the iCUE LINK System Hub,
+and only when the registered driver implements the exact typed assignment
+method. The command resolves the target and profile from the current normalized
+snapshot, dispatches under the shared mutation lock, then reads the same target
+back. A mismatch triggers an immediate attempt to restore the previous profile;
+the result distinguishes verified recovery from unverified recovery. Existing
+profile definitions are not edited by this route.
+
 ## Revision semantics
 
 - `revision` changes when user/configuration state changes: inventory,
@@ -59,7 +82,7 @@ the resulting revision, and the verified target. Command responses are
 
 ## Conditional requests
 
-All three routes return a strong `ETag`, `Cache-Control: private, no-cache`,
+All three GET routes return a strong `ETag`, `Cache-Control: private, no-cache`,
 and `Vary: Accept`. Clients should send `If-None-Match`; an identical document
 returns `304 Not Modified` with no body. The native client retains its current
 presentation model on 304, avoiding unnecessary JSON conversion and QML model
@@ -81,24 +104,27 @@ network, HTTP, or malformed-data failures remain errors.
 The contract excludes raw configuration paths, sensor file paths, log content,
 HID handles/instances, secrets, and the legacy catch-all mutation payload. An
 unavailable capability includes an explicit reason and an empty operation set.
-Mutation authorization is capability-scoped: only an `overview` capability
-with `access: read-write`, operation `update-label`, and a matching published
-`labelTargets` entry enables this command. No generic mutation transport exists.
-Cooling, lighting, input, display, automation, and administration remain
-read-only through contract 1.0. `persistence` is still reported as `unknown`
+Mutation authorization is capability-scoped: labels require `update-label` and
+a matching `labelTargets` entry; lighting assignment requires
+`assign-profile` on the exact published lighting target and profile. No generic
+mutation transport exists. Cooling, profile-definition editing, input, display,
+automation, and administration remain read-only through contract 1.0.
+`persistence` is still reported as `unknown`
 because the existing device save methods do not return independent durable-file
 confirmation; the command proves normalized service read-back, not storage
 media durability.
 
 Lighting targets use explicit `device` or `channel:<id>` identities and publish
 their scope, supported profile IDs, operations, and identification availability.
-This structural checkpoint advertises only `read`; `assign-profile` and
-`identify` remain absent until separately connected and reviewed.
+Only recognized LINK Hub channel targets advertise `assign-profile`; all other
+lighting targets remain `read`. `identify` remains absent until separately
+connected and reviewed.
 
 The proposed guarded lighting assignment and transient target-identification
 extension is documented in
-[`LIGHTING_COMMAND_DESIGN.md`](LIGHTING_COMMAND_DESIGN.md). It is design-only:
-its routes and operations are not part of the currently implemented contract.
+[`LIGHTING_COMMAND_DESIGN.md`](LIGHTING_COMMAND_DESIGN.md). Assignment is now
+implemented for the bounded target family above; identification remains
+design-only.
 
 The machine-readable structural baseline is
 [`contract-v1.schema.json`](contract-v1.schema.json). Sanitized golden fixture

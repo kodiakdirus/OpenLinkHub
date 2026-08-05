@@ -1,10 +1,11 @@
 # OpenLinkHub Plasma Prototype
 
 This is a native Qt 6/Kirigami prototype for an OpenLinkHub desktop client.
-It starts in self-contained Demo mode. Phase 3 retains the versioned read
-contract and adds one deliberately narrow label mutation. Device/channel labels
-use a typed command, expected state revision, backend persistence path, and
-read-back verification. Every hardware-affecting control remains unconnected.
+It starts in self-contained Demo mode. The versioned contract includes guarded
+label editing and one deliberately narrow lighting assignment command. Both use
+typed commands, expected state revisions, and read-back verification. Lighting
+assignment is limited to existing profiles on explicitly authorized LINK Hub
+channel targets; profile-definition editing remains a local preview.
 
 ## Run
 
@@ -73,12 +74,15 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   and no model replacement on `304 Not Modified`
 - Guarded `PUT /api/v1/devices/label` editing for backend-published device and
   channel targets, including stale-revision rejection and verified read-back
+- Capability-gated `PUT /api/v1/lighting/assignment` for existing effects on
+  supported LINK Hub channels, including read-back and recovery verification
 - Legacy response normalization for product-specific hub, keyboard, mouse, and
   other device payloads
 - Read-only live CPU, GPU, coolant, fan/pump RPM, firmware, battery, channel,
   profile, and capability summaries
 - Per-device live Lighting tabs with physical target selection, the backend's
-  complete device-filtered effect library, and a local-only parameter draft
+  complete device-filtered effect library, guarded assignment where published,
+  and an explicitly local-only parameter-definition draft
 - Stable device and tab identities plus a presentation-stable tab model, so
   both loaded content and the visible tab indicator survive telemetry refresh
 - Background polls retain the last connection state and unchanged header,

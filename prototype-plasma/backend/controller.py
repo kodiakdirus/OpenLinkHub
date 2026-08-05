@@ -157,6 +157,16 @@ class BackendController(QObject):
     def devices(self) -> list[dict[str, Any]]:
         return self._devices
 
+    @pyqtProperty(bool, notify=dataChanged)
+    def lightingAssignmentAvailable(self) -> bool:
+        for device in self._devices:
+            for tab in device.get("tabs", []):
+                editor = tab.get("lightingEditor", {})
+                for target in editor.get("targets", []):
+                    if "assign-profile" in target.get("operations", []):
+                        return True
+        return False
+
     @pyqtProperty("QVariantMap", notify=dataChanged)
     def telemetry(self) -> dict[str, Any]:
         return self._telemetry
@@ -249,6 +259,69 @@ class BackendController(QObject):
             self._accept_label_command,
         )
 
+    @pyqtSlot(str, str, str)
+    def assignLightingProfile(
+        self,
+        device_id: str,
+        target_id: str,
+        profile_id: str,
+    ) -> None:
+        if self._command_busy:
+            return
+        if self._mode != "live" or self._contract_version != "1.0":
+            self._set_command(
+                False,
+                "rejected",
+                "Lighting assignment requires the versioned write contract.",
+            )
+            return
+        target = self._lighting_target(device_id, target_id)
+        if target is None or "assign-profile" not in target.get("operations", []):
+            self._set_command(
+                False,
+                "rejected",
+                "That lighting target does not publish profile assignment.",
+            )
+            return
+        supported = target.get("supportedProfileIds", [])
+        if not profile_id or profile_id not in supported:
+            self._set_command(
+                False,
+                "rejected",
+                "Choose an effect published for this lighting target.",
+            )
+            return
+
+        self._set_command(True, "working", "Applying lighting effect…")
+        self._put_document(
+            "/api/v1/lighting/assignment",
+            {
+                "expectedRevision": self._contract_revision,
+                "deviceId": device_id,
+                "targetId": target_id,
+                "profileId": profile_id,
+            },
+            self._accept_lighting_command,
+        )
+
+    def _lighting_target(
+        self,
+        device_id: str,
+        target_id: str,
+    ) -> dict[str, Any] | None:
+        for device in self._devices:
+            if device.get("id") != device_id:
+                continue
+            for tab in device.get("tabs", []):
+                if tab.get("name") != "Lighting":
+                    continue
+                editor = tab.get("lightingEditor", {})
+                for target in editor.get("targets", []):
+                    if target.get("key") == target_id:
+                        return target
+            return None
+        return None
+
     def _accept_label_command(
         self,
         payload: dict[str, Any] | None,
@@ -266,6 +339,38 @@ class BackendController(QObject):
         result = document.data
         status = str(result.get("status", "rejected"))
         message = str(result.get("message", "The label request was rejected."))
+        self._contract_revision = document.revision
+        self.connectionChanged.emit()
+        self._set_command(False, status, message)
+        self._snapshot_etag = ""
+        self._refresh_after_command = True
+        if not self._refreshing:
+            self._refresh_after_command = False
+            QTimer.singleShot(0, self.refresh)
+
+    def _accept_lighting_command(
+        self,
+        payload: dict[str, Any] | None,
+        error: str | None,
+    ) -> None:
+        if payload is None:
+            self._set_command(
+                False,
+                "rejected",
+                error or "The lighting assignment failed.",
+            )
+            return
+        try:
+            document = VersionedDocument.from_mapping(payload, kind="command-result")
+        except (PayloadError, TypeError, ValueError) as parse_error:
+            self._set_command(False, "rejected", str(parse_error))
+            return
+
+        result = document.data
+        status = str(result.get("status", "rejected"))
+        message = str(
+            result.get("message", "The lighting assignment was rejected.")
+        )
         self._contract_revision = document.revision
         self.connectionChanged.emit()
         self._set_command(False, status, message)

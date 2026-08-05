@@ -74,7 +74,7 @@ func BuildService(input ServiceInput, deviceCount int) ServiceDescriptor {
 		SystemService:  input.SystemService,
 		DeviceCount:    deviceCount,
 		Persistence:    "unknown",
-		MutationAccess: "guarded-labels",
+		MutationAccess: "guarded-labels-lighting",
 		Features:       features,
 		Warnings:       warnings,
 	}
@@ -217,7 +217,13 @@ func normalizeDevice(input DeviceInput) DeviceState {
 		Active:     activeDeviceProfile(detail),
 		SavedCount: collectionLength(lookup(detail, "userProfiles")),
 	}
-	lighting := normalizeLighting(input.Product, detail, channels, input.LightingData)
+	lighting := normalizeLighting(
+		input.Product,
+		detail,
+		channels,
+		input.LightingData,
+		input.LightingChannelAssignment,
+	)
 	capabilities := inferCapabilities(
 		input,
 		detail,
@@ -447,7 +453,17 @@ func inferCapabilities(
 			options["effectCount"] = lighting.ProfileCount
 			options["targetCount"] = len(lighting.Targets)
 		}
-		result = append(result, newCapability("lighting", options))
+		capability := newCapability("lighting", options)
+		if lighting != nil {
+			for _, target := range lighting.Targets {
+				if stringSliceContains(target.Operations, "assign-profile") {
+					capability.Access = "read-write"
+					capability.Operations = []string{"read", "assign-profile"}
+					break
+				}
+			}
+		}
+		result = append(result, capability)
 	}
 	if len(channels) > 0 {
 		result = append(result, newCapability(
@@ -504,6 +520,15 @@ func newCapability(id string, options map[string]any) Capability {
 		Operations: []string{"read"},
 		Options:    options,
 	}
+}
+
+func stringSliceContains(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func performanceCapability(detail map[string]any) Capability {
@@ -575,6 +600,7 @@ func normalizeLighting(
 	detail map[string]any,
 	channels []Channel,
 	raw any,
+	channelAssignment bool,
 ) *LightingCatalog {
 	catalogData := mapping(raw)
 	profileData := mapping(lookup(catalogData, "profiles"))
@@ -653,6 +679,10 @@ func normalizeLighting(
 		if name == "" {
 			name = channel.Name
 		}
+		operations := []string{"read"}
+		if channelAssignment {
+			operations = append(operations, "assign-profile")
+		}
 		targets = append(targets, LightingTarget{
 			ID:                  fmt.Sprintf("channel:%d", channelID),
 			Scope:               "channel",
@@ -661,7 +691,7 @@ func normalizeLighting(
 			Description:         fmt.Sprintf("Channel %s · %s", channel.ID, channel.Description),
 			ActiveProfile:       active,
 			SupportedProfileIDs: append([]string(nil), supportedProfileIDs...),
-			Operations:          []string{"read"},
+			Operations:          operations,
 			Identifiable:        false,
 		})
 	}

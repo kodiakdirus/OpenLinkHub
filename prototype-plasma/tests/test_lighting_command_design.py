@@ -22,22 +22,20 @@ class LightingCommandDesignTests(unittest.TestCase):
         cls.schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         cls.design = DESIGN.read_text(encoding="utf-8")
 
-    def test_design_is_explicitly_non_operational(self) -> None:
-        self.assertIn("Design-only checkpoint", self.design)
+    def test_assignment_is_operational_but_identification_is_not(self) -> None:
+        self.assertIn("Assignment checkpoint implemented", self.design)
         current_contract = CURRENT_CONTRACT.read_text(encoding="utf-8")
         server = "\n".join(
             path.read_text(encoding="utf-8")
             for path in SERVER_DIR.glob("*.go")
             if not path.name.endswith("_test.go")
         )
-        for route in (
-            "/api/v1/lighting/assignment",
-            "/api/v1/lighting/identify",
-        ):
-            self.assertNotIn(route, current_contract)
-            self.assertNotIn(route, server)
+        self.assertIn("/api/v1/lighting/assignment", current_contract)
+        self.assertIn("/api/v1/lighting/assignment", server)
+        self.assertNotIn("/api/v1/lighting/identify", current_contract)
+        self.assertNotIn("/api/v1/lighting/identify", server)
 
-    def test_legacy_adapter_is_present_but_not_connected(self) -> None:
+    def test_legacy_adapter_is_connected_only_through_the_typed_service(self) -> None:
         adapter = LEGACY_ADAPTER.read_text(encoding="utf-8")
         self.assertIn("legacyLightingAssignerAdapter", adapter)
         self.assertNotIn("devices.CallDeviceMethod", adapter)
@@ -47,8 +45,9 @@ class LightingCommandDesignTests(unittest.TestCase):
             for path in SERVER_DIR.glob("*.go")
             if not path.name.endswith("_test.go") and path != LEGACY_ADAPTER
         )
-        self.assertNotIn("newLegacyLightingAssignerAdapter", production)
-        self.assertNotIn("newContractV1LightingInventoryAdapter", production)
+        self.assertIn("newLegacyLightingAssignerAdapter", production)
+        self.assertIn("newContractV1LightingInventoryAdapter", production)
+        self.assertIn("lighting.NewServiceWithLocker", production)
 
     def test_target_identity_and_authorization_are_bounded(self) -> None:
         target = self.fixture["target"]

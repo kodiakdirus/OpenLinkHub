@@ -70,9 +70,11 @@ Item {
                         spacing: 2
                         Label {
                             text: page.shell.liveMode
-                                ? page.shell.backendClient.contractVersion === "1.0"
-                                    ? "Phase 3 — guarded label write checkpoint"
-                                    : "Phase 2 — legacy read-only compatibility"
+                                ? page.shell.backendClient.lightingAssignmentAvailable
+                                    ? "Phase 4 — guarded lighting assignment checkpoint"
+                                    : page.shell.backendClient.contractVersion === "1.0"
+                                        ? "Phase 3 — guarded label write checkpoint"
+                                        : "Phase 2 — legacy read-only compatibility"
                                 : "Demo mode — no backend connection"
                             color: page.shell.primaryText
                             font.pixelSize: 18
@@ -81,9 +83,11 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: page.shell.liveMode
-                                ? page.shell.backendClient.contractVersion === "1.0"
-                                    ? "The versioned client can update published labels with stale-state rejection and read-back verification; every other mutation remains a local preview."
-                                    : "The installed service uses the legacy GET adapter, so every control mutation remains a local preview."
+                                ? page.shell.backendClient.lightingAssignmentAvailable
+                                    ? "The versioned client can update published labels and assign existing effects to authorized lighting targets; both use stale-state rejection and read-back verification."
+                                    : page.shell.backendClient.contractVersion === "1.0"
+                                        ? "The versioned client can update published labels with stale-state rejection and read-back verification; lighting and other mutations remain unavailable."
+                                        : "The installed service uses the legacy GET adapter, so every control mutation remains a local preview."
                                 : "Controls use local demo state and reset when the window closes."
                             color: page.shell.secondaryText
                             wrapMode: Text.WordWrap
@@ -354,7 +358,9 @@ Item {
                         iconName: "network-connect"
                         title: "Client connection"
                         subtitle: page.shell.liveMode
-                            ? "The client prefers one versioned snapshot request, exposes one narrow guarded label command, and retains an explicit legacy read-only fallback."
+                            ? page.shell.backendClient.lightingAssignmentAvailable
+                                ? "The client prefers one versioned snapshot request, exposes guarded label and lighting-assignment commands, and retains an explicit legacy read-only fallback."
+                                : "The client prefers one versioned snapshot request, exposes guarded labels when published, and retains an explicit legacy read-only fallback."
                             : "Choose Live in the top bar to use the loopback transport. Demo mode opens no socket."
                     }
 
@@ -409,7 +415,9 @@ Item {
                                 : "Unavailable on the installed legacy service",
                             kind: "stat",
                             value: page.shell.backendClient.contractVersion.length > 0
-                                ? "PUT /api/v1/devices/label"
+                                ? page.shell.backendClient.lightingAssignmentAvailable
+                                    ? "2 capability-gated PUT routes"
+                                    : "PUT /api/v1/devices/label"
                                 : "Unavailable"
                         })
                     }

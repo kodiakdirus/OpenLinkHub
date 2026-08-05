@@ -29,6 +29,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
     contract_payload: dict = {}
     contract_etag = '"fixture-s7-t11"'
     label_commands: list[dict] = []
+    lighting_commands: list[dict] = []
 
     def do_GET(self) -> None:
         type(self).requests.append(f"GET {self.path}")
@@ -89,14 +90,21 @@ class FixtureHandler(BaseHTTPRequestHandler):
 
     def do_PUT(self) -> None:
         type(self).requests.append(f"PUT {self.path}")
-        if self.path != "/api/v1/devices/label" or not type(self).support_contract:
+        if self.path not in {
+            "/api/v1/devices/label",
+            "/api/v1/lighting/assignment",
+        } or not type(self).support_contract:
             self.send_response(405)
             self.end_headers()
             return
 
         length = int(self.headers.get("Content-Length", "0"))
         command = json.loads(self.rfile.read(length))
-        type(self).label_commands.append(command)
+        is_lighting = self.path == "/api/v1/lighting/assignment"
+        if is_lighting:
+            type(self).lighting_commands.append(command)
+        else:
+            type(self).label_commands.append(command)
         current_revision = type(self).contract_payload["revision"]
         if command.get("expectedRevision") != current_revision:
             status = 409
@@ -106,12 +114,20 @@ class FixtureHandler(BaseHTTPRequestHandler):
         else:
             status = 200
             result_status = "succeeded"
-            message = "Label applied and verified from refreshed service state."
+            message = (
+                "Lighting profile assigned and verified from refreshed service state."
+                if is_lighting
+                else "Label applied and verified from refreshed service state."
+            )
             changed = True
             type(self).contract_payload["revision"] += 1
             current_revision += 1
-            target = type(self).contract_payload["data"]["devices"][0]["labelTargets"][0]
-            target["label"] = command["label"]
+            if is_lighting:
+                target = type(self).contract_payload["data"]["devices"][0]["lighting"]["targets"][0]
+                target["activeProfile"] = command["profileId"]
+            else:
+                target = type(self).contract_payload["data"]["devices"][0]["labelTargets"][0]
+                target["label"] = command["label"]
             type(self).contract_etag = f'"fixture-s{current_revision}-t11"'
 
         payload = {
@@ -119,7 +135,11 @@ class FixtureHandler(BaseHTTPRequestHandler):
             "kind": "command-result",
             "revision": current_revision,
             "data": {
-                "operation": "device-label.update",
+                "operation": (
+                    "lighting.assign-profile"
+                    if is_lighting
+                    else "device-label.update"
+                ),
                 "status": result_status,
                 "message": message,
                 "changed": changed,
@@ -192,8 +212,70 @@ class BackendControllerTests(unittest.TestCase):
                                     "maximum": 26000,
                                 },
                             },
+                            {
+                                "id": "lighting",
+                                "label": "Lighting",
+                                "available": True,
+                                "access": "read-write",
+                                "operations": ["read", "assign-profile"],
+                                "options": {"effectCount": 2, "targetCount": 1},
+                            },
                         ],
                         "channels": [],
+                        "lighting": {
+                            "source": "OpenLinkHub versioned capability contract",
+                            "device": "mouse-1",
+                            "defaultColor": "#0078d4",
+                            "profileCount": 2,
+                            "profiles": [
+                                {
+                                    "id": "rainbow",
+                                    "name": "Rainbow",
+                                    "speed": 2,
+                                    "brightness": 100,
+                                    "smoothness": 1,
+                                    "startColor": "#ff0000",
+                                    "middleColor": "#00ff00",
+                                    "endColor": "#0000ff",
+                                    "gradientColors": [],
+                                    "minTemperature": 0,
+                                    "maxTemperature": 0,
+                                    "direction": 0,
+                                    "alternateColors": False,
+                                    "perLed": False,
+                                    "temperatureReactive": False,
+                                },
+                                {
+                                    "id": "static",
+                                    "name": "Static",
+                                    "speed": 1,
+                                    "brightness": 70,
+                                    "smoothness": 0,
+                                    "startColor": "#0078d4",
+                                    "middleColor": "#0078d4",
+                                    "endColor": "#0078d4",
+                                    "gradientColors": [],
+                                    "minTemperature": 0,
+                                    "maxTemperature": 0,
+                                    "direction": 0,
+                                    "alternateColors": False,
+                                    "perLed": False,
+                                    "temperatureReactive": False,
+                                },
+                            ],
+                            "targets": [
+                                {
+                                    "id": "device",
+                                    "scope": "device",
+                                    "name": "Whole device",
+                                    "description": "Mouse lighting surface",
+                                    "activeProfile": "static",
+                                    "supportedProfileIds": ["rainbow", "static"],
+                                    "operations": ["read", "assign-profile"],
+                                    "identifiable": False,
+                                }
+                            ],
+                        },
                         "labelTargets": [
                             {
                                 "id": "device",
@@ -214,6 +296,7 @@ class BackendControllerTests(unittest.TestCase):
         }
         FixtureHandler.requests = []
         FixtureHandler.label_commands = []
+        FixtureHandler.lighting_commands = []
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler)
         cls.thread = Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -227,10 +310,12 @@ class BackendControllerTests(unittest.TestCase):
     def setUp(self) -> None:
         FixtureHandler.requests = []
         FixtureHandler.label_commands = []
+        FixtureHandler.lighting_commands = []
         FixtureHandler.fail_inventory = False
         FixtureHandler.support_contract = False
         FixtureHandler.contract_payload["revision"] = 7
         FixtureHandler.contract_payload["data"]["devices"][0]["labelTargets"][0]["label"] = "Mouse"
+        FixtureHandler.contract_payload["data"]["devices"][0]["lighting"]["targets"][0]["activeProfile"] = "static"
         FixtureHandler.contract_etag = '"fixture-s7-t11"'
         endpoint = f"http://127.0.0.1:{self.server.server_port}"
         self.controller = BackendController(
@@ -302,6 +387,23 @@ class BackendControllerTests(unittest.TestCase):
         self.assertEqual(FixtureHandler.requests, before)
         self.assertNotIn("PUT /api/v1/devices/label", FixtureHandler.requests)
 
+    def test_legacy_mode_refuses_lighting_write_without_sending_request(self) -> None:
+        self.controller.setMode("live")
+        self.wait_until(
+            lambda: not self.controller.refreshing
+            and self.controller.connectionState == "connected"
+        )
+        before = list(FixtureHandler.requests)
+
+        self.controller.assignLightingProfile("hub-1", "channel:2", "static")
+
+        self.assertEqual(self.controller.commandStatus, "rejected")
+        self.assertEqual(FixtureHandler.requests, before)
+        self.assertNotIn(
+            "PUT /api/v1/lighting/assignment",
+            FixtureHandler.requests,
+        )
+
     def test_versioned_snapshot_uses_one_request_and_skips_legacy_fanout(self) -> None:
         FixtureHandler.support_contract = True
         self.controller.setMode("live")
@@ -318,7 +420,10 @@ class BackendControllerTests(unittest.TestCase):
             self.controller.contractSource,
             "Versioned service contract",
         )
-        self.assertEqual(self.controller.devices[0]["capabilities"], ["DPI"])
+        self.assertEqual(
+            self.controller.devices[0]["capabilities"],
+            ["DPI", "Lighting"],
+        )
 
         changes = 0
 
@@ -386,6 +491,66 @@ class BackendControllerTests(unittest.TestCase):
             },
         )
         self.assertEqual(self.controller.contractRevision, 9)
+
+    def test_versioned_lighting_assignment_uses_published_operation(self) -> None:
+        FixtureHandler.support_contract = True
+        self.controller.setMode("live")
+        self.wait_until(
+            lambda: not self.controller.refreshing
+            and self.controller.connectionState == "connected"
+        )
+
+        lighting = next(
+            tab
+            for tab in self.controller.devices[0]["tabs"]
+            if tab["name"] == "Lighting"
+        )["lightingEditor"]
+        self.assertEqual(
+            lighting["targets"][0]["operations"],
+            ["read", "assign-profile"],
+        )
+        self.controller.assignLightingProfile("mouse-1", "device", "rainbow")
+        self.wait_until(
+            lambda: not self.controller.commandBusy
+            and self.controller.commandStatus == "succeeded"
+            and not self.controller.refreshing
+            and next(
+                tab
+                for tab in self.controller.devices[0]["tabs"]
+                if tab["name"] == "Lighting"
+            )["lightingEditor"]["targets"][0]["activeProfile"] == "rainbow"
+        )
+
+        self.assertEqual(
+            FixtureHandler.lighting_commands,
+            [{
+                "expectedRevision": 7,
+                "deviceId": "mouse-1",
+                "targetId": "device",
+                "profileId": "rainbow",
+            }],
+        )
+        self.assertIn("PUT /api/v1/lighting/assignment", FixtureHandler.requests)
+        self.assertEqual(self.controller.contractRevision, 8)
+
+    def test_lighting_assignment_fails_closed_without_published_operation(self) -> None:
+        FixtureHandler.support_contract = True
+        target = FixtureHandler.contract_payload["data"]["devices"][0]["lighting"]["targets"][0]
+        original_operations = target["operations"]
+        target["operations"] = ["read"]
+        try:
+            self.controller.setMode("live")
+            self.wait_until(
+                lambda: not self.controller.refreshing
+                and self.controller.connectionState == "connected"
+            )
+            before = list(FixtureHandler.requests)
+            self.controller.assignLightingProfile("mouse-1", "device", "rainbow")
+            self.assertEqual(self.controller.commandStatus, "rejected")
+            self.assertEqual(FixtureHandler.requests, before)
+            self.assertEqual(FixtureHandler.lighting_commands, [])
+        finally:
+            target["operations"] = original_operations
 
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:
         self.controller.setMode("live")

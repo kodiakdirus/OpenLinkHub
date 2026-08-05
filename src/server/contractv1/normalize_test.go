@@ -78,6 +78,7 @@ func fixtureInput() Input {
 						},
 					},
 				},
+				LightingChannelAssignment: true,
 			},
 			{
 				ID:          "receiver",
@@ -169,7 +170,8 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 	if len(hub.Lighting.Targets) != 2 || hub.Lighting.Targets[0].ID != "channel:1" ||
 		hub.Lighting.Targets[0].Scope != "channel" || hub.Lighting.Targets[0].ChannelID == nil ||
 		*hub.Lighting.Targets[0].ChannelID != 1 || len(hub.Lighting.Targets[0].SupportedProfileIDs) != 2 ||
-		len(hub.Lighting.Targets[0].Operations) != 1 || hub.Lighting.Targets[0].Operations[0] != "read" ||
+		len(hub.Lighting.Targets[0].Operations) != 2 || hub.Lighting.Targets[0].Operations[0] != "read" ||
+		hub.Lighting.Targets[0].Operations[1] != "assign-profile" ||
 		hub.Lighting.Targets[0].Identifiable {
 		t.Fatalf("lighting targets were not safely published: %#v", hub.Lighting.Targets)
 	}
@@ -177,6 +179,9 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 		!hasCapability(hub.Capabilities, "sensors", true) ||
 		!hasCapability(hub.Capabilities, "lighting", true) {
 		t.Fatalf("capability inference failed: %#v", hub.Capabilities)
+	}
+	if !hasOperation(hub.Capabilities, "lighting", "assign-profile") {
+		t.Fatalf("lighting assignment capability was not published: %#v", hub.Capabilities)
 	}
 	if !hasCapability(snapshot.Devices[1].Capabilities, "pairing", false) {
 		t.Fatalf("receiver pairing limitation was not explicit: %#v", snapshot.Devices[1])
@@ -199,6 +204,27 @@ func TestDeviceProfileLabelPublishesWholeDeviceTarget(t *testing.T) {
 	}, nil)
 	if len(targets) != 1 || targets[0].ID != "device" || targets[0].Label != "Keyboard" {
 		t.Fatalf("whole-device label target was not normalized: %#v", targets)
+	}
+}
+
+func TestLightingAssignmentRequiresExplicitChannelAuthorization(t *testing.T) {
+	input := fixtureInput()
+	input.Devices[0].LightingChannelAssignment = false
+	targets := BuildSnapshot(input).Devices[0].Lighting.Targets
+	for _, target := range targets {
+		if stringSliceContains(target.Operations, "assign-profile") {
+			t.Fatalf("read-only input published assignment: %#v", targets)
+		}
+	}
+
+	input.Devices[0].Detail = map[string]any{
+		"Connected":     true,
+		"DeviceProfile": map[string]any{"RGBProfile": "static"},
+	}
+	wholeDevice := BuildSnapshot(input).Devices[0].Lighting.Targets
+	if len(wholeDevice) != 1 || wholeDevice[0].ID != "device" ||
+		stringSliceContains(wholeDevice[0].Operations, "assign-profile") {
+		t.Fatalf("channel authorization leaked to whole-device target: %#v", wholeDevice)
 	}
 }
 

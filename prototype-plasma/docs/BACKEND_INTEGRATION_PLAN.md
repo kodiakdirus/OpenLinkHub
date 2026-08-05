@@ -1,20 +1,20 @@
 # OpenLinkHub Plasma Backend Integration Plan
 
 Status: Phase 2 additive read contract and Phase 2.5 hardening implemented;
-Phase 3 now has one guarded, non-hardware label mutation. Hardware-affecting
-callbacks remain unauthorized.
+Phase 3 has a guarded label mutation. The next bounded slice adds existing
+lighting-profile assignment only for capability-authorized LINK Hub channels.
 
 The source-level organization review is recorded in
 `BACKEND_ORGANIZATION_AUDIT.md`. Its decision is incremental: add one typed
 application-service and legacy-adapter seam before guarded lighting writes;
 keep broader backend cleanup on the Horizon rather than rewriting the service.
 
-The first structural lighting checkpoint implements that seam without an HTTP
-route or live callback: a locked device-registry snapshot, a transport-neutral
-lighting service with narrow inventory/assignment ports, fake verification and
-recovery tests, and an unconnected fail-closed legacy reflection adapter.
-Normalized lighting targets now publish stable identity and authorization
-metadata but advertise only `read`.
+The structural lighting checkpoint introduced a locked device-registry
+snapshot, a transport-neutral lighting service with narrow
+inventory/assignment ports, fake verification and recovery tests, and a
+fail-closed legacy adapter. The current slice connects that seam through one
+typed route. Only LINK Hub channel targets whose registered driver implements
+the exact assignment method advertise `assign-profile`; all others stay read.
 
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules
@@ -50,6 +50,10 @@ Phase 2 is implemented as an additive contract:
   targets. It requires the current state revision, uses a narrow command type,
   rejects stale or invalid input before dispatch, and verifies refreshed
   normalized state before claiming success.
+- The guarded lighting slice adds `PUT /api/v1/lighting/assignment` for an
+  existing profile on an exact authorized target. It shares the mutation lock,
+  rejects stale/unpublished input before dispatch, verifies refreshed state,
+  and attempts verified restoration after a mismatch.
 - The structural schema and sanitized golden snapshot cover hub/cooling,
   keyboard, mouse, and receiver presentation families without exposing raw
   configuration paths or HID internals.
@@ -125,13 +129,13 @@ service-owned feature has one documented disposition:
 4. an intentionally unavailable control with a reason; or
 5. a backend contract gap that must be filled before the UI can expose it.
 
-It does not mean making 159 raw API operations into 159 buttons.
+It does not mean making 160 raw API operations into 160 buttons.
 
 ## Source-derived API facts
 
-- The service currently registers 159 `/api` routes: 45 `GET`, 100 `POST`,
-  8 `PUT`, and 6 `DELETE`. `/api/metrics` is one of those routes but is
-  conditional on `config.metrics`; 155 routes are unconditional.
+- The service currently registers 160 `/api` routes: 45 `GET`, 100 `POST`,
+  9 `PUT`, and 6 `DELETE`. `/api/metrics` is one of those routes but is
+  conditional on `config.metrics`; 156 routes are unconditional.
 - The default listener is `127.0.0.1:27003`. The current API has no
   authentication boundary, so the desktop client must default to loopback and
   must not silently expose the listener on another interface.
@@ -277,12 +281,12 @@ opaque duplicate.
 
 ## Registered route-family disposition
 
-The detailed 159-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
+The detailed 160-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
 user-facing disposition is:
 
 | Route family | Count | Disposition |
 |---|---:|---|
-| Versioned contract, root, CPU/GPU/storage, battery | 13 | Contract-first service/capability/snapshot reads plus compatibility/background telemetry; formatted and clean temperature duplicates collapse into one typed value |
+| Versioned contract, root, CPU/GPU/storage, battery | 14 | Contract-first service/capability/snapshot reads and guarded commands plus compatibility/background telemetry; formatted and clean temperature duplicates collapse into one typed value |
 | `devices`, `label`, `position`, `operatingMode` | 8 | Device inventory/topology and capability-gated device or cooling controls |
 | `temperatures`, `speed`, `psu` | 10 | Cooling workspace; manual speed is a protected diagnostic session |
 | `color`, `brightness`, `argb`, `hub`, `led`, `misc`, `scheduler` | 32 | Lighting editor, topology, hardware lighting, brightness, and Automations; helper reads stay internal |
@@ -390,7 +394,7 @@ not depend on that choice.
 - Define normalized models and error taxonomy.
 - Keep the prototype offline.
 
-Exit: all 159 current routes are classified and representative payloads parse
+Exit: all 160 current routes are classified and representative payloads parse
 without QML involvement.
 
 ### Phase 1 — read-only legacy client
@@ -437,16 +441,18 @@ labels. The snapshot publishes stable label targets and `update-label`
 capability authorization. The Qt editor submits a typed command with the
 current state revision; the service validates, dispatches through the existing
 device driver, rebuilds state, and reports success only after label read-back.
-HTTP 400/404/409/422/500 rejection paths remain explicit. Cooling, lighting,
-profile CRUD, and every hardware-affecting operation remain outside this slice.
+HTTP 400/404/409/422/500 rejection paths remain explicit. The bounded lighting
+slice adds existing-profile assignment for exact capability-authorized LINK Hub
+channels with the same optimistic concurrency plus verified recovery. Cooling,
+profile CRUD, and every other hardware-affecting operation remain outside this
+slice.
 
-The next lighting checkpoint is now designed in
-`LIGHTING_COMMAND_DESIGN.md`. Its first implementation boundary is one
-target-specific persistent profile assignment with verified recovery plus a
-separate non-persistent, server-expiring identification lease. The design
-explicitly defers profile editing, bulk/global assignment, hardware lighting,
+The lighting boundary is documented in `LIGHTING_COMMAND_DESIGN.md`.
+Target-specific persistent assignment with verified recovery is implemented;
+the separate non-persistent, server-expiring identification lease remains a
+future checkpoint. Profile editing, bulk/global assignment, hardware lighting,
 per-key/per-LED data, adapters, clusters, schedules, and peripheral-specific
-zones. No lighting route or callback is connected by the design checkpoint.
+zones remain explicitly deferred.
 
 ### Phase 4 — cooling and hardware/offline behavior
 

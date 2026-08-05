@@ -1,13 +1,13 @@
 # Guarded lighting command design
 
-**Status:** Design-only checkpoint. No route, callback, or live lighting write
-is implemented by this document.
+**Status:** Assignment checkpoint implemented for capability-authorized iCUE
+LINK System Hub channels. Identification remains design-only.
 
 **Structural progress:** The typed application service, narrow ports, locked
-registry snapshot, read-only target metadata, fake recovery tests, and
-unconnected legacy adapter are implemented. No target publishes
-`assign-profile` or `identify`, and no constructor is connected to HTTP or the
-real device dispatcher.
+registry snapshot, target metadata, fake recovery tests, fail-closed legacy
+adapter, versioned route, and Plasma client adapter are implemented. An exact
+LINK Hub driver/method check publishes `assign-profile` only on channel targets.
+No target publishes `identify`.
 
 ## Goal
 

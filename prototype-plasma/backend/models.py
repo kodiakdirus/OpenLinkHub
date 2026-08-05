@@ -970,6 +970,7 @@ class ContractSnapshot:
         details: dict[str, Mapping[str, Any]] = {}
         batteries: dict[str, Any] = {}
         lighting_profiles: dict[str, Any] = {}
+        contract_lighting_by_id: dict[str, Mapping[str, Any]] = {}
         capabilities_by_id: dict[str, list[Mapping[str, Any]]] = {}
         label_targets_by_id: dict[str, list[dict[str, Any]]] = {}
 
@@ -1097,6 +1098,7 @@ class ContractSnapshot:
 
             lighting = _mapping(device.get("lighting"))
             if lighting:
+                contract_lighting_by_id[device_id] = lighting
                 converted = _legacy_lighting_from_contract(lighting)
                 lighting_profiles[device_id] = converted
                 targets = lighting.get("targets")
@@ -1104,8 +1106,9 @@ class ContractSnapshot:
                     for target in targets:
                         target_data = _mapping(target)
                         target_id = _text(target_data.get("id"))
-                        if target_id in channels:
-                            channels[target_id]["rgb"] = _text(
+                        channel_key = target_id.removeprefix("channel:")
+                        if target_id.startswith("channel:") and channel_key in channels:
+                            channels[channel_key]["rgb"] = _text(
                                 target_data.get("activeProfile")
                             )
                         elif target_id == "device":
@@ -1152,6 +1155,68 @@ class ContractSnapshot:
                 lighting,
                 transport=transport,
             )
+            contract_lighting = contract_lighting_by_id.get(device_id, {})
+            if contract_lighting:
+                lighting_tab = next(
+                    (
+                        tab
+                        for tab in device["tabs"]
+                        if tab.get("name") == "Lighting"
+                    ),
+                    None,
+                )
+                if lighting_tab is not None:
+                    editor = lighting_tab.get("lightingEditor", {})
+                    contract_targets: list[dict[str, Any]] = []
+                    raw_targets = contract_lighting.get("targets")
+                    if isinstance(raw_targets, list):
+                        for raw_target in raw_targets:
+                            target = _mapping(raw_target)
+                            target_id = _text(target.get("id"))
+                            if not target_id:
+                                continue
+                            raw_operations = target.get("operations")
+                            operations = (
+                                [
+                                    _text(operation)
+                                    for operation in raw_operations
+                                    if _text(operation)
+                                ]
+                                if isinstance(raw_operations, list)
+                                else ["read"]
+                            )
+                            raw_supported = target.get("supportedProfileIds")
+                            supported = (
+                                [
+                                    _text(profile_id)
+                                    for profile_id in raw_supported
+                                    if _text(profile_id)
+                                ]
+                                if isinstance(raw_supported, list)
+                                else []
+                            )
+                            contract_targets.append(
+                                {
+                                    "key": target_id,
+                                    "scope": _text(target.get("scope")),
+                                    "channelId": target.get("channelId"),
+                                    "name": _text(target.get("name"), target_id),
+                                    "description": _text(target.get("description")),
+                                    "activeProfile": _text(target.get("activeProfile")),
+                                    "supportedProfileIds": supported,
+                                    "operations": operations,
+                                }
+                            )
+                    editor["targets"] = contract_targets
+                    editor["source"] = _text(
+                        contract_lighting.get("source"),
+                        "OpenLinkHub versioned capability contract",
+                    )
+                    lighting_tab["lightingEditor"] = editor
+                    lighting_tab["readOnly"] = not any(
+                        "assign-profile" in target["operations"]
+                        for target in contract_targets
+                    )
             device["source"] = (
                 "contract-transport" if transport else "contract-v1"
             )

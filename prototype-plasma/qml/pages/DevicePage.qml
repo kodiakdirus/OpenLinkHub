@@ -284,7 +284,9 @@ Item {
                     StatusBadge {
                         shell: page.shell
                         text: page.shell.liveMode && page.displayLabelTargets.length > 0
-                            ? "Connected · guarded labels"
+                            ? page.shell.backendClient.lightingAssignmentAvailable
+                                ? "Connected · guarded writes"
+                                : "Connected · guarded labels"
                             : page.shell.liveMode ? "Connected · read only" : "Connected · demo"
                         badgeColor: page.device.connected === false
                             ? page.shell.warningColor

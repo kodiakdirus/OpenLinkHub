@@ -30,6 +30,12 @@ ColumnLayout {
     property string profileSource: ""
     readonly property var selectedTarget: targetForKey(selectedTargetKey)
     readonly property var selectedProfile: profileForKey(selectedProfileKey)
+    readonly property var selectedOperations: selectedTarget.operations || []
+    readonly property var selectedSupportedProfiles: selectedTarget.supportedProfileIds || []
+    readonly property bool canAssignSelected: shell.liveMode
+        && shell.backendClient.contractVersion === "1.0"
+        && selectedOperations.indexOf("assign-profile") >= 0
+        && selectedSupportedProfiles.indexOf(selectedProfileKey) >= 0
 
     spacing: shell.sectionSpacing
 
@@ -84,7 +90,9 @@ ColumnLayout {
             target.key,
             target.name,
             target.description,
-            target.activeProfile
+            target.activeProfile,
+            target.supportedProfileIds,
+            target.operations
         ]))
         const nextProfileSignature = JSON.stringify(incomingProfiles.map(profile => [
             profile.key,
@@ -177,8 +185,10 @@ ColumnLayout {
                 }
                 StatusBadge {
                     shell: editor.shell
-                    text: "Draft only"
-                    badgeColor: editor.shell.warningColor
+                    text: editor.canAssignSelected ? "Assignment available" : "Read only"
+                    badgeColor: editor.canAssignSelected
+                        ? editor.shell.successColor
+                        : editor.shell.warningColor
                 }
             }
 
@@ -414,7 +424,9 @@ ColumnLayout {
                 Layout.fillWidth: true
                 Label {
                     Layout.fillWidth: true
-                    text: "Applying and saving remain unavailable until the guarded write phase."
+                    text: editor.canAssignSelected
+                        ? "Apply assigns the selected stored effect to this target. Parameter edits remain a local preview until profile-definition writes are implemented."
+                        : "This target does not publish a guarded lighting assignment operation. Draft parameter edits remain local."
                     color: editor.shell.mutedText
                     wrapMode: Text.WordWrap
                 }
@@ -424,11 +436,20 @@ ColumnLayout {
                     onClicked: editor.loadDraft()
                 }
                 Button {
-                    text: "Write phase required"
+                    text: editor.shell.backendClient.commandBusy ? "Applying…" : "Apply effect"
                     icon.name: "dialog-ok-apply"
-                    enabled: false
+                    enabled: editor.canAssignSelected
+                        && !editor.shell.backendClient.commandBusy
+                        && editor.selectedProfileKey !== editor.selectedTarget.activeProfile
+                    onClicked: editor.shell.backendClient.assignLightingProfile(
+                        editor.device.id,
+                        editor.selectedTargetKey,
+                        editor.selectedProfileKey
+                    )
                     ToolTip.visible: hovered
-                    ToolTip.text: "Read-only Phase 1 has no lighting mutation transport."
+                    ToolTip.text: editor.canAssignSelected
+                        ? "Assign this existing OpenLinkHub effect and verify it by read-back."
+                        : "The backend has not authorized assignment for this target."
                 }
             }
         }

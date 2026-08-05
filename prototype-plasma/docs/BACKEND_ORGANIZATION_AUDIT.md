@@ -47,7 +47,7 @@ not quality scores:
 
 | Area | Observed shape |
 |---|---|
-| Route registration | `setRoutes` contains 172 `handleFunc` registrations; the documented public inventory contains 159 `/api` method/path pairs |
+| Route registration | `setRoutes` contains 173 `handleFunc` registrations; the documented public inventory contains 160 `/api` method/path pairs |
 | Legacy request layer | `src/server/requests/requests.go` is about 5,420 lines and contains 104 `Process...` functions |
 | Server layer | `src/server/server.go` is about 2,760 lines; `api_v1.go` is about 437 lines |
 | Device layer | 149 driver source files were matched; many product packages repeat profile, RGB, and persistence lifecycles |

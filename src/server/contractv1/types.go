@@ -93,16 +93,17 @@ type BatteryInput struct {
 }
 
 type DeviceInput struct {
-	ID           string
-	Product      string
-	ProductID    uint16
-	ProductType  uint16
-	DeviceType   string
-	Firmware     string
-	Hidden       bool
-	Detail       any
-	Battery      *BatteryInput
-	LightingData any
+	ID                        string
+	Product                   string
+	ProductID                 uint16
+	ProductType               uint16
+	DeviceType                string
+	Firmware                  string
+	Hidden                    bool
+	Detail                    any
+	Battery                   *BatteryInput
+	LightingData              any
+	LightingChannelAssignment bool
 }
 
 type Input struct {
@@ -244,6 +245,29 @@ type LabelCommandResult struct {
 	RefreshRequired bool           `json:"refreshRequired"`
 	Target          *LabelTarget   `json:"target,omitempty"`
 	Issues          []CommandIssue `json:"issues"`
+}
+
+type LightingAssignmentCommand struct {
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	DeviceID         string `json:"deviceId"`
+	TargetID         string `json:"targetId"`
+	ProfileID        string `json:"profileId"`
+}
+
+type LightingAssignmentResult struct {
+	Operation        string         `json:"operation"`
+	Status           string         `json:"status"`
+	Message          string         `json:"message"`
+	Changed          bool           `json:"changed"`
+	RefreshRequired  bool           `json:"refreshRequired"`
+	DeviceID         string         `json:"deviceId,omitempty"`
+	TargetID         string         `json:"targetId,omitempty"`
+	PreviousProfile  string         `json:"previousProfile,omitempty"`
+	RequestedProfile string         `json:"requestedProfile,omitempty"`
+	ObservedProfile  string         `json:"observedProfile,omitempty"`
+	Recovery         string         `json:"recovery"`
+	Persistence      string         `json:"persistence"`
+	Issues           []CommandIssue `json:"issues"`
 }
 
 type DeviceCapability struct {

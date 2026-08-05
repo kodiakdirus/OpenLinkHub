@@ -7,7 +7,7 @@ This is the planning coverage baseline for the native Plasma client. Dynamic
 suffixes such as a device serial, profile name, macro ID, or key ID are implied
 by routes ending in `/`.
 
-Count: 159 `/api` registrations: 45 `GET`, 100 `POST`, 8 `PUT`, and 6 `DELETE`.
+Count: 160 `/api` registrations: 45 `GET`, 100 `POST`, 9 `PUT`, and 6 `DELETE`.
 `GET /api/metrics` is registered only when metrics are enabled.
 
 ## Service, overview, and monitoring
@@ -18,6 +18,8 @@ Count: 159 `/api` registrations: 45 `GET`, 100 `POST`, 8 `PUT`, and 6 `DELETE`.
   display, dashboard, and LCD state with a monotonic process revision.
 - `PUT /api/v1/devices/label` — guarded device/channel label command with
   expected-revision rejection and refreshed-state verification.
+- `PUT /api/v1/lighting/assignment` — capability-gated existing-profile
+  assignment with refreshed-state verification and recovery.
 - `GET /api/` — aggregate raw device state; compatibility/background.
 - `GET /api/cpuTemp` — formatted CPU temperature; collapse into typed telemetry.
 - `GET /api/cpuTemp/clean` — numeric CPU temperature.

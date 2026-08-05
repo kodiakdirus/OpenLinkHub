@@ -1,6 +1,7 @@
 package server
 
 import (
+	"OpenLinkHub/src/application/lighting"
 	"OpenLinkHub/src/common"
 	"OpenLinkHub/src/config"
 	"OpenLinkHub/src/dashboard"
@@ -12,6 +13,7 @@ import (
 	"OpenLinkHub/src/stats"
 	"OpenLinkHub/src/temperatures"
 	"OpenLinkHub/src/version"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +29,36 @@ var apiV1TelemetryRevision contractv1.RevisionTracker
 var apiV1Input = collectV1Input
 var apiV1WriteMutex sync.Mutex
 var apiV1ApplyLabel = applyLabelV1
+
+type lightingAssignmentCommander interface {
+	AssignProfile(context.Context, lighting.Command) lighting.Result
+}
+
+var apiV1LightingCommands lightingAssignmentCommander = newAPIV1LightingService()
+
+type channelLightingProfileAssigner interface {
+	UpdateRgbProfile(int, string) uint8
+}
+
+func newAPIV1LightingService() *lighting.Service {
+	inventory := newContractV1LightingInventoryAdapter(
+		func(ctx context.Context) (contractv1.Snapshot, uint64, error) {
+			select {
+			case <-ctx.Done():
+				return contractv1.Snapshot{}, 0, ctx.Err()
+			default:
+			}
+			snapshot := contractv1.BuildSnapshot(apiV1Input())
+			revision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(snapshot))
+			return snapshot, revision, nil
+		},
+	)
+	return lighting.NewServiceWithLocker(
+		inventory,
+		newLegacyLightingAssignerAdapter(devices.CallDeviceMethod),
+		&apiV1WriteMutex,
+	)
+}
 
 func getServiceV1(w http.ResponseWriter, request *http.Request) {
 	input := apiV1Input()
@@ -182,6 +214,129 @@ func putDeviceLabelV1(w http.ResponseWriter, request *http.Request) {
 		Target:          &verified,
 		Issues:          []contractv1.CommandIssue{},
 	})
+}
+
+func putLightingAssignmentV1(w http.ResponseWriter, request *http.Request) {
+	command := contractv1.LightingAssignmentCommand{}
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&command); err != nil {
+		sendLightingAssignmentError(
+			w,
+			currentV1StateRevision(),
+			http.StatusBadRequest,
+			"The lighting assignment is not valid JSON.",
+			contractv1.CommandIssue{Field: "body", Code: "invalid-json", Message: err.Error()},
+		)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		sendLightingAssignmentError(
+			w,
+			currentV1StateRevision(),
+			http.StatusBadRequest,
+			"The lighting assignment must contain one JSON object.",
+			contractv1.CommandIssue{Field: "body", Code: "trailing-data", Message: "Remove content after the command object."},
+		)
+		return
+	}
+
+	result := apiV1LightingCommands.AssignProfile(request.Context(), lighting.Command{
+		ExpectedRevision: command.ExpectedRevision,
+		DeviceID:         command.DeviceID,
+		TargetID:         command.TargetID,
+		ProfileID:        command.ProfileID,
+	})
+	status := lightingAssignmentHTTPStatus(result)
+	revision := result.Revision
+	if revision == 0 {
+		revision = currentV1StateRevision()
+	}
+	issues := []contractv1.CommandIssue{}
+	if result.Issue != nil {
+		issues = append(issues, contractv1.CommandIssue{
+			Field: result.Issue.Field, Code: result.Issue.Code, Message: result.Issue.Message,
+		})
+	}
+	sendLightingAssignmentResult(w, status, revision, contractv1.LightingAssignmentResult{
+		Operation:        "lighting.assign-profile",
+		Status:           string(result.Status),
+		Message:          lightingAssignmentMessage(result),
+		Changed:          result.Changed,
+		RefreshRequired:  result.Issue != nil && result.Issue.Code == "stale-revision",
+		DeviceID:         result.DeviceID,
+		TargetID:         result.TargetID,
+		PreviousProfile:  result.PreviousProfile,
+		RequestedProfile: result.RequestedProfile,
+		ObservedProfile:  result.ObservedProfile,
+		Recovery:         string(result.Recovery),
+		Persistence:      result.Persistence,
+		Issues:           issues,
+	})
+}
+
+func lightingAssignmentHTTPStatus(result lighting.Result) int {
+	if result.Status == lighting.StatusSucceeded {
+		return http.StatusOK
+	}
+	if result.Status == lighting.StatusFailedRestored || result.Status == lighting.StatusFailedRestoreUnverified {
+		return http.StatusInternalServerError
+	}
+	if result.Issue == nil {
+		return http.StatusUnprocessableEntity
+	}
+	switch result.Issue.Code {
+	case "required":
+		return http.StatusBadRequest
+	case "stale-revision":
+		return http.StatusConflict
+	case "target-not-found":
+		return http.StatusNotFound
+	case "service", "unavailable", "inventory-unavailable":
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusUnprocessableEntity
+	}
+}
+
+func lightingAssignmentMessage(result lighting.Result) string {
+	if result.Status == lighting.StatusSucceeded {
+		if result.Changed {
+			return "Lighting profile assigned and verified from refreshed service state."
+		}
+		return "The requested lighting profile is already active."
+	}
+	if result.Status == lighting.StatusFailedRestored {
+		return "The lighting assignment failed; the previous profile was restored and verified."
+	}
+	if result.Status == lighting.StatusFailedRestoreUnverified {
+		return "The lighting assignment failed and recovery could not be verified. Refresh before issuing another command."
+	}
+	if result.Issue != nil {
+		return result.Issue.Message
+	}
+	return "The lighting assignment was rejected."
+}
+
+func sendLightingAssignmentError(w http.ResponseWriter, revision uint64, status int, message string, issue contractv1.CommandIssue) {
+	sendLightingAssignmentResult(w, status, revision, contractv1.LightingAssignmentResult{
+		Operation:       "lighting.assign-profile",
+		Status:          string(lighting.StatusRejected),
+		Message:         message,
+		Changed:         false,
+		RefreshRequired: status == http.StatusConflict,
+		Recovery:        string(lighting.RecoveryNotNeeded),
+		Persistence:     "unknown",
+		Issues:          []contractv1.CommandIssue{issue},
+	})
+}
+
+func sendLightingAssignmentResult(w http.ResponseWriter, status int, revision uint64, result contractv1.LightingAssignmentResult) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(contractv1.Wrap("command-result", revision, result))
 }
 
 func validateLabelCommand(command contractv1.LabelCommand) []contractv1.CommandIssue {
@@ -372,19 +527,28 @@ func collectV1Input() contractv1.Input {
 			}
 		}
 		input.Devices = append(input.Devices, contractv1.DeviceInput{
-			ID:           id,
-			Product:      device.Product,
-			ProductID:    device.ProductId,
-			ProductType:  device.ProductType,
-			DeviceType:   semanticDeviceType(device.DeviceType),
-			Firmware:     device.Firmware,
-			Hidden:       device.Hidden,
-			Detail:       device.GetDevice,
-			Battery:      battery,
-			LightingData: lighting[id],
+			ID:                        id,
+			Product:                   device.Product,
+			ProductID:                 device.ProductId,
+			ProductType:               device.ProductType,
+			DeviceType:                semanticDeviceType(device.DeviceType),
+			Firmware:                  device.Firmware,
+			Hidden:                    device.Hidden,
+			Detail:                    device.GetDevice,
+			Battery:                   battery,
+			LightingData:              lighting[id],
+			LightingChannelAssignment: supportsChannelLightingAssignment(device),
 		})
 	}
 	return input
+}
+
+func supportsChannelLightingAssignment(device *common.Device) bool {
+	if device == nil || device.ProductType != common.ProductTypeLinkHub || device.Instance == nil {
+		return false
+	}
+	_, supported := device.Instance.(channelLightingProfileAssigner)
+	return supported
 }
 
 func semanticDeviceType(deviceType uint32) string {

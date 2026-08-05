@@ -88,12 +88,19 @@ type Result struct {
 
 type Service struct {
 	mu        sync.Mutex
+	locker    sync.Locker
 	inventory InventoryReader
 	assigner  LightingAssigner
 }
 
 func NewService(inventory InventoryReader, assigner LightingAssigner) *Service {
 	return &Service{inventory: inventory, assigner: assigner}
+}
+
+// NewServiceWithLocker lets the transport serialize this transaction with
+// other guarded mutations without coupling the application layer to HTTP.
+func NewServiceWithLocker(inventory InventoryReader, assigner LightingAssigner, locker sync.Locker) *Service {
+	return &Service{inventory: inventory, assigner: assigner, locker: locker}
 }
 
 // AssignProfile validates and executes one target-specific profile assignment.
@@ -120,8 +127,12 @@ func (service *Service) AssignProfile(ctx context.Context, command Command) Resu
 		return result
 	}
 
-	service.mu.Lock()
-	defer service.mu.Unlock()
+	locker := service.locker
+	if locker == nil {
+		locker = &service.mu
+	}
+	locker.Lock()
+	defer locker.Unlock()
 
 	before, err := service.inventory.Snapshot(ctx)
 	if err != nil {
