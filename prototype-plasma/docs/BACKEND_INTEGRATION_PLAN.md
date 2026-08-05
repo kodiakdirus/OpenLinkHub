@@ -4,6 +4,11 @@ Status: Phase 2 additive read contract and Phase 2.5 hardening implemented;
 Phase 3 now has one guarded, non-hardware label mutation. Hardware-affecting
 callbacks remain unauthorized.
 
+The source-level organization review is recorded in
+`BACKEND_ORGANIZATION_AUDIT.md`. Its decision is incremental: add one typed
+application-service and legacy-adapter seam before guarded lighting writes;
+keep broader backend cleanup on the Horizon rather than rewriting the service.
+
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules
 on the current implementation branch.
@@ -427,6 +432,14 @@ current state revision; the service validates, dispatches through the existing
 device driver, rebuilds state, and reports success only after label read-back.
 HTTP 400/404/409/422/500 rejection paths remain explicit. Cooling, lighting,
 profile CRUD, and every hardware-affecting operation remain outside this slice.
+
+The next lighting checkpoint is now designed in
+`LIGHTING_COMMAND_DESIGN.md`. Its first implementation boundary is one
+target-specific persistent profile assignment with verified recovery plus a
+separate non-persistent, server-expiring identification lease. The design
+explicitly defers profile editing, bulk/global assignment, hardware lighting,
+per-key/per-LED data, adapters, clusters, schedules, and peripheral-specific
+zones. No lighting route or callback is connected by the design checkpoint.
 
 ### Phase 4 — cooling and hardware/offline behavior
 

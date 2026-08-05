@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://openlinkhub.local/schema/lighting-command-design.json",
+  "title": "OpenLinkHub guarded lighting command design",
+  "oneOf": [
+    {"$ref": "#/$defs/lightingTarget"},
+    {"$ref": "#/$defs/assignmentCommand"},
+    {"$ref": "#/$defs/assignmentResult"},
+    {"$ref": "#/$defs/identifyCommand"},
+    {"$ref": "#/$defs/identifyCancel"},
+    {"$ref": "#/$defs/identifyResult"}
+  ],
+  "$defs": {
+    "targetId": {
+      "type": "string",
+      "pattern": "^(device|channel:[0-9]+|adapter:[0-9]+:[0-9]+)$"
+    },
+    "lightingTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "name",
+        "description",
+        "activeProfile",
+        "supportedProfileIds",
+        "operations",
+        "identifiable"
+      ],
+      "properties": {
+        "id": {"$ref": "#/$defs/targetId"},
+        "scope": {"enum": ["device", "channel", "adapter"]},
+        "channelId": {"type": "integer", "minimum": 0},
+        "adapterId": {"type": "integer", "minimum": 0},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "activeProfile": {"type": "string", "minLength": 1},
+        "supportedProfileIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["read", "assign-profile", "identify"]}
+        },
+        "identifiable": {"type": "boolean"}
+      }
+    },
+    "assignmentCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expectedRevision", "deviceId", "targetId", "profileId"],
+      "properties": {
+        "expectedRevision": {"type": "integer", "minimum": 1},
+        "deviceId": {"type": "string", "minLength": 1},
+        "targetId": {"$ref": "#/$defs/targetId"},
+        "profileId": {"type": "string", "minLength": 1}
+      }
+    },
+    "assignmentResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "kind", "revision", "data"],
+      "properties": {
+        "apiVersion": {"const": "1.0"},
+        "kind": {"const": "command-result"},
+        "revision": {"type": "integer", "minimum": 1},
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "status",
+            "changed",
+            "deviceId",
+            "targetId",
+            "previousProfile",
+            "requestedProfile",
+            "observedProfile",
+            "recovery"
+          ],
+          "properties": {
+            "operation": {"const": "assign-lighting"},
+            "status": {
+              "enum": [
+                "succeeded",
+                "failed-restored",
+                "failed-restore-unverified"
+              ]
+            },
+            "changed": {"type": "boolean"},
+            "deviceId": {"type": "string", "minLength": 1},
+            "targetId": {"$ref": "#/$defs/targetId"},
+            "previousProfile": {"type": "string", "minLength": 1},
+            "requestedProfile": {"type": "string", "minLength": 1},
+            "observedProfile": {"type": "string", "minLength": 1},
+            "recovery": {
+              "enum": ["not-needed", "verified", "unverified"]
+            }
+          }
+        }
+      }
+    },
+    "identifyCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expectedRevision", "deviceId", "targetId", "durationMs"],
+      "properties": {
+        "expectedRevision": {"type": "integer", "minimum": 1},
+        "deviceId": {"type": "string", "minLength": 1},
+        "targetId": {"$ref": "#/$defs/targetId"},
+        "durationMs": {"type": "integer", "minimum": 1000, "maximum": 5000},
+        "leaseId": {"type": "string", "minLength": 16}
+      }
+    },
+    "identifyCancel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deviceId", "leaseId"],
+      "properties": {
+        "deviceId": {"type": "string", "minLength": 1},
+        "leaseId": {"type": "string", "minLength": 16}
+      }
+    },
+    "identifyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiVersion", "kind", "revision", "data"],
+      "properties": {
+        "apiVersion": {"const": "1.0"},
+        "kind": {"const": "lease-result"},
+        "revision": {"type": "integer", "minimum": 1},
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operation",
+            "status",
+            "deviceId",
+            "targetId",
+            "leaseId",
+            "expiresInMs",
+            "restoration"
+          ],
+          "properties": {
+            "operation": {"const": "identify-lighting"},
+            "status": {"enum": ["active", "cancelled", "expired"]},
+            "deviceId": {"type": "string", "minLength": 1},
+            "targetId": {"$ref": "#/$defs/targetId"},
+            "leaseId": {"type": "string", "minLength": 16},
+            "expiresInMs": {"type": "integer", "minimum": 0, "maximum": 5000},
+            "restoration": {"enum": ["pending", "verified", "unverified"]}
+          }
+        }
+      }
+    }
+  }
+}

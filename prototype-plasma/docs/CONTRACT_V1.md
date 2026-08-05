@@ -90,6 +90,11 @@ because the existing device save methods do not return independent durable-file
 confirmation; the command proves normalized service read-back, not storage
 media durability.
 
+The proposed guarded lighting assignment and transient target-identification
+extension is documented in
+[`LIGHTING_COMMAND_DESIGN.md`](LIGHTING_COMMAND_DESIGN.md). It is design-only:
+its routes and operations are not part of the currently implemented contract.
+
 The machine-readable structural baseline is
 [`contract-v1.schema.json`](contract-v1.schema.json). Sanitized golden fixture
 [`v1_snapshot_families.json`](../tests/fixtures/v1_snapshot_families.json)
