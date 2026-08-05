@@ -3,6 +3,12 @@
 **Status:** Design-only checkpoint. No route, callback, or live lighting write
 is implemented by this document.
 
+**Structural progress:** The typed application service, narrow ports, locked
+registry snapshot, read-only target metadata, fake recovery tests, and
+unconnected legacy adapter are implemented. No target publishes
+`assign-profile` or `identify`, and no constructor is connected to HTTP or the
+real device dispatcher.
+
 ## Goal
 
 Expose the useful parts of OpenLinkHub lighting as typed, capability-gated

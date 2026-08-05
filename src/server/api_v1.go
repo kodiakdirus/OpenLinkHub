@@ -351,7 +351,7 @@ func collectV1Input() contractv1.Input {
 
 	batteries := stats.GetBatteryStats()
 	lighting := apiV1Lighting.get(time.Now(), devices.GetRgbProfiles)
-	deviceMap := devices.GetDevices()
+	deviceMap := devices.GetDevicesSnapshot()
 	deviceIDs := make([]string, 0, len(deviceMap))
 	for id := range deviceMap {
 		deviceIDs = append(deviceIDs, id)

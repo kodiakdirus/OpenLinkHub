@@ -90,6 +90,13 @@ class ContractSchemaTests(unittest.TestCase):
         self.assertEqual(lighting["profileCount"], len(profile_ids))
         for target in lighting["targets"]:
             self.assertIn(target["activeProfile"], profile_ids)
+            self.assertEqual(target["operations"], ["read"])
+            self.assertFalse(target["identifiable"])
+            self.assertTrue(set(target["supportedProfileIds"]).issubset(profile_ids))
+            if target["scope"] == "channel":
+                self.assertEqual(target["id"], f"channel:{target['channelId']}")
+            else:
+                self.assertEqual(target["id"], "device")
 
         document = VersionedDocument.from_mapping(
             self.document,

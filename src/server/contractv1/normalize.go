@@ -631,12 +631,18 @@ func normalizeLighting(
 	})
 
 	profileIDs := make(map[string]bool, len(profiles))
+	supportedProfileIDs := make([]string, 0, len(profiles))
 	for _, profile := range profiles {
 		profileIDs[profile.ID] = true
+		supportedProfileIDs = append(supportedProfileIDs, profile.ID)
 	}
 	targets := make([]LightingTarget, 0)
 	for _, channel := range channels {
 		if channel.LightingEffect == nil {
+			continue
+		}
+		channelID, err := strconv.Atoi(channel.ID)
+		if err != nil || channelID < 0 {
 			continue
 		}
 		active := channel.LightingEffect.ID
@@ -648,10 +654,15 @@ func normalizeLighting(
 			name = channel.Name
 		}
 		targets = append(targets, LightingTarget{
-			ID:            channel.ID,
-			Name:          fmt.Sprintf("%s · Ch %s", name, channel.ID),
-			Description:   fmt.Sprintf("Channel %s · %s", channel.ID, channel.Description),
-			ActiveProfile: active,
+			ID:                  fmt.Sprintf("channel:%d", channelID),
+			Scope:               "channel",
+			ChannelID:           &channelID,
+			Name:                fmt.Sprintf("%s · Ch %s", name, channel.ID),
+			Description:         fmt.Sprintf("Channel %s · %s", channel.ID, channel.Description),
+			ActiveProfile:       active,
+			SupportedProfileIDs: append([]string(nil), supportedProfileIDs...),
+			Operations:          []string{"read"},
+			Identifiable:        false,
 		})
 	}
 	if len(targets) == 0 {
@@ -660,10 +671,14 @@ func normalizeLighting(
 			active = profiles[0].ID
 		}
 		targets = append(targets, LightingTarget{
-			ID:            "device",
-			Name:          "Whole device",
-			Description:   product + " lighting surface",
-			ActiveProfile: active,
+			ID:                  "device",
+			Scope:               "device",
+			Name:                "Whole device",
+			Description:         product + " lighting surface",
+			ActiveProfile:       active,
+			SupportedProfileIDs: append([]string(nil), supportedProfileIDs...),
+			Operations:          []string{"read"},
+			Identifiable:        false,
 		})
 	}
 

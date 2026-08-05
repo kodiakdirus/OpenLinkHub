@@ -166,6 +166,13 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 	if hub.Lighting == nil || hub.Lighting.ProfileCount != 2 {
 		t.Fatalf("lighting library was not normalized: %#v", hub.Lighting)
 	}
+	if len(hub.Lighting.Targets) != 2 || hub.Lighting.Targets[0].ID != "channel:1" ||
+		hub.Lighting.Targets[0].Scope != "channel" || hub.Lighting.Targets[0].ChannelID == nil ||
+		*hub.Lighting.Targets[0].ChannelID != 1 || len(hub.Lighting.Targets[0].SupportedProfileIDs) != 2 ||
+		len(hub.Lighting.Targets[0].Operations) != 1 || hub.Lighting.Targets[0].Operations[0] != "read" ||
+		hub.Lighting.Targets[0].Identifiable {
+		t.Fatalf("lighting targets were not safely published: %#v", hub.Lighting.Targets)
+	}
 	if !hasCapability(hub.Capabilities, "cooling", true) ||
 		!hasCapability(hub.Capabilities, "sensors", true) ||
 		!hasCapability(hub.Capabilities, "lighting", true) {

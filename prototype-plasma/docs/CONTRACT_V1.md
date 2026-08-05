@@ -90,6 +90,11 @@ because the existing device save methods do not return independent durable-file
 confirmation; the command proves normalized service read-back, not storage
 media durability.
 
+Lighting targets use explicit `device` or `channel:<id>` identities and publish
+their scope, supported profile IDs, operations, and identification availability.
+This structural checkpoint advertises only `read`; `assign-profile` and
+`identify` remain absent until separately connected and reviewed.
+
 The proposed guarded lighting assignment and transient target-identification
 extension is documented in
 [`LIGHTING_COMMAND_DESIGN.md`](LIGHTING_COMMAND_DESIGN.md). It is design-only:

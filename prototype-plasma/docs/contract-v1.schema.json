@@ -112,7 +112,7 @@
         "channels": {"type": "array", "items": {"$ref": "#/$defs/channel"}},
         "labelTargets": {"type": "array", "items": {"$ref": "#/$defs/labelTarget"}},
         "battery": {"$ref": "#/$defs/measurement"},
-        "lighting": {"type": "object"}
+        "lighting": {"$ref": "#/$defs/lightingCatalog"}
       }
     },
     "labelTarget": {
@@ -125,6 +125,45 @@
         "channelId": {"type": "integer", "minimum": 0},
         "name": {"type": "string", "minLength": 1},
         "label": {"type": "string", "maxLength": 64}
+      }
+    },
+    "lightingTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "scope", "name", "description", "activeProfile", "supportedProfileIds", "operations", "identifiable"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^(device|channel:[0-9]+)$"},
+        "scope": {"enum": ["device", "channel"]},
+        "channelId": {"type": "integer", "minimum": 0},
+        "name": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "activeProfile": {"type": "string", "minLength": 1},
+        "supportedProfileIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["read", "assign-profile", "identify"]}
+        },
+        "identifiable": {"type": "boolean"}
+      }
+    },
+    "lightingCatalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "device", "defaultColor", "targets", "profiles", "profileCount"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "device": {"type": "string", "minLength": 1},
+        "defaultColor": {"type": "string"},
+        "targets": {"type": "array", "items": {"$ref": "#/$defs/lightingTarget"}},
+        "profiles": {"type": "array", "items": {"type": "object"}},
+        "profileCount": {"type": "integer", "minimum": 0}
       }
     }
   }

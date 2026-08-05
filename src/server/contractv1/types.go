@@ -154,10 +154,15 @@ type Channel struct {
 }
 
 type LightingTarget struct {
-	ID            string `json:"id"`
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	ActiveProfile string `json:"activeProfile"`
+	ID                  string   `json:"id"`
+	Scope               string   `json:"scope"`
+	ChannelID           *int     `json:"channelId,omitempty"`
+	Name                string   `json:"name"`
+	Description         string   `json:"description"`
+	ActiveProfile       string   `json:"activeProfile"`
+	SupportedProfileIDs []string `json:"supportedProfileIds"`
+	Operations          []string `json:"operations"`
+	Identifiable        bool     `json:"identifiable"`
 }
 
 type LightingProfile struct {

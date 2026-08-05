@@ -11,7 +11,8 @@ FIXTURE = Path(__file__).parent / "fixtures" / "lighting_command_design.json"
 SCHEMA = PROTOTYPE_ROOT / "docs" / "lighting-command-design.schema.json"
 DESIGN = PROTOTYPE_ROOT / "docs" / "LIGHTING_COMMAND_DESIGN.md"
 CURRENT_CONTRACT = PROTOTYPE_ROOT / "docs" / "CONTRACT_V1.md"
-SERVER = REPOSITORY_ROOT / "src" / "server" / "server.go"
+SERVER_DIR = REPOSITORY_ROOT / "src" / "server"
+LEGACY_ADAPTER = SERVER_DIR / "api_v1_lighting_adapter.go"
 
 
 class LightingCommandDesignTests(unittest.TestCase):
@@ -24,13 +25,30 @@ class LightingCommandDesignTests(unittest.TestCase):
     def test_design_is_explicitly_non_operational(self) -> None:
         self.assertIn("Design-only checkpoint", self.design)
         current_contract = CURRENT_CONTRACT.read_text(encoding="utf-8")
-        server = SERVER.read_text(encoding="utf-8")
+        server = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in SERVER_DIR.glob("*.go")
+            if not path.name.endswith("_test.go")
+        )
         for route in (
             "/api/v1/lighting/assignment",
             "/api/v1/lighting/identify",
         ):
             self.assertNotIn(route, current_contract)
             self.assertNotIn(route, server)
+
+    def test_legacy_adapter_is_present_but_not_connected(self) -> None:
+        adapter = LEGACY_ADAPTER.read_text(encoding="utf-8")
+        self.assertIn("legacyLightingAssignerAdapter", adapter)
+        self.assertNotIn("devices.CallDeviceMethod", adapter)
+
+        production = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in SERVER_DIR.glob("*.go")
+            if not path.name.endswith("_test.go") and path != LEGACY_ADAPTER
+        )
+        self.assertNotIn("newLegacyLightingAssignerAdapter", production)
+        self.assertNotIn("newContractV1LightingInventoryAdapter", production)
 
     def test_target_identity_and_authorization_are_bounded(self) -> None:
         target = self.fixture["target"]

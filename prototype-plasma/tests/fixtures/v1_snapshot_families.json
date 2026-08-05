@@ -79,8 +79,8 @@
           "device": "iCUE LINK System Hub",
           "defaultColor": "#0078d4",
           "targets": [
-            {"id": "1", "name": "Radiator · Ch 1", "description": "Channel 1 · Fan channel", "activeProfile": "static"},
-            {"id": "2", "name": "Pump · Ch 2", "description": "Channel 2 · AIO pump", "activeProfile": "liquid-temperature"}
+            {"id": "channel:1", "scope": "channel", "channelId": 1, "name": "Radiator · Ch 1", "description": "Channel 1 · Fan channel", "activeProfile": "static", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false},
+            {"id": "channel:2", "scope": "channel", "channelId": 2, "name": "Pump · Ch 2", "description": "Channel 2 · AIO pump", "activeProfile": "liquid-temperature", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false}
           ],
           "profiles": [
             {"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false},
@@ -113,7 +113,7 @@
           "source": "OpenLinkHub versioned capability contract",
           "device": "K100 AIR",
           "defaultColor": "#0078d4",
-          "targets": [{"id": "device", "name": "Whole device", "description": "K100 AIR lighting surface", "activeProfile": "static"}],
+          "targets": [{"id": "device", "scope": "device", "name": "Whole device", "description": "K100 AIR lighting surface", "activeProfile": "static", "supportedProfileIds": ["static"], "operations": ["read"], "identifiable": false}],
           "profiles": [{"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false}],
           "profileCount": 1
         }
@@ -143,7 +143,7 @@
           "source": "OpenLinkHub versioned capability contract",
           "device": "SCIMITAR ELITE",
           "defaultColor": "#0078d4",
-          "targets": [{"id": "device", "name": "Whole device", "description": "SCIMITAR ELITE lighting surface", "activeProfile": "static"}],
+          "targets": [{"id": "device", "scope": "device", "name": "Whole device", "description": "SCIMITAR ELITE lighting surface", "activeProfile": "static", "supportedProfileIds": ["static"], "operations": ["read"], "identifiable": false}],
           "profiles": [{"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false}],
           "profileCount": 1
         }

@@ -427,6 +427,25 @@ func GetDevices() map[string]*common.Device {
 	return devices
 }
 
+// GetDevicesSnapshot returns detached registry metadata under the device lock.
+// Product-specific Detail and Instance values remain driver-owned references;
+// callers cannot mutate the registry map or its common.Device entries.
+func GetDevicesSnapshot() map[string]*common.Device {
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	snapshot := make(map[string]*common.Device, len(devices))
+	for id, device := range devices {
+		if device == nil {
+			snapshot[id] = nil
+			continue
+		}
+		value := *device
+		snapshot[id] = &value
+	}
+	return snapshot
+}
+
 // GetMouse will return all available mouse devices
 func GetMouse() map[string]string {
 	mutex.Lock()

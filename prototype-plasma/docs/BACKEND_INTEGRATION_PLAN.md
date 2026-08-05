@@ -9,6 +9,13 @@ The source-level organization review is recorded in
 application-service and legacy-adapter seam before guarded lighting writes;
 keep broader backend cleanup on the Horizon rather than rewriting the service.
 
+The first structural lighting checkpoint implements that seam without an HTTP
+route or live callback: a locked device-registry snapshot, a transport-neutral
+lighting service with narrow inventory/assignment ports, fake verification and
+recovery tests, and an unconnected fail-closed legacy reflection adapter.
+Normalized lighting targets now publish stable identity and authorization
+metadata but advertise only `read`.
+
 Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
 `src/config/config.go`, `src/devices/`, and the service-owned profile modules
 on the current implementation branch.
