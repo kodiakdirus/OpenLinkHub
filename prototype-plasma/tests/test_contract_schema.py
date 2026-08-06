@@ -86,6 +86,14 @@ class ContractSchemaTests(unittest.TestCase):
         devices = self.document["data"]["devices"]
         hub = next(item for item in devices if item["deviceType"] == "cooler")
         lighting = hub["lighting"]
+        self.assertEqual(lighting["ownership"]["controller"], "rgb-cluster")
+        self.assertEqual(lighting["ownership"]["mode"], "synchronized")
+        self.assertEqual(lighting["ownership"]["operations"], ["read"])
+        self.assertEqual(lighting["ownership"]["affectedTargetCount"], 2)
+        self.assertEqual(
+            lighting["ownership"]["savedIndividualSummary"],
+            "2 saved individual effects",
+        )
         profile_ids = {item["id"] for item in lighting["profiles"]}
         self.assertEqual(lighting["profileCount"], len(profile_ids))
         for target in lighting["targets"]:
@@ -110,6 +118,20 @@ class ContractSchemaTests(unittest.TestCase):
         self.assertNotIn("Cooling", normalized_mouse["capabilities"])
         self.assertTrue(normalized_mouse["canEditLabels"])
         self.assertEqual(normalized_mouse["labelTargets"][0]["id"], "device")
+        normalized_hub = next(
+            item for item in snapshot["devices"] if item["id"] == "hub-1"
+        )
+        lighting_tab = next(
+            tab for tab in normalized_hub["tabs"] if tab["name"] == "Lighting"
+        )
+        self.assertEqual(
+            lighting_tab["lightingEditor"]["ownership"]["controller"],
+            "rgb-cluster",
+        )
+        self.assertNotIn(
+            "change-controller",
+            lighting_tab["lightingEditor"]["ownership"]["operations"],
+        )
         self.assertEqual(document.revision, 7)
         self.assertEqual(document.telemetry_revision, 11)
 

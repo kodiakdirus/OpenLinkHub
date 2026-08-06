@@ -25,6 +25,17 @@ ColumnLayout {
 
     property var targets: []
     property var profiles: []
+    property var ownership: ({
+        controller: "individual",
+        mode: "individual",
+        label: "Individual devices",
+        description: "Each published target uses its own saved lighting effect.",
+        operations: ["read"],
+        affectedTargetCount: 0,
+        savedIndividualSummary: "No individual lighting targets"
+    })
+    property string ownershipSignature: ""
+    property bool clusterEditorOpen: false
     property string targetModelSignature: ""
     property string profileModelSignature: ""
     property string profileSource: ""
@@ -90,6 +101,7 @@ ColumnLayout {
     function reconcileModel() {
         const incomingTargets = modelData.targets || []
         const incomingProfiles = modelData.profiles || []
+        const incomingOwnership = modelData.ownership || editor.ownership
         const nextTargetSignature = JSON.stringify(incomingTargets.map(target => [
             target.key,
             target.name,
@@ -115,6 +127,7 @@ ColumnLayout {
             profile.perLed,
             profile.temperatureReactive
         ]))
+        const nextOwnershipSignature = JSON.stringify(incomingOwnership)
 
         if (nextTargetSignature !== targetModelSignature) {
             targetModelSignature = nextTargetSignature
@@ -123,6 +136,10 @@ ColumnLayout {
         if (nextProfileSignature !== profileModelSignature) {
             profileModelSignature = nextProfileSignature
             profiles = incomingProfiles
+        }
+        if (nextOwnershipSignature !== ownershipSignature) {
+            ownershipSignature = nextOwnershipSignature
+            ownership = incomingOwnership
         }
         profileSource = modelData.source || "Device-filtered OpenLinkHub profile library"
 
@@ -164,6 +181,29 @@ ColumnLayout {
                 editor.commandFeedbackListening = false
             }
         }
+    }
+
+    LightingOwnershipCard {
+        shell: editor.shell
+        ownership: editor.ownership
+        targets: editor.targets
+        onReviewRequested: ownershipDialog.open()
+        onClusterEditorRequested: editor.clusterEditorOpen = true
+    }
+
+    LightingClusterEditor {
+        visible: editor.clusterEditorOpen && editor.ownership.controller === "rgb-cluster"
+        shell: editor.shell
+        ownership: editor.ownership
+        targets: editor.targets
+        onCloseRequested: editor.clusterEditorOpen = false
+    }
+
+    LightingOwnershipDialog {
+        id: ownershipDialog
+        shell: editor.shell
+        ownership: editor.ownership
+        targets: editor.targets
     }
 
     GridLayout {

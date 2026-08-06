@@ -722,10 +722,65 @@ func normalizeLighting(
 		Source:       "OpenLinkHub versioned capability contract",
 		Device:       textOr(lookup(catalogData, "device"), product),
 		DefaultColor: colorHex(mapping(lookup(catalogData, "defaultColor"))),
+		Ownership:    normalizeLightingOwnership(detail, targets, profiles),
 		Targets:      targets,
 		Profiles:     profiles,
 		ProfileCount: len(profiles),
 	}
+}
+
+func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget, profiles []LightingProfile) LightingOwnership {
+	controller := "individual"
+	mode := "individual"
+	label := "Individual devices"
+	description := "Each published target uses its own saved lighting effect."
+	profile := mapping(lookup(detail, "DeviceProfile"))
+	if enabled, ok := booleanValue(lookup(profile, "OpenRGBIntegration")); ok && enabled {
+		controller = "openrgb"
+		mode = "external"
+		label = "OpenRGB"
+		description = "OpenRGB currently owns this device's lighting output."
+	} else if enabled, ok := booleanValue(lookup(profile, "RGBCluster")); ok && enabled {
+		controller = "rgb-cluster"
+		mode = "synchronized"
+		label = "RGB Cluster"
+		description = "One synchronized controller owns this device's lighting targets."
+	}
+
+	return LightingOwnership{
+		Controller:             controller,
+		Mode:                   mode,
+		Label:                  label,
+		Description:            description,
+		Operations:             []string{"read"},
+		AffectedTargetCount:    len(targets),
+		SavedIndividualSummary: summarizeIndividualLighting(targets, profiles),
+	}
+}
+
+func summarizeIndividualLighting(targets []LightingTarget, profiles []LightingProfile) string {
+	if len(targets) == 0 {
+		return "No individual lighting targets"
+	}
+	profileNames := make(map[string]string, len(profiles))
+	for _, profile := range profiles {
+		profileNames[profile.ID] = profile.Name
+	}
+	active := targets[0].ActiveProfile
+	for _, target := range targets[1:] {
+		if target.ActiveProfile != active {
+			return fmt.Sprintf("%d saved individual effects", len(targets))
+		}
+	}
+	name := profileNames[active]
+	if name == "" {
+		name = title(active)
+	}
+	targetWord := "targets"
+	if len(targets) == 1 {
+		targetWord = "target"
+	}
+	return fmt.Sprintf("%s on %d %s", name, len(targets), targetWord)
 }
 
 func lightingAssignmentBlockReason(detail map[string]any) string {

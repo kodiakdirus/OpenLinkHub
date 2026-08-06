@@ -184,10 +184,21 @@ type LightingProfile struct {
 	TemperatureReactive bool     `json:"temperatureReactive"`
 }
 
+type LightingOwnership struct {
+	Controller             string   `json:"controller"`
+	Mode                   string   `json:"mode"`
+	Label                  string   `json:"label"`
+	Description            string   `json:"description"`
+	Operations             []string `json:"operations"`
+	AffectedTargetCount    int      `json:"affectedTargetCount"`
+	SavedIndividualSummary string   `json:"savedIndividualSummary"`
+}
+
 type LightingCatalog struct {
 	Source       string            `json:"source"`
 	Device       string            `json:"device"`
 	DefaultColor string            `json:"defaultColor"`
+	Ownership    LightingOwnership `json:"ownership"`
 	Targets      []LightingTarget  `json:"targets"`
 	Profiles     []LightingProfile `json:"profiles"`
 	ProfileCount int               `json:"profileCount"`

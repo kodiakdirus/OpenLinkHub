@@ -78,9 +78,10 @@
           "source": "OpenLinkHub versioned capability contract",
           "device": "iCUE LINK System Hub",
           "defaultColor": "#0078d4",
+          "ownership": {"controller": "rgb-cluster", "mode": "synchronized", "label": "RGB Cluster", "description": "One synchronized controller owns this device's lighting targets.", "operations": ["read"], "affectedTargetCount": 2, "savedIndividualSummary": "2 saved individual effects"},
           "targets": [
-            {"id": "channel:1", "scope": "channel", "channelId": 1, "name": "Radiator · Ch 1", "description": "Channel 1 · Fan channel", "activeProfile": "static", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false},
-            {"id": "channel:2", "scope": "channel", "channelId": 2, "name": "Pump · Ch 2", "description": "Channel 2 · AIO pump", "activeProfile": "liquid-temperature", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false}
+            {"id": "channel:1", "scope": "channel", "channelId": 1, "name": "Radiator · Ch 1", "description": "Channel 1 · Fan channel · Managed by RGB Cluster", "activeProfile": "static", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false},
+            {"id": "channel:2", "scope": "channel", "channelId": 2, "name": "Pump · Ch 2", "description": "Channel 2 · AIO pump · Managed by RGB Cluster", "activeProfile": "liquid-temperature", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false}
           ],
           "profiles": [
             {"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false},
@@ -113,6 +114,7 @@
           "source": "OpenLinkHub versioned capability contract",
           "device": "K100 AIR",
           "defaultColor": "#0078d4",
+          "ownership": {"controller": "individual", "mode": "individual", "label": "Individual devices", "description": "Each published target uses its own saved lighting effect.", "operations": ["read"], "affectedTargetCount": 1, "savedIndividualSummary": "Static on 1 target"},
           "targets": [{"id": "device", "scope": "device", "name": "Whole device", "description": "K100 AIR lighting surface", "activeProfile": "static", "supportedProfileIds": ["static"], "operations": ["read"], "identifiable": false}],
           "profiles": [{"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false}],
           "profileCount": 1
@@ -143,6 +145,7 @@
           "source": "OpenLinkHub versioned capability contract",
           "device": "SCIMITAR ELITE",
           "defaultColor": "#0078d4",
+          "ownership": {"controller": "individual", "mode": "individual", "label": "Individual devices", "description": "Each published target uses its own saved lighting effect.", "operations": ["read"], "affectedTargetCount": 1, "savedIndividualSummary": "Static on 1 target"},
           "targets": [{"id": "device", "scope": "device", "name": "Whole device", "description": "SCIMITAR ELITE lighting surface", "activeProfile": "static", "supportedProfileIds": ["static"], "operations": ["read"], "identifiable": false}],
           "profiles": [{"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false}],
           "profileCount": 1

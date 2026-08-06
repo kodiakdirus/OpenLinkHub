@@ -312,10 +312,42 @@ def _normalize_lighting(
             }
         )
 
+    profile_names = {profile["key"]: profile["name"] for profile in profiles}
+    active_profiles = {target["activeProfile"] for target in targets}
+    if not targets:
+        saved_summary = "No individual lighting targets"
+    elif len(active_profiles) == 1:
+        active = next(iter(active_profiles))
+        noun = "target" if len(targets) == 1 else "targets"
+        profile_name = profile_names.get(active, active.replace("-", " ").title())
+        saved_summary = f"{profile_name} on {len(targets)} {noun}"
+    else:
+        saved_summary = f"{len(targets)} saved individual effects"
+
+    device_profile = _mapping(detail.get("DeviceProfile"))
+    if bool(device_profile.get("OpenRGBIntegration")):
+        controller, mode, label = "openrgb", "external", "OpenRGB"
+        description = "OpenRGB currently owns this device's lighting output."
+    elif bool(device_profile.get("RGBCluster")):
+        controller, mode, label = "rgb-cluster", "synchronized", "RGB Cluster"
+        description = "One synchronized controller owns this device's lighting targets."
+    else:
+        controller, mode, label = "individual", "individual", "Individual devices"
+        description = "Each published target uses its own saved lighting effect."
+
     return {
         "source": "OpenLinkHub /api/color/ filtered device library",
         "device": _text(raw_library.get("device"), product),
         "defaultColor": _color_hex(raw_library.get("defaultColor")),
+        "ownership": {
+            "controller": controller,
+            "mode": mode,
+            "label": label,
+            "description": description,
+            "operations": ["read"],
+            "affectedTargetCount": len(targets),
+            "savedIndividualSummary": saved_summary,
+        },
         "targets": targets,
         "profiles": profiles,
         "profileCount": len(profiles),
@@ -1208,6 +1240,101 @@ class ContractSnapshot:
                                 }
                             )
                     editor["targets"] = contract_targets
+                    raw_ownership = _mapping(contract_lighting.get("ownership"))
+                    saved_individual_summary = (
+                        f"{len(contract_targets)} saved individual effects"
+                    )
+                    if not raw_ownership:
+                        descriptions = " ".join(
+                            target["description"] for target in contract_targets
+                        )
+                        inferred_controller = (
+                            "rgb-cluster" if "Managed by RGB Cluster" in descriptions
+                            else "openrgb" if "Managed by OpenRGB" in descriptions
+                            else "individual"
+                        )
+                        inferred_mode = (
+                            "synchronized" if inferred_controller == "rgb-cluster"
+                            else "external" if inferred_controller == "openrgb"
+                            else "individual"
+                        )
+                        inferred_label = (
+                            "RGB Cluster" if inferred_controller == "rgb-cluster"
+                            else "OpenRGB" if inferred_controller == "openrgb"
+                            else "Individual devices"
+                        )
+                        active_profile_ids = {
+                            target["activeProfile"] for target in contract_targets
+                        }
+                        contract_profile_names = {
+                            _text(_mapping(profile).get("id")): _text(
+                                _mapping(profile).get("name")
+                            )
+                            for profile in contract_lighting.get("profiles", [])
+                            if _text(_mapping(profile).get("id"))
+                        }
+                        if not contract_targets:
+                            saved_individual_summary = (
+                                "No individual lighting targets"
+                            )
+                        elif len(active_profile_ids) == 1:
+                            active_profile_id = next(iter(active_profile_ids))
+                            target_word = (
+                                "target" if len(contract_targets) == 1 else "targets"
+                            )
+                            saved_individual_summary = (
+                                f"{contract_profile_names.get(active_profile_id, active_profile_id.replace('-', ' ').title())} "
+                                f"on {len(contract_targets)} {target_word}"
+                            )
+                        else:
+                            saved_individual_summary = (
+                                f"{len(contract_targets)} saved individual effects"
+                            )
+                        raw_ownership = {
+                            "controller": inferred_controller,
+                            "mode": inferred_mode,
+                            "label": inferred_label,
+                            "description": (
+                                f"{inferred_label} currently owns this device's lighting output."
+                                if inferred_controller != "individual"
+                                else "Each published target uses its own saved lighting effect."
+                            ),
+                            "operations": ["read"],
+                            "affectedTargetCount": len(contract_targets),
+                            "savedIndividualSummary": saved_individual_summary,
+                        }
+                    raw_ownership_operations = raw_ownership.get("operations")
+                    ownership_operations = (
+                        [
+                            _text(operation)
+                            for operation in raw_ownership_operations
+                            if _text(operation)
+                        ]
+                        if isinstance(raw_ownership_operations, list)
+                        else ["read"]
+                    )
+                    editor["ownership"] = {
+                        "controller": _text(
+                            raw_ownership.get("controller"), "individual"
+                        ),
+                        "mode": _text(raw_ownership.get("mode"), "individual"),
+                        "label": _text(
+                            raw_ownership.get("label"), "Individual devices"
+                        ),
+                        "description": _text(
+                            raw_ownership.get("description"),
+                            "Each published target uses its own saved lighting effect.",
+                        ),
+                        "operations": ownership_operations,
+                        "affectedTargetCount": round(
+                            _number(raw_ownership.get("affectedTargetCount"))
+                            or len(contract_targets)
+                        ),
+                        "savedIndividualSummary": _text(
+                            raw_ownership.get("savedIndividualSummary"),
+                            saved_individual_summary,
+                        ),
+                    }
                     editor["source"] = _text(
                         contract_lighting.get("source"),
                         "OpenLinkHub versioned capability contract",

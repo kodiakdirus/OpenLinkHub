@@ -156,14 +156,34 @@
     "lightingCatalog": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source", "device", "defaultColor", "targets", "profiles", "profileCount"],
+      "required": ["source", "device", "defaultColor", "ownership", "targets", "profiles", "profileCount"],
       "properties": {
         "source": {"type": "string", "minLength": 1},
         "device": {"type": "string", "minLength": 1},
         "defaultColor": {"type": "string"},
+        "ownership": {"$ref": "#/$defs/lightingOwnership"},
         "targets": {"type": "array", "items": {"$ref": "#/$defs/lightingTarget"}},
         "profiles": {"type": "array", "items": {"type": "object"}},
         "profileCount": {"type": "integer", "minimum": 0}
+      }
+    },
+    "lightingOwnership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controller", "mode", "label", "description", "operations", "affectedTargetCount", "savedIndividualSummary"],
+      "properties": {
+        "controller": {"enum": ["individual", "rgb-cluster", "openrgb"]},
+        "mode": {"enum": ["individual", "synchronized", "external"]},
+        "label": {"type": "string", "minLength": 1},
+        "description": {"type": "string", "minLength": 1},
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"enum": ["read", "change-controller"]}
+        },
+        "affectedTargetCount": {"type": "integer", "minimum": 0},
+        "savedIndividualSummary": {"type": "string", "minLength": 1}
       }
     }
   }

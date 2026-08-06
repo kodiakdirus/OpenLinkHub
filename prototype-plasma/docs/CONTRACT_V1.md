@@ -67,6 +67,19 @@ back. A mismatch triggers an immediate attempt to restore the previous profile;
 the result distinguishes verified recovery from unverified recovery. Existing
 profile definitions are not edited by this route.
 
+## Lighting controller ownership
+
+Lighting catalogs publish the current whole-device controller, presentation
+mode, affected target count, allowed operations, and a summary of saved
+individual effects. The current checkpoint publishes `read` only. It adds no
+ownership route and cannot switch hardware control. The fake-backed guarded
+transition and UI review shell are described in
+[`LIGHTING_OWNERSHIP_DESIGN.md`](LIGHTING_OWNERSHIP_DESIGN.md).
+
+Global profiles do not implicitly change ownership. A future transition must
+be an explicit, revision-guarded device command with verified read-back and
+recovery.
+
 ## Revision semantics
 
 - `revision` changes when user/configuration state changes: inventory,

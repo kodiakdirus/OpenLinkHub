@@ -167,6 +167,13 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 	if hub.Lighting == nil || hub.Lighting.ProfileCount != 2 {
 		t.Fatalf("lighting library was not normalized: %#v", hub.Lighting)
 	}
+	if hub.Lighting.Ownership.Controller != "individual" ||
+		hub.Lighting.Ownership.Mode != "individual" ||
+		hub.Lighting.Ownership.SavedIndividualSummary != "2 saved individual effects" ||
+		len(hub.Lighting.Ownership.Operations) != 1 ||
+		hub.Lighting.Ownership.Operations[0] != "read" {
+		t.Fatalf("lighting ownership was not normalized: %#v", hub.Lighting.Ownership)
+	}
 	if len(hub.Lighting.Targets) != 2 || hub.Lighting.Targets[0].ID != "channel:1" ||
 		hub.Lighting.Targets[0].Scope != "channel" || hub.Lighting.Targets[0].ChannelID == nil ||
 		*hub.Lighting.Targets[0].ChannelID != 1 || len(hub.Lighting.Targets[0].SupportedProfileIDs) != 2 ||
@@ -230,19 +237,22 @@ func TestLightingAssignmentRequiresExplicitChannelAuthorization(t *testing.T) {
 
 func TestLightingAssignmentIsSuppressedByExternalLightingControl(t *testing.T) {
 	tests := []struct {
-		name   string
-		field  string
-		reason string
+		name       string
+		field      string
+		reason     string
+		controller string
+		mode       string
 	}{
-		{name: "rgb cluster", field: "RGBCluster", reason: "Managed by RGB Cluster"},
-		{name: "openrgb", field: "OpenRGBIntegration", reason: "Managed by OpenRGB"},
+		{name: "rgb cluster", field: "RGBCluster", reason: "Managed by RGB Cluster", controller: "rgb-cluster", mode: "synchronized"},
+		{name: "openrgb", field: "OpenRGBIntegration", reason: "Managed by OpenRGB", controller: "openrgb", mode: "external"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			input := fixtureInput()
 			detail := input.Devices[0].Detail.(map[string]any)
 			detail["DeviceProfile"] = map[string]any{test.field: true}
-			targets := BuildSnapshot(input).Devices[0].Lighting.Targets
+			lighting := BuildSnapshot(input).Devices[0].Lighting
+			targets := lighting.Targets
 			if len(targets) == 0 {
 				t.Fatal("expected normalized lighting targets")
 			}
@@ -253,6 +263,13 @@ func TestLightingAssignmentIsSuppressedByExternalLightingControl(t *testing.T) {
 				if !strings.Contains(target.Description, test.reason) {
 					t.Fatalf("target description %q does not disclose %q", target.Description, test.reason)
 				}
+			}
+			if lighting.Ownership.Controller != test.controller ||
+				lighting.Ownership.Mode != test.mode ||
+				lighting.Ownership.AffectedTargetCount != len(targets) ||
+				lighting.Ownership.SavedIndividualSummary != "2 saved individual effects" ||
+				len(lighting.Ownership.Operations) != 1 || lighting.Ownership.Operations[0] != "read" {
+				t.Fatalf("external ownership was not safely published: %#v", lighting.Ownership)
 			}
 		})
 	}
