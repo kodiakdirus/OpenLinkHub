@@ -224,6 +224,7 @@ func normalizeDevice(input DeviceInput) DeviceState {
 		input.LightingData,
 		input.LightingChannelAssignment,
 		input.LightingOwnershipTransition,
+		input.LightingRGBCluster,
 	)
 	capabilities := inferCapabilities(
 		input,
@@ -603,6 +604,7 @@ func normalizeLighting(
 	raw any,
 	channelAssignment bool,
 	ownershipTransition bool,
+	rgbCluster *bool,
 ) *LightingCatalog {
 	catalogData := mapping(raw)
 	profileData := mapping(lookup(catalogData, "profiles"))
@@ -664,7 +666,7 @@ func normalizeLighting(
 		profileIDs[profile.ID] = true
 		supportedProfileIDs = append(supportedProfileIDs, profile.ID)
 	}
-	assignmentBlockReason := lightingAssignmentBlockReason(detail)
+	assignmentBlockReason := lightingAssignmentBlockReason(detail, rgbCluster)
 	assignmentAvailable := channelAssignment && assignmentBlockReason == ""
 	targets := make([]LightingTarget, 0)
 	for _, channel := range channels {
@@ -724,14 +726,14 @@ func normalizeLighting(
 		Source:       "OpenLinkHub versioned capability contract",
 		Device:       textOr(lookup(catalogData, "device"), product),
 		DefaultColor: colorHex(mapping(lookup(catalogData, "defaultColor"))),
-		Ownership:    normalizeLightingOwnership(detail, targets, profiles, ownershipTransition),
+		Ownership:    normalizeLightingOwnership(detail, targets, profiles, ownershipTransition, rgbCluster),
 		Targets:      targets,
 		Profiles:     profiles,
 		ProfileCount: len(profiles),
 	}
 }
 
-func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget, profiles []LightingProfile, transitionAvailable bool) LightingOwnership {
+func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget, profiles []LightingProfile, transitionAvailable bool, rgbCluster *bool) LightingOwnership {
 	controller := "individual"
 	mode := "individual"
 	label := "Individual devices"
@@ -742,7 +744,7 @@ func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget,
 		mode = "external"
 		label = "OpenRGB"
 		description = "OpenRGB currently owns this device's lighting output."
-	} else if enabled, ok := booleanValue(lookup(profile, "RGBCluster")); ok && enabled {
+	} else if rgbClusterEnabled(profile, rgbCluster) {
 		controller = "rgb-cluster"
 		mode = "synchronized"
 		label = "RGB Cluster"
@@ -789,15 +791,23 @@ func summarizeIndividualLighting(targets []LightingTarget, profiles []LightingPr
 	return fmt.Sprintf("%s on %d %s", name, len(targets), targetWord)
 }
 
-func lightingAssignmentBlockReason(detail map[string]any) string {
+func lightingAssignmentBlockReason(detail map[string]any, rgbCluster *bool) string {
 	profile := mapping(lookup(detail, "DeviceProfile"))
 	if enabled, ok := booleanValue(lookup(profile, "OpenRGBIntegration")); ok && enabled {
 		return "Managed by OpenRGB"
 	}
-	if enabled, ok := booleanValue(lookup(profile, "RGBCluster")); ok && enabled {
+	if rgbClusterEnabled(profile, rgbCluster) {
 		return "Managed by RGB Cluster"
 	}
 	return ""
+}
+
+func rgbClusterEnabled(profile map[string]any, authoritative *bool) bool {
+	if authoritative != nil {
+		return *authoritative
+	}
+	enabled, ok := booleanValue(lookup(profile, "RGBCluster"))
+	return ok && enabled
 }
 
 func colorHex(color map[string]any) string {

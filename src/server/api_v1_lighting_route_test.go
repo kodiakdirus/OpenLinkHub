@@ -28,9 +28,20 @@ type fakeChannelLightingDriver struct{}
 
 func (*fakeChannelLightingDriver) UpdateRgbProfile(int, string) uint8 { return 1 }
 
-type fakeOwnershipDriver struct{}
+type fakeOwnershipDriver struct {
+	rgbCluster bool
+}
 
 func (*fakeOwnershipDriver) ProcessSetRgbCluster(bool) uint8 { return 1 }
+func (driver *fakeOwnershipDriver) GetRgbCluster() bool      { return driver.rgbCluster }
+
+type fakeOwnershipSetterOnly struct{}
+
+func (*fakeOwnershipSetterOnly) ProcessSetRgbCluster(bool) uint8 { return 1 }
+
+type fakeOwnershipReaderOnly struct{}
+
+func (*fakeOwnershipReaderOnly) GetRgbCluster() bool { return false }
 
 func TestChannelLightingCapabilityResolverFailsClosed(t *testing.T) {
 	tests := []struct {
@@ -63,7 +74,9 @@ func TestLightingOwnershipCapabilityResolverFailsClosed(t *testing.T) {
 		{name: "k100 air wireless", device: &common.Device{ProductType: common.ProductTypeK100AirWU, Instance: &fakeOwnershipDriver{}}, want: true},
 		{name: "scimitar wireless", device: &common.Device{ProductType: common.ProductTypeScimitarRgbEliteWU, Instance: &fakeOwnershipDriver{}}, want: true},
 		{name: "wrong family", device: &common.Device{ProductType: common.ProductTypeK100, Instance: &fakeOwnershipDriver{}}, want: false},
-		{name: "missing method", device: &common.Device{ProductType: common.ProductTypeLinkHub, Instance: struct{}{}}, want: false},
+		{name: "missing reader", device: &common.Device{ProductType: common.ProductTypeLinkHub, Instance: &fakeOwnershipSetterOnly{}}, want: false},
+		{name: "missing writer", device: &common.Device{ProductType: common.ProductTypeLinkHub, Instance: &fakeOwnershipReaderOnly{}}, want: false},
+		{name: "missing methods", device: &common.Device{ProductType: common.ProductTypeLinkHub, Instance: struct{}{}}, want: false},
 		{name: "missing device", device: nil, want: false},
 	}
 	for _, test := range tests {

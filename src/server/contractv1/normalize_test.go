@@ -281,6 +281,33 @@ func TestLightingAssignmentIsSuppressedByExternalLightingControl(t *testing.T) {
 	}
 }
 
+func TestAuthoritativeRGBClusterOwnershipDoesNotDependOnLegacyDetail(t *testing.T) {
+	input := fixtureInput()
+	input.Devices[0].Detail = nil
+	enabled := true
+	input.Devices[0].LightingRGBCluster = &enabled
+
+	lighting := BuildSnapshot(input).Devices[0].Lighting
+	if lighting == nil || lighting.Ownership.Controller != "rgb-cluster" ||
+		lighting.Ownership.Mode != "synchronized" {
+		t.Fatalf("authoritative cluster ownership was not normalized: %#v", lighting)
+	}
+}
+
+func TestAuthoritativeRGBClusterOwnershipOverridesStaleLegacyDetail(t *testing.T) {
+	input := fixtureInput()
+	detail := input.Devices[0].Detail.(map[string]any)
+	detail["DeviceProfile"] = map[string]any{"RGBCluster": true}
+	disabled := false
+	input.Devices[0].LightingRGBCluster = &disabled
+
+	lighting := BuildSnapshot(input).Devices[0].Lighting
+	if lighting == nil || lighting.Ownership.Controller != "individual" ||
+		lighting.Ownership.Mode != "individual" {
+		t.Fatalf("authoritative individual ownership did not override stale detail: %#v", lighting)
+	}
+}
+
 func equalStringSlices(left, right []string) bool {
 	if len(left) != len(right) {
 		return false
@@ -347,6 +374,12 @@ func TestStateAndTelemetryRevisionsAreIndependent(t *testing.T) {
 	}
 	if got := state.Observe(StateRevisionValue(snapshot)); got != 2 {
 		t.Fatalf("configuration revision = %d, want 2", got)
+	}
+
+	snapshot.Devices[0].Lighting.Ownership.Controller = "rgb-cluster"
+	snapshot.Devices[0].Lighting.Ownership.Mode = "synchronized"
+	if got := state.Observe(StateRevisionValue(snapshot)); got != 3 {
+		t.Fatalf("lighting ownership revision = %d, want 3", got)
 	}
 }
 

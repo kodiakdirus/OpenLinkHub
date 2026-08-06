@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -46,6 +47,10 @@ type lightingOwnershipCommander interface {
 
 type rgbClusterOwnershipSwitcher interface {
 	ProcessSetRgbCluster(bool) uint8
+}
+
+type rgbClusterOwnershipReader interface {
+	GetRgbCluster() bool
 }
 
 var apiV1LightingOwnershipCommands lightingOwnershipCommander = newAPIV1LightingOwnershipService()
@@ -664,6 +669,7 @@ func collectV1Input() contractv1.Input {
 			LightingData:                lighting[id],
 			LightingChannelAssignment:   supportsChannelLightingAssignment(device),
 			LightingOwnershipTransition: supportsLightingOwnershipTransition(device),
+			LightingRGBCluster:          readLightingRGBCluster(id, device),
 		})
 	}
 	return input
@@ -678,8 +684,21 @@ func supportsLightingOwnershipTransition(device *common.Device) bool {
 	default:
 		return false
 	}
-	_, supported := device.Instance.(rgbClusterOwnershipSwitcher)
-	return supported
+	_, canWrite := device.Instance.(rgbClusterOwnershipSwitcher)
+	_, canRead := device.Instance.(rgbClusterOwnershipReader)
+	return canWrite && canRead
+}
+
+func readLightingRGBCluster(deviceID string, device *common.Device) *bool {
+	if !supportsLightingOwnershipTransition(device) {
+		return nil
+	}
+	result := devices.CallDeviceMethod(deviceID, "GetRgbCluster")
+	if len(result) != 1 || !result[0].IsValid() || result[0].Kind() != reflect.Bool {
+		return nil
+	}
+	value := result[0].Bool()
+	return &value
 }
 
 func supportsChannelLightingAssignment(device *common.Device) bool {

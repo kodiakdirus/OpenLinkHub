@@ -2793,6 +2793,11 @@ func (d *Device) ProcessSetRgbCluster(enabled bool) uint8 {
 	return 1
 }
 
+// GetRgbCluster returns whether RGB Cluster currently owns device lighting.
+func (d *Device) GetRgbCluster() bool {
+	return d.DeviceProfile != nil && d.DeviceProfile.RGBCluster
+}
+
 // ProcessSetRgbOverride will update RGB override settings
 func (d *Device) ProcessSetRgbOverride(channelId, subDeviceId int, enabled bool, startColor, endColor, middleColor rgb.Color, speed float64) uint8 {
 	if d.DeviceProfile == nil {

@@ -105,6 +105,7 @@ type DeviceInput struct {
 	LightingData                any
 	LightingChannelAssignment   bool
 	LightingOwnershipTransition bool
+	LightingRGBCluster          *bool
 }
 
 type Input struct {
