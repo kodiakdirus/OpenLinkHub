@@ -829,6 +829,11 @@ func (d *Device) ProcessSetRgbCluster(enabled bool) uint8 {
 	return 1
 }
 
+// GetRgbCluster returns whether RGB Cluster currently owns device lighting.
+func (d *Device) GetRgbCluster() bool {
+	return d.DeviceProfile != nil && d.DeviceProfile.RGBCluster
+}
+
 // ChangeDeviceBrightness will change device brightness
 func (d *Device) ChangeDeviceBrightness(mode uint8) uint8 {
 	d.DeviceProfile.Brightness = mode
