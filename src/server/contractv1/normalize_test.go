@@ -78,7 +78,8 @@ func fixtureInput() Input {
 						},
 					},
 				},
-				LightingChannelAssignment: true,
+				LightingChannelAssignment:   true,
+				LightingOwnershipTransition: true,
 			},
 			{
 				ID:          "receiver",
@@ -170,8 +171,9 @@ func TestBuildSnapshotNormalizesCapabilitiesAndTelemetry(t *testing.T) {
 	if hub.Lighting.Ownership.Controller != "individual" ||
 		hub.Lighting.Ownership.Mode != "individual" ||
 		hub.Lighting.Ownership.SavedIndividualSummary != "2 saved individual effects" ||
-		len(hub.Lighting.Ownership.Operations) != 1 ||
-		hub.Lighting.Ownership.Operations[0] != "read" {
+		len(hub.Lighting.Ownership.Operations) != 2 ||
+		hub.Lighting.Ownership.Operations[0] != "read" ||
+		hub.Lighting.Ownership.Operations[1] != "change-controller" {
 		t.Fatalf("lighting ownership was not normalized: %#v", hub.Lighting.Ownership)
 	}
 	if len(hub.Lighting.Targets) != 2 || hub.Lighting.Targets[0].ID != "channel:1" ||
@@ -264,15 +266,31 @@ func TestLightingAssignmentIsSuppressedByExternalLightingControl(t *testing.T) {
 					t.Fatalf("target description %q does not disclose %q", target.Description, test.reason)
 				}
 			}
+			wantOperations := []string{"read", "change-controller"}
+			if test.controller == "openrgb" {
+				wantOperations = []string{"read"}
+			}
 			if lighting.Ownership.Controller != test.controller ||
 				lighting.Ownership.Mode != test.mode ||
 				lighting.Ownership.AffectedTargetCount != len(targets) ||
 				lighting.Ownership.SavedIndividualSummary != "2 saved individual effects" ||
-				len(lighting.Ownership.Operations) != 1 || lighting.Ownership.Operations[0] != "read" {
+				!equalStringSlices(lighting.Ownership.Operations, wantOperations) {
 				t.Fatalf("external ownership was not safely published: %#v", lighting.Ownership)
 			}
 		})
 	}
+}
+
+func equalStringSlices(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestSnapshotDoesNotLeakRawPathsOrInternalObjects(t *testing.T) {

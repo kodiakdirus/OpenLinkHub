@@ -88,7 +88,7 @@ class ContractSchemaTests(unittest.TestCase):
         lighting = hub["lighting"]
         self.assertEqual(lighting["ownership"]["controller"], "rgb-cluster")
         self.assertEqual(lighting["ownership"]["mode"], "synchronized")
-        self.assertEqual(lighting["ownership"]["operations"], ["read"])
+        self.assertEqual(lighting["ownership"]["operations"], ["read", "change-controller"])
         self.assertEqual(lighting["ownership"]["affectedTargetCount"], 2)
         self.assertEqual(
             lighting["ownership"]["savedIndividualSummary"],
@@ -128,10 +128,7 @@ class ContractSchemaTests(unittest.TestCase):
             lighting_tab["lightingEditor"]["ownership"]["controller"],
             "rgb-cluster",
         )
-        self.assertNotIn(
-            "change-controller",
-            lighting_tab["lightingEditor"]["ownership"]["operations"],
-        )
+        self.assertIn("change-controller", lighting_tab["lightingEditor"]["ownership"]["operations"])
         self.assertEqual(document.revision, 7)
         self.assertEqual(document.telemetry_revision, 11)
 

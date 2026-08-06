@@ -1,9 +1,8 @@
 # Lighting controller ownership checkpoint
 
-This checkpoint makes whole-device lighting ownership understandable before it
-becomes writable. It is source-only and fake-backed: no HTTP route, controller
-callback, product-driver adapter, service deployment, or hardware transition is
-included.
+This checkpoint connects the previously reviewed ownership model to a guarded
+versioned route and Plasma client. The source remains undeployed in this
+checkpoint, so no hardware transition occurs during development or review.
 
 ## Published state
 
@@ -13,30 +12,30 @@ affected target count, allowed operations, and a summary of the saved
 individual effects. A client can therefore explain both what currently owns
 the LEDs and what would reappear when synchronized control is released.
 
-Current catalogs publish only `read`. A later implementation may advertise
-`change-controller` only for a device backed by an explicitly reviewed driver
-adapter. OpenRGB is observable but cannot be selected through this proposed
-command.
+Catalogs advertise `change-controller` only for the explicitly reviewed LINK
+Hub, K100 AIR wireless, and Scimitar wireless product families when the live
+driver implements the exact whole-device RGB Cluster method. OpenRGB-owned
+devices remain observable but cannot publish or receive this command.
 
 ## Review interaction
 
 The device Lighting tab contains a persistent controller card. “Change control
 mode…” opens a review dialog that names the current and requested controllers,
-affected targets, and the saved individual state. The confirmation control is
-disabled in this checkpoint. Global profiles must not switch ownership
-implicitly; ownership is an explicit device-level decision.
+affected targets, and the saved individual state. Confirmation is enabled only
+in Live contract-1.0 mode when the selected device publishes the operation.
+Global profiles must not switch ownership implicitly; ownership is an explicit
+device-level decision.
 
-When RGB Cluster owns the device, “Open Cluster editor” reveals a non-writing
-workspace shell for the synchronized scene and its members. Cluster membership
+When RGB Cluster owns the device, “Open Cluster editor” reveals a workspace for
+the synchronized scene and its members. Cluster membership
 is modeled at the top-level device boundary used by the backend: attached LINK
 Hub channels follow their parent Hub rather than appearing as independently
 selectable members. “Edit members…” opens a local draft checklist of all
 published lighting-capable devices. OpenRGB-owned devices are disclosed and
-locked. The draft can be changed and reset, but applying membership remains
-disabled until a separately reviewed guarded command exists. This establishes
-the information hierarchy without inventing a backend capability.
+locked. The editor accepts exactly one changed device per Apply so every
+transition receives its own revision check, read-back, and recovery outcome.
 
-## Future guarded transaction
+## Guarded transaction
 
 The transport-neutral application service accepts:
 
@@ -50,11 +49,10 @@ The transport-neutral application service accepts:
 ```
 
 It rejects stale revisions, owner changes, unknown devices, unsupported modes,
-and unpublished operations before dispatch. A future adapter must capture the
-previous controller, dispatch exactly once, rebuild ownership state, and report
-success only after read-back. A mismatch triggers restoration and produces
-either `failed-restored` or `failed-restore-unverified`.
-
-Connecting a versioned route and a real LINK Hub adapter is a separate review
-checkpoint because the legacy implementation restarts the lighting renderer
-and changes whole-device control.
+and unpublished operations before dispatch. The narrow adapter dispatches the
+existing whole-device driver method under the shared mutation lock, rebuilds
+ownership state, and reports success only after read-back. A mismatch triggers
+restoration and produces either `failed-restored` or
+`failed-restore-unverified`. Deployment and the first real transition remain a
+separate, explicitly authorized checkpoint because the legacy implementation
+restarts the lighting renderer and changes whole-device control.

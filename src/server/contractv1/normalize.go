@@ -74,7 +74,7 @@ func BuildService(input ServiceInput, deviceCount int) ServiceDescriptor {
 		SystemService:  input.SystemService,
 		DeviceCount:    deviceCount,
 		Persistence:    "unknown",
-		MutationAccess: "guarded-labels-lighting",
+		MutationAccess: "guarded-labels-lighting-ownership",
 		Features:       features,
 		Warnings:       warnings,
 	}
@@ -223,6 +223,7 @@ func normalizeDevice(input DeviceInput) DeviceState {
 		channels,
 		input.LightingData,
 		input.LightingChannelAssignment,
+		input.LightingOwnershipTransition,
 	)
 	capabilities := inferCapabilities(
 		input,
@@ -601,6 +602,7 @@ func normalizeLighting(
 	channels []Channel,
 	raw any,
 	channelAssignment bool,
+	ownershipTransition bool,
 ) *LightingCatalog {
 	catalogData := mapping(raw)
 	profileData := mapping(lookup(catalogData, "profiles"))
@@ -722,14 +724,14 @@ func normalizeLighting(
 		Source:       "OpenLinkHub versioned capability contract",
 		Device:       textOr(lookup(catalogData, "device"), product),
 		DefaultColor: colorHex(mapping(lookup(catalogData, "defaultColor"))),
-		Ownership:    normalizeLightingOwnership(detail, targets, profiles),
+		Ownership:    normalizeLightingOwnership(detail, targets, profiles, ownershipTransition),
 		Targets:      targets,
 		Profiles:     profiles,
 		ProfileCount: len(profiles),
 	}
 }
 
-func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget, profiles []LightingProfile) LightingOwnership {
+func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget, profiles []LightingProfile, transitionAvailable bool) LightingOwnership {
 	controller := "individual"
 	mode := "individual"
 	label := "Individual devices"
@@ -747,12 +749,16 @@ func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget,
 		description = "One synchronized controller owns this device's lighting targets."
 	}
 
+	operations := []string{"read"}
+	if transitionAvailable && controller != "openrgb" {
+		operations = append(operations, "change-controller")
+	}
 	return LightingOwnership{
 		Controller:             controller,
 		Mode:                   mode,
 		Label:                  label,
 		Description:            description,
-		Operations:             []string{"read"},
+		Operations:             operations,
 		AffectedTargetCount:    len(targets),
 		SavedIndividualSummary: summarizeIndividualLighting(targets, profiles),
 	}

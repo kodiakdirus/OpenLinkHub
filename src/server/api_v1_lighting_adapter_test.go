@@ -35,6 +35,27 @@ func TestContractV1LightingInventoryAdapterCopiesReadOnlyTargets(t *testing.T) {
 	}
 }
 
+func TestContractV1LightingInventoryAdapterCopiesOwnership(t *testing.T) {
+	adapter := newContractV1LightingInventoryAdapter(func(context.Context) (contractv1.Snapshot, uint64, error) {
+		return contractv1.Snapshot{Devices: []contractv1.DeviceState{{
+			ID: "hub", Lighting: &contractv1.LightingCatalog{Ownership: contractv1.LightingOwnership{
+				Controller: "rgb-cluster", Operations: []string{"read", "change-controller"},
+				AffectedTargetCount: 7, SavedIndividualSummary: "Static on 7 targets",
+			}},
+		}}}, 14, nil
+	})
+	snapshot, err := adapter.OwnershipSnapshot(context.Background())
+	if err != nil || snapshot.Revision != 14 || len(snapshot.States) != 1 {
+		t.Fatalf("unexpected ownership inventory: %#v %v", snapshot, err)
+	}
+	state := snapshot.States[0]
+	if state.DeviceID != "hub" || state.Controller != lighting.ControllerRGBCluster ||
+		state.AffectedTargetCount != 7 || state.SavedIndividualEffect != "Static on 7 targets" ||
+		!containsString(state.Operations, lighting.OperationChangeController) {
+		t.Fatalf("unexpected ownership state: %#v", state)
+	}
+}
+
 func TestLegacyLightingAssignerAdapterContainsReflectionBoundary(t *testing.T) {
 	channelID := 7
 	called := false
@@ -75,6 +96,47 @@ func TestLegacyLightingAssignerAdapterFailsClosed(t *testing.T) {
 			})
 			if err == nil {
 				t.Fatal("unsafe legacy result was accepted")
+			}
+		})
+	}
+}
+
+func TestLegacyLightingOwnershipSwitcherAdapterContainsReflectionBoundary(t *testing.T) {
+	called := false
+	adapter := newLegacyLightingOwnershipSwitcherAdapter(func(deviceID, method string, args ...interface{}) []reflect.Value {
+		called = true
+		if deviceID != "hub" || method != "ProcessSetRgbCluster" || len(args) != 1 || args[0] != true {
+			t.Fatalf("unexpected dispatch: %q %q %#v", deviceID, method, args)
+		}
+		return []reflect.Value{reflect.ValueOf(uint8(1))}
+	})
+	err := adapter.SwitchController(context.Background(), lighting.OwnershipTransition{DeviceID: "hub", Controller: lighting.ControllerRGBCluster})
+	if err != nil || !called {
+		t.Fatalf("transition = %v, called = %v", err, called)
+	}
+}
+
+func TestLegacyLightingOwnershipSwitcherAdapterFailsClosed(t *testing.T) {
+	tests := []struct {
+		name       string
+		controller lighting.Controller
+		dispatch   func(string, string, ...interface{}) []reflect.Value
+	}{
+		{name: "invalid controller", controller: lighting.ControllerOpenRGB, dispatch: func(string, string, ...interface{}) []reflect.Value {
+			return []reflect.Value{reflect.ValueOf(uint8(1))}
+		}},
+		{name: "missing result", controller: lighting.ControllerIndividual, dispatch: func(string, string, ...interface{}) []reflect.Value { return nil }},
+		{name: "rejected result", controller: lighting.ControllerIndividual, dispatch: func(string, string, ...interface{}) []reflect.Value {
+			return []reflect.Value{reflect.ValueOf(uint8(0))}
+		}},
+		{name: "invalid result", controller: lighting.ControllerIndividual, dispatch: func(string, string, ...interface{}) []reflect.Value { return []reflect.Value{reflect.ValueOf("yes")} }},
+		{name: "panic", controller: lighting.ControllerIndividual, dispatch: func(string, string, ...interface{}) []reflect.Value { panic("driver") }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			adapter := newLegacyLightingOwnershipSwitcherAdapter(test.dispatch)
+			if err := adapter.SwitchController(context.Background(), lighting.OwnershipTransition{DeviceID: "hub", Controller: test.controller}); err == nil {
+				t.Fatal("unsafe legacy ownership result was accepted")
 			}
 		})
 	}

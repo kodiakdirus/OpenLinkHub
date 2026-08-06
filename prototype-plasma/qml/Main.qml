@@ -809,7 +809,9 @@ ApplicationWindow {
         if (!liveMode) return "Demo controls remain local to this prototype"
         if (backendClient.connectionState === "connected") {
             return backendClient.contractVersion === "1.0"
-                ? backendClient.lightingAssignmentAvailable
+                ? backendClient.lightingOwnershipAvailable
+                    ? "Live telemetry · guarded label + lighting + ownership writes · updated " + backendClient.lastUpdated
+                    : backendClient.lightingAssignmentAvailable
                     ? "Live telemetry · guarded label + lighting writes · updated " + backendClient.lastUpdated
                     : "Live telemetry · guarded label writes · updated " + backendClient.lastUpdated
                 : "Live telemetry is read-only · updated " + backendClient.lastUpdated

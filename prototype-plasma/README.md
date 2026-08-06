@@ -76,6 +76,9 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   channel targets, including stale-revision rejection and verified read-back
 - Capability-gated `PUT /api/v1/lighting/assignment` for existing effects on
   supported LINK Hub channels, including read-back and recovery verification
+- Capability-gated `PUT /api/v1/lighting/ownership` for explicit whole-device
+  Individual/RGB Cluster transitions, including stale-owner checks, read-back,
+  recovery verification, and one-device-at-a-time Cluster membership editing
 - Legacy response normalization for product-specific hub, keyboard, mouse, and
   other device payloads
 - Read-only live CPU, GPU, coolant, fan/pump RPM, firmware, battery, channel,

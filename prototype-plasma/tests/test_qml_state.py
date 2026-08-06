@@ -95,7 +95,7 @@ class QmlStateTests(unittest.TestCase):
         self.assertIn("lightingAssignmentAvailable", controller)
         self.assertIn("backendClient.lightingAssignmentAvailable", main)
 
-    def test_lighting_ownership_checkpoint_is_visible_but_disconnected(self) -> None:
+    def test_lighting_ownership_checkpoint_is_guarded_and_capability_gated(self) -> None:
         prototype = QML_ROOT.parent
         editor = (QML_ROOT / "components" / "LightingDeviceEditor.qml").read_text(
             encoding="utf-8"
@@ -123,19 +123,22 @@ class QmlStateTests(unittest.TestCase):
         self.assertIn('text: "Change control mode…"', card)
         self.assertIn('text: "Saved individual state"', card)
         self.assertIn("Global profiles will not switch this mode implicitly", dialog)
-        self.assertIn("enabled: false", dialog)
+        self.assertIn("enabled: dialog.canChange", dialog)
         self.assertIn('text: "RGB Cluster editor"', cluster)
-        self.assertIn('text: "Design shell · no writes"', cluster)
+        self.assertIn("Guarded membership · one at a time", cluster)
         self.assertIn('text: "Edit members…"', cluster)
         self.assertIn("availableDevices: editor.shell.devices", editor)
         self.assertIn('title: "Edit RGB Cluster members"', members)
         self.assertIn("Attached channels follow their parent device", members)
         self.assertIn('text: "Apply membership"', members)
-        self.assertIn("enabled: false", members)
+        self.assertIn("enabled: dialog.canApply", members)
+        self.assertIn("changedCount === 1", members)
+        self.assertIn("Apply one device at a time", members)
         self.assertIn("ownership.controller === \"rgb-cluster\"", members)
         self.assertIn("ownership.controller === \"openrgb\"", members)
-        self.assertNotIn("changeLightingController", editor)
-        self.assertNotIn("/api/v1/lighting/ownership", controller)
+        self.assertIn("changeLightingController", dialog)
+        self.assertIn("changeLightingController", members)
+        self.assertIn("/api/v1/lighting/ownership", controller)
 
     def test_overview_and_service_alignment_contracts(self) -> None:
         overview = (QML_ROOT / "pages" / "OverviewPage.qml").read_text(encoding="utf-8")

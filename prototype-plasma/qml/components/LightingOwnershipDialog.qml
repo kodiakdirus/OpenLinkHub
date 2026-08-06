@@ -7,10 +7,16 @@ Dialog {
     id: dialog
 
     required property var shell
+    required property var device
     required property var ownership
     required property var targets
     readonly property bool clusterOwned: ownership.controller === "rgb-cluster"
     readonly property string requestedLabel: clusterOwned ? "Individual devices" : "RGB Cluster"
+    readonly property string requestedController: clusterOwned ? "individual" : "rgb-cluster"
+    readonly property bool canChange: shell.liveMode
+        && shell.backendClient.contractVersion === "1.0"
+        && (ownership.operations || []).indexOf("change-controller") >= 0
+        && !shell.backendClient.commandBusy
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -73,16 +79,31 @@ Dialog {
             Item { Layout.fillWidth: true }
             StatusBadge {
                 shell: dialog.shell
-                text: "Source-only checkpoint"
-                badgeColor: shell.warningColor
+                text: dialog.canChange ? "Guarded transition available" : "Read only"
+                badgeColor: dialog.canChange ? shell.successColor : shell.warningColor
             }
             Button {
                 text: dialog.clusterOwned ? "Switch to individual control" : "Switch to synchronized control"
                 icon.name: "dialog-ok-apply"
-                enabled: false
+                enabled: dialog.canChange
                 ToolTip.visible: hovered
-                ToolTip.text: "No ownership command is connected in this checkpoint."
+                ToolTip.text: dialog.canChange
+                    ? "Apply one revision-checked transition and verify it from refreshed state."
+                    : "This service or device does not publish the guarded ownership operation."
+                onClicked: shell.backendClient.changeLightingController(
+                    device.id,
+                    ownership.controller,
+                    dialog.requestedController
+                )
             }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: shell.backendClient.commandMessage !== ""
+            text: shell.backendClient.commandMessage
+            color: shell.backendClient.commandStatus === "succeeded" ? shell.successColor : shell.warningColor
+            wrapMode: Text.WordWrap
         }
     }
 }

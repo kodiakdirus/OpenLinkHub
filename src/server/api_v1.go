@@ -40,6 +40,16 @@ type channelLightingProfileAssigner interface {
 	UpdateRgbProfile(int, string) uint8
 }
 
+type lightingOwnershipCommander interface {
+	ChangeController(context.Context, lighting.OwnershipCommand) lighting.OwnershipResult
+}
+
+type rgbClusterOwnershipSwitcher interface {
+	ProcessSetRgbCluster(bool) uint8
+}
+
+var apiV1LightingOwnershipCommands lightingOwnershipCommander = newAPIV1LightingOwnershipService()
+
 func newAPIV1LightingService() *lighting.Service {
 	inventory := newContractV1LightingInventoryAdapter(
 		func(ctx context.Context) (contractv1.Snapshot, uint64, error) {
@@ -56,6 +66,26 @@ func newAPIV1LightingService() *lighting.Service {
 	return lighting.NewServiceWithLocker(
 		inventory,
 		newLegacyLightingAssignerAdapter(devices.CallDeviceMethod),
+		&apiV1WriteMutex,
+	)
+}
+
+func newAPIV1LightingOwnershipService() *lighting.OwnershipService {
+	inventory := newContractV1LightingInventoryAdapter(
+		func(ctx context.Context) (contractv1.Snapshot, uint64, error) {
+			select {
+			case <-ctx.Done():
+				return contractv1.Snapshot{}, 0, ctx.Err()
+			default:
+			}
+			snapshot := contractv1.BuildSnapshot(apiV1Input())
+			revision := apiV1StateRevision.Observe(contractv1.StateRevisionValue(snapshot))
+			return snapshot, revision, nil
+		},
+	)
+	return lighting.NewOwnershipServiceWithLocker(
+		inventory,
+		newLegacyLightingOwnershipSwitcherAdapter(devices.CallDeviceMethod),
 		&apiV1WriteMutex,
 	)
 }
@@ -273,6 +303,101 @@ func putLightingAssignmentV1(w http.ResponseWriter, request *http.Request) {
 		Persistence:      result.Persistence,
 		Issues:           issues,
 	})
+}
+
+func putLightingOwnershipV1(w http.ResponseWriter, request *http.Request) {
+	command := contractv1.LightingOwnershipCommand{}
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&command); err != nil {
+		sendLightingOwnershipError(w, currentV1StateRevision(), http.StatusBadRequest, "The lighting ownership request is not valid JSON.", contractv1.CommandIssue{Field: "body", Code: "invalid-json", Message: err.Error()})
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		sendLightingOwnershipError(w, currentV1StateRevision(), http.StatusBadRequest, "The lighting ownership request must contain one JSON object.", contractv1.CommandIssue{Field: "body", Code: "trailing-data", Message: "Remove content after the command object."})
+		return
+	}
+	result := apiV1LightingOwnershipCommands.ChangeController(request.Context(), lighting.OwnershipCommand{
+		ExpectedRevision:    command.ExpectedRevision,
+		DeviceID:            command.DeviceID,
+		ExpectedController:  lighting.Controller(command.ExpectedController),
+		RequestedController: lighting.Controller(command.RequestedController),
+	})
+	status := lightingOwnershipHTTPStatus(result)
+	revision := result.Revision
+	if revision == 0 {
+		revision = currentV1StateRevision()
+	}
+	issues := []contractv1.CommandIssue{}
+	if result.Issue != nil {
+		issues = append(issues, contractv1.CommandIssue{Field: result.Issue.Field, Code: result.Issue.Code, Message: result.Issue.Message})
+	}
+	sendLightingOwnershipResult(w, status, revision, contractv1.LightingOwnershipResult{
+		Operation: "lighting.change-controller", Status: string(result.Status), Message: lightingOwnershipMessage(result),
+		Changed: result.Changed, RefreshRequired: result.Issue != nil && (result.Issue.Code == "stale-revision" || result.Issue.Code == "owner-changed"),
+		DeviceID: result.DeviceID, PreviousController: string(result.PreviousController), RequestedController: string(result.RequestedController),
+		ObservedController: string(result.ObservedController), AffectedTargetCount: result.AffectedTargetCount,
+		SavedIndividualSummary: result.SavedIndividualEffect, Recovery: string(result.Recovery), Persistence: "unknown", Issues: issues,
+	})
+}
+
+func lightingOwnershipHTTPStatus(result lighting.OwnershipResult) int {
+	if result.Status == lighting.StatusSucceeded {
+		return http.StatusOK
+	}
+	if result.Status == lighting.StatusFailedRestored || result.Status == lighting.StatusFailedRestoreUnverified {
+		return http.StatusInternalServerError
+	}
+	if result.Issue == nil {
+		return http.StatusUnprocessableEntity
+	}
+	switch result.Issue.Code {
+	case "required", "invalid":
+		return http.StatusBadRequest
+	case "stale-revision", "owner-changed":
+		return http.StatusConflict
+	case "device-not-found":
+		return http.StatusNotFound
+	case "service", "unavailable", "inventory-unavailable":
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusUnprocessableEntity
+	}
+}
+
+func lightingOwnershipMessage(result lighting.OwnershipResult) string {
+	if result.Status == lighting.StatusSucceeded {
+		if result.Changed {
+			return "Lighting controller changed and verified from refreshed service state."
+		}
+		return "The requested lighting controller is already active."
+	}
+	if result.Status == lighting.StatusFailedRestored {
+		return "The controller change failed; the previous controller was restored and verified."
+	}
+	if result.Status == lighting.StatusFailedRestoreUnverified {
+		return "The controller change failed and recovery could not be verified. Refresh before issuing another command."
+	}
+	if result.Issue != nil {
+		return result.Issue.Message
+	}
+	return "The lighting controller change was rejected."
+}
+
+func sendLightingOwnershipError(w http.ResponseWriter, revision uint64, status int, message string, issue contractv1.CommandIssue) {
+	sendLightingOwnershipResult(w, status, revision, contractv1.LightingOwnershipResult{
+		Operation: "lighting.change-controller", Status: string(lighting.StatusRejected), Message: message,
+		RefreshRequired: status == http.StatusConflict, Recovery: string(lighting.RecoveryNotNeeded), Persistence: "unknown",
+		Issues: []contractv1.CommandIssue{issue},
+	})
+}
+
+func sendLightingOwnershipResult(w http.ResponseWriter, status int, revision uint64, result contractv1.LightingOwnershipResult) {
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(contractv1.Wrap("command-result", revision, result))
 }
 
 func lightingAssignmentHTTPStatus(result lighting.Result) int {
@@ -527,20 +652,34 @@ func collectV1Input() contractv1.Input {
 			}
 		}
 		input.Devices = append(input.Devices, contractv1.DeviceInput{
-			ID:                        id,
-			Product:                   device.Product,
-			ProductID:                 device.ProductId,
-			ProductType:               device.ProductType,
-			DeviceType:                semanticDeviceType(device.DeviceType),
-			Firmware:                  device.Firmware,
-			Hidden:                    device.Hidden,
-			Detail:                    device.GetDevice,
-			Battery:                   battery,
-			LightingData:              lighting[id],
-			LightingChannelAssignment: supportsChannelLightingAssignment(device),
+			ID:                          id,
+			Product:                     device.Product,
+			ProductID:                   device.ProductId,
+			ProductType:                 device.ProductType,
+			DeviceType:                  semanticDeviceType(device.DeviceType),
+			Firmware:                    device.Firmware,
+			Hidden:                      device.Hidden,
+			Detail:                      device.GetDevice,
+			Battery:                     battery,
+			LightingData:                lighting[id],
+			LightingChannelAssignment:   supportsChannelLightingAssignment(device),
+			LightingOwnershipTransition: supportsLightingOwnershipTransition(device),
 		})
 	}
 	return input
+}
+
+func supportsLightingOwnershipTransition(device *common.Device) bool {
+	if device == nil || device.Instance == nil {
+		return false
+	}
+	switch device.ProductType {
+	case common.ProductTypeLinkHub, common.ProductTypeK100AirWU, common.ProductTypeScimitarRgbEliteWU:
+	default:
+		return false
+	}
+	_, supported := device.Instance.(rgbClusterOwnershipSwitcher)
+	return supported
 }
 
 func supportsChannelLightingAssignment(device *common.Device) bool {

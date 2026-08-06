@@ -12,6 +12,7 @@ legacy `/api/...` routes.
 | `GET /api/v1/snapshot` | `snapshot` | Normalized state plus current measurements |
 | `PUT /api/v1/devices/label` | `command-result` | Guarded device/channel label update |
 | `PUT /api/v1/lighting/assignment` | `command-result` | Guarded existing-profile assignment for an authorized lighting target |
+| `PUT /api/v1/lighting/ownership` | `command-result` | Guarded whole-device transition between Individual and RGB Cluster control |
 
 Every successful response contains `apiVersion`, `kind`, a positive
 `revision`, and object `data`. Snapshot documents also contain a positive
@@ -71,14 +72,18 @@ profile definitions are not edited by this route.
 
 Lighting catalogs publish the current whole-device controller, presentation
 mode, affected target count, allowed operations, and a summary of saved
-individual effects. The current checkpoint publishes `read` only. It adds no
-ownership route and cannot switch hardware control. The fake-backed guarded
-transition and UI review shell are described in
-[`LIGHTING_OWNERSHIP_DESIGN.md`](LIGHTING_OWNERSHIP_DESIGN.md).
+individual effects. Verified device families publish `change-controller` only
+when the exact whole-device driver method is present and OpenRGB is not the
+active controller.
 
-Global profiles do not implicitly change ownership. A future transition must
-be an explicit, revision-guarded device command with verified read-back and
-recovery.
+`PUT /api/v1/lighting/ownership` accepts `expectedRevision`, `deviceId`,
+`expectedController`, and `requestedController`. Only `individual` and
+`rgb-cluster` are accepted. The service verifies both the state revision and
+current controller before dispatch, reads the owner back afterward, and tries
+to restore the previous controller if verification fails. The Plasma Cluster
+editor intentionally applies one device membership change at a time so each
+transition is independently guarded and recoverable. Global profiles never
+change ownership implicitly.
 
 ## Revision semantics
 

@@ -167,6 +167,13 @@ class BackendController(QObject):
                         return True
         return False
 
+    @pyqtProperty(bool, notify=dataChanged)
+    def lightingOwnershipAvailable(self) -> bool:
+        return any(
+            "change-controller" in self._lighting_ownership(device.get("id", "")).get("operations", [])
+            for device in self._devices
+        )
+
     @pyqtProperty("QVariantMap", notify=dataChanged)
     def telemetry(self) -> dict[str, Any]:
         return self._telemetry
@@ -304,6 +311,41 @@ class BackendController(QObject):
             self._accept_lighting_command,
         )
 
+    @pyqtSlot(str, str, str)
+    def changeLightingController(
+        self,
+        device_id: str,
+        expected_controller: str,
+        requested_controller: str,
+    ) -> None:
+        if self._command_busy:
+            return
+        if self._mode != "live" or self._contract_version != "1.0":
+            self._set_command(False, "rejected", "Lighting ownership changes require the versioned write contract.")
+            return
+        ownership = self._lighting_ownership(device_id)
+        if "change-controller" not in ownership.get("operations", []):
+            self._set_command(False, "rejected", "That device does not publish a lighting-controller transition.")
+            return
+        if ownership.get("controller") != expected_controller:
+            self._set_command(False, "rejected", "The lighting controller changed; refresh and review the transition again.")
+            return
+        if requested_controller not in {"individual", "rgb-cluster"}:
+            self._set_command(False, "rejected", "Choose Individual devices or RGB Cluster.")
+            return
+
+        self._set_command(True, "working", "Changing lighting controller…")
+        self._put_document(
+            "/api/v1/lighting/ownership",
+            {
+                "expectedRevision": self._contract_revision,
+                "deviceId": device_id,
+                "expectedController": expected_controller,
+                "requestedController": requested_controller,
+            },
+            self._accept_lighting_ownership_command,
+        )
+
     def _lighting_target(
         self,
         device_id: str,
@@ -321,6 +363,17 @@ class BackendController(QObject):
                         return target
             return None
         return None
+
+    def _lighting_ownership(self, device_id: str) -> dict[str, Any]:
+        for device in self._devices:
+            if device.get("id") != device_id:
+                continue
+            for tab in device.get("tabs", []):
+                if tab.get("name") == "Lighting":
+                    ownership = tab.get("lightingEditor", {}).get("ownership", {})
+                    return ownership if isinstance(ownership, dict) else {}
+            break
+        return {}
 
     def _accept_label_command(
         self,
@@ -374,6 +427,33 @@ class BackendController(QObject):
         self._contract_revision = document.revision
         self.connectionChanged.emit()
         self._set_command(False, status, message)
+        self._snapshot_etag = ""
+        self._refresh_after_command = True
+        if not self._refreshing:
+            self._refresh_after_command = False
+            QTimer.singleShot(0, self.refresh)
+
+    def _accept_lighting_ownership_command(
+        self,
+        payload: dict[str, Any] | None,
+        error: str | None,
+    ) -> None:
+        if payload is None:
+            self._set_command(False, "rejected", error or "The lighting controller change failed.")
+            return
+        try:
+            document = VersionedDocument.from_mapping(payload, kind="command-result")
+        except (PayloadError, TypeError, ValueError) as parse_error:
+            self._set_command(False, "rejected", str(parse_error))
+            return
+        result = document.data
+        self._contract_revision = document.revision
+        self.connectionChanged.emit()
+        self._set_command(
+            False,
+            str(result.get("status", "rejected")),
+            str(result.get("message", "The lighting controller change was rejected.")),
+        )
         self._snapshot_etag = ""
         self._refresh_after_command = True
         if not self._refreshing:

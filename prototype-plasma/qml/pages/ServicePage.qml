@@ -70,7 +70,9 @@ Item {
                         spacing: 2
                         Label {
                             text: page.shell.liveMode
-                                ? page.shell.backendClient.lightingAssignmentAvailable
+                                ? page.shell.backendClient.lightingOwnershipAvailable
+                                    ? "Phase 5 — guarded lighting ownership checkpoint"
+                                    : page.shell.backendClient.lightingAssignmentAvailable
                                     ? "Phase 4 — guarded lighting assignment checkpoint"
                                     : page.shell.backendClient.contractVersion === "1.0"
                                         ? "Phase 3 — guarded label write checkpoint"
@@ -83,7 +85,9 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: page.shell.liveMode
-                                ? page.shell.backendClient.lightingAssignmentAvailable
+                                ? page.shell.backendClient.lightingOwnershipAvailable
+                                    ? "The versioned client can update labels, assign existing effects, and change whole-device RGB Cluster membership one device at a time; every mutation uses stale-state rejection and refreshed-state verification."
+                                    : page.shell.backendClient.lightingAssignmentAvailable
                                     ? "The versioned client can update published labels and assign existing effects to authorized lighting targets; both use stale-state rejection and read-back verification."
                                     : page.shell.backendClient.contractVersion === "1.0"
                                         ? "The versioned client can update published labels with stale-state rejection and read-back verification; lighting and other mutations remain unavailable."
@@ -358,7 +362,9 @@ Item {
                         iconName: "network-connect"
                         title: "Client connection"
                         subtitle: page.shell.liveMode
-                            ? page.shell.backendClient.lightingAssignmentAvailable
+                            ? page.shell.backendClient.lightingOwnershipAvailable
+                                ? "The client prefers one versioned snapshot request, exposes guarded label, lighting-assignment, and ownership commands, and retains an explicit legacy read-only fallback."
+                                : page.shell.backendClient.lightingAssignmentAvailable
                                 ? "The client prefers one versioned snapshot request, exposes guarded label and lighting-assignment commands, and retains an explicit legacy read-only fallback."
                                 : "The client prefers one versioned snapshot request, exposes guarded labels when published, and retains an explicit legacy read-only fallback."
                             : "Choose Live in the top bar to use the loopback transport. Demo mode opens no socket."
@@ -415,7 +421,9 @@ Item {
                                 : "Unavailable on the installed legacy service",
                             kind: "stat",
                             value: page.shell.backendClient.contractVersion.length > 0
-                                ? page.shell.backendClient.lightingAssignmentAvailable
+                                ? page.shell.backendClient.lightingOwnershipAvailable
+                                    ? "3 capability-gated PUT routes"
+                                    : page.shell.backendClient.lightingAssignmentAvailable
                                     ? "2 capability-gated PUT routes"
                                     : "PUT /api/v1/devices/label"
                                 : "Unavailable"

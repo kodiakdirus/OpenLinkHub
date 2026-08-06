@@ -204,6 +204,7 @@ ColumnLayout {
     LightingOwnershipDialog {
         id: ownershipDialog
         shell: editor.shell
+        device: editor.device
         ownership: editor.ownership
         targets: editor.targets
     }

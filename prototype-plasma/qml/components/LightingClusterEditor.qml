@@ -62,8 +62,10 @@ Panel {
         }
         StatusBadge {
             shell: clusterEditor.shell
-            text: "Design shell · no writes"
-            badgeColor: shell.warningColor
+            text: shell.backendClient.lightingOwnershipAvailable
+                ? "Guarded membership · one at a time"
+                : "Read-only membership"
+            badgeColor: shell.backendClient.lightingOwnershipAvailable ? shell.successColor : shell.warningColor
         }
         Button {
             text: "Edit members…"

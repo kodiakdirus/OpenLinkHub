@@ -53,8 +53,75 @@ func (adapter *contractV1LightingInventoryAdapter) Snapshot(ctx context.Context)
 	return result, nil
 }
 
+func (adapter *contractV1LightingInventoryAdapter) OwnershipSnapshot(ctx context.Context) (lighting.OwnershipSnapshot, error) {
+	if adapter == nil || adapter.read == nil {
+		return lighting.OwnershipSnapshot{}, errors.New("lighting inventory adapter is not configured")
+	}
+	snapshot, revision, err := adapter.read(ctx)
+	if err != nil {
+		return lighting.OwnershipSnapshot{}, err
+	}
+	result := lighting.OwnershipSnapshot{Revision: revision, States: []lighting.OwnershipState{}}
+	for _, device := range snapshot.Devices {
+		if device.Lighting == nil {
+			continue
+		}
+		ownership := device.Lighting.Ownership
+		result.States = append(result.States, lighting.OwnershipState{
+			DeviceID:              device.ID,
+			Controller:            lighting.Controller(ownership.Controller),
+			Operations:            append([]string(nil), ownership.Operations...),
+			AffectedTargetCount:   ownership.AffectedTargetCount,
+			SavedIndividualEffect: ownership.SavedIndividualSummary,
+		})
+	}
+	return result, nil
+}
+
 type legacyLightingAssignerAdapter struct {
 	dispatch dispatcher.DeviceDispatcher
+}
+
+type legacyLightingOwnershipSwitcherAdapter struct {
+	dispatch dispatcher.DeviceDispatcher
+}
+
+func newLegacyLightingOwnershipSwitcherAdapter(dispatch dispatcher.DeviceDispatcher) *legacyLightingOwnershipSwitcherAdapter {
+	return &legacyLightingOwnershipSwitcherAdapter{dispatch: dispatch}
+}
+
+func (adapter *legacyLightingOwnershipSwitcherAdapter) SwitchController(
+	ctx context.Context,
+	transition lighting.OwnershipTransition,
+) (err error) {
+	if adapter == nil || adapter.dispatch == nil {
+		return errors.New("legacy lighting ownership dispatcher is not configured")
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+	if transition.Controller != lighting.ControllerIndividual && transition.Controller != lighting.ControllerRGBCluster {
+		return errors.New("unsupported lighting controller")
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("legacy lighting ownership dispatcher panicked: %v", recovered)
+		}
+	}()
+	values := adapter.dispatch(
+		transition.DeviceID,
+		"ProcessSetRgbCluster",
+		transition.Controller == lighting.ControllerRGBCluster,
+	)
+	if len(values) != 1 || !values[0].IsValid() {
+		return errors.New("legacy lighting ownership dispatcher returned no result")
+	}
+	if values[0].Kind() < reflect.Uint || values[0].Kind() > reflect.Uint64 || values[0].Uint() != 1 {
+		return errors.New("legacy lighting ownership dispatcher rejected the transition")
+	}
+	return nil
 }
 
 func newLegacyLightingAssignerAdapter(dispatch dispatcher.DeviceDispatcher) *legacyLightingAssignerAdapter {

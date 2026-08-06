@@ -30,6 +30,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
     contract_etag = '"fixture-s7-t11"'
     label_commands: list[dict] = []
     lighting_commands: list[dict] = []
+    ownership_commands: list[dict] = []
 
     def do_GET(self) -> None:
         type(self).requests.append(f"GET {self.path}")
@@ -93,6 +94,7 @@ class FixtureHandler(BaseHTTPRequestHandler):
         if self.path not in {
             "/api/v1/devices/label",
             "/api/v1/lighting/assignment",
+            "/api/v1/lighting/ownership",
         } or not type(self).support_contract:
             self.send_response(405)
             self.end_headers()
@@ -101,7 +103,10 @@ class FixtureHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         command = json.loads(self.rfile.read(length))
         is_lighting = self.path == "/api/v1/lighting/assignment"
-        if is_lighting:
+        is_ownership = self.path == "/api/v1/lighting/ownership"
+        if is_ownership:
+            type(self).ownership_commands.append(command)
+        elif is_lighting:
             type(self).lighting_commands.append(command)
         else:
             type(self).label_commands.append(command)
@@ -115,14 +120,21 @@ class FixtureHandler(BaseHTTPRequestHandler):
             status = 200
             result_status = "succeeded"
             message = (
-                "Lighting profile assigned and verified from refreshed service state."
+                "Lighting controller changed and verified from refreshed service state."
+                if is_ownership
+                else "Lighting profile assigned and verified from refreshed service state."
                 if is_lighting
                 else "Label applied and verified from refreshed service state."
             )
             changed = True
             type(self).contract_payload["revision"] += 1
             current_revision += 1
-            if is_lighting:
+            if is_ownership:
+                ownership = type(self).contract_payload["data"]["devices"][0]["lighting"]["ownership"]
+                ownership["controller"] = command["requestedController"]
+                ownership["mode"] = "synchronized" if command["requestedController"] == "rgb-cluster" else "individual"
+                ownership["label"] = "RGB Cluster" if command["requestedController"] == "rgb-cluster" else "Individual devices"
+            elif is_lighting:
                 target = type(self).contract_payload["data"]["devices"][0]["lighting"]["targets"][0]
                 target["activeProfile"] = command["profileId"]
             else:
@@ -136,7 +148,9 @@ class FixtureHandler(BaseHTTPRequestHandler):
             "revision": current_revision,
             "data": {
                 "operation": (
-                    "lighting.assign-profile"
+                    "lighting.change-controller"
+                    if is_ownership
+                    else "lighting.assign-profile"
                     if is_lighting
                     else "device-label.update"
                 ),
@@ -227,6 +241,15 @@ class BackendControllerTests(unittest.TestCase):
                             "device": "mouse-1",
                             "defaultColor": "#0078d4",
                             "profileCount": 2,
+                            "ownership": {
+                                "controller": "individual",
+                                "mode": "individual",
+                                "label": "Individual devices",
+                                "description": "Each published target uses its own saved lighting effect.",
+                                "operations": ["read", "change-controller"],
+                                "affectedTargetCount": 1,
+                                "savedIndividualSummary": "Static on 1 target",
+                            },
                             "profiles": [
                                 {
                                     "id": "rainbow",
@@ -297,6 +320,7 @@ class BackendControllerTests(unittest.TestCase):
         FixtureHandler.requests = []
         FixtureHandler.label_commands = []
         FixtureHandler.lighting_commands = []
+        FixtureHandler.ownership_commands = []
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), FixtureHandler)
         cls.thread = Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -311,11 +335,18 @@ class BackendControllerTests(unittest.TestCase):
         FixtureHandler.requests = []
         FixtureHandler.label_commands = []
         FixtureHandler.lighting_commands = []
+        FixtureHandler.ownership_commands = []
         FixtureHandler.fail_inventory = False
         FixtureHandler.support_contract = False
         FixtureHandler.contract_payload["revision"] = 7
         FixtureHandler.contract_payload["data"]["devices"][0]["labelTargets"][0]["label"] = "Mouse"
         FixtureHandler.contract_payload["data"]["devices"][0]["lighting"]["targets"][0]["activeProfile"] = "static"
+        FixtureHandler.contract_payload["data"]["devices"][0]["lighting"]["ownership"].update({
+            "controller": "individual",
+            "mode": "individual",
+            "label": "Individual devices",
+            "operations": ["read", "change-controller"],
+        })
         FixtureHandler.contract_etag = '"fixture-s7-t11"'
         endpoint = f"http://127.0.0.1:{self.server.server_port}"
         self.controller = BackendController(
@@ -551,6 +582,36 @@ class BackendControllerTests(unittest.TestCase):
             self.assertEqual(FixtureHandler.lighting_commands, [])
         finally:
             target["operations"] = original_operations
+
+    def test_versioned_lighting_ownership_uses_published_operation(self) -> None:
+        FixtureHandler.support_contract = True
+        self.controller.setMode("live")
+        self.wait_until(lambda: not self.controller.refreshing and self.controller.connectionState == "connected")
+        self.assertTrue(self.controller.lightingOwnershipAvailable)
+        self.controller.changeLightingController("mouse-1", "individual", "rgb-cluster")
+        self.wait_until(lambda: not self.controller.commandBusy and self.controller.commandStatus == "succeeded" and not self.controller.refreshing)
+        self.assertEqual(FixtureHandler.ownership_commands, [{
+            "expectedRevision": 7,
+            "deviceId": "mouse-1",
+            "expectedController": "individual",
+            "requestedController": "rgb-cluster",
+        }])
+        self.assertIn("PUT /api/v1/lighting/ownership", FixtureHandler.requests)
+
+    def test_lighting_ownership_fails_closed_without_published_operation(self) -> None:
+        FixtureHandler.support_contract = True
+        ownership = FixtureHandler.contract_payload["data"]["devices"][0]["lighting"]["ownership"]
+        ownership["operations"] = ["read"]
+        try:
+            self.controller.setMode("live")
+            self.wait_until(lambda: not self.controller.refreshing and self.controller.connectionState == "connected")
+            before = list(FixtureHandler.requests)
+            self.controller.changeLightingController("mouse-1", "individual", "rgb-cluster")
+            self.assertEqual(self.controller.commandStatus, "rejected")
+            self.assertEqual(FixtureHandler.requests, before)
+            self.assertEqual(FixtureHandler.ownership_commands, [])
+        finally:
+            ownership["operations"] = ["read", "change-controller"]
 
     def test_failed_refresh_preserves_last_good_snapshot(self) -> None:
         self.controller.setMode("live")

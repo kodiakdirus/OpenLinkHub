@@ -11,6 +11,14 @@ Dialog {
     property var draftMembers: []
     readonly property int selectedCount: draftMembers.filter(member => member.selected).length
     readonly property int changedCount: draftMembers.filter(member => member.selected !== member.initialSelected).length
+    readonly property var changedMember: changedCount === 1
+        ? draftMembers.filter(member => member.selected !== member.initialSelected)[0]
+        : ({})
+    readonly property bool canApply: shell.liveMode
+        && shell.backendClient.contractVersion === "1.0"
+        && changedCount === 1
+        && changedMember.canChange === true
+        && !shell.backendClient.commandBusy
 
     parent: Overlay.overlay
     anchors.centerIn: parent
@@ -47,7 +55,8 @@ Dialog {
                 controller: ownership.label || "Individual devices",
                 selected: selected,
                 initialSelected: selected,
-                locked: ownership.controller === "openrgb"
+                locked: ownership.controller === "openrgb",
+                canChange: (ownership.operations || []).indexOf("change-controller") >= 0
             })
         }
         draftMembers = candidates
@@ -65,7 +74,8 @@ Dialog {
             controller: member.controller,
             selected: selected,
             initialSelected: member.initialSelected,
-            locked: member.locked
+            locked: member.locked,
+            canChange: member.canChange
         }
         draftMembers = updated
     }
@@ -82,7 +92,8 @@ Dialog {
                 controller: member.controller,
                 selected: member.initialSelected,
                 initialSelected: member.initialSelected,
-                locked: member.locked
+                locked: member.locked,
+                canChange: member.canChange
             })
         }
         draftMembers = updated
@@ -91,6 +102,10 @@ Dialog {
     function openEditor() {
         rebuildDraft()
         open()
+    }
+
+    onAvailableDevicesChanged: {
+        if (visible && !shell.backendClient.commandBusy) Qt.callLater(rebuildDraft)
     }
 
     ColumnLayout {
@@ -211,7 +226,9 @@ Dialog {
                 Layout.fillWidth: true
                 text: dialog.changedCount === 0
                     ? "No membership changes drafted."
-                    : dialog.changedCount + " membership changes drafted locally."
+                    : dialog.changedCount === 1
+                        ? "One membership transition is ready for guarded verification."
+                        : "Apply one device at a time so every transition can be verified independently."
                 color: shell.mutedText
             }
             Button {
@@ -223,10 +240,27 @@ Dialog {
             Button {
                 text: "Apply membership"
                 icon.name: "dialog-ok-apply"
-                enabled: false
+                enabled: dialog.canApply
                 ToolTip.visible: hovered
-                ToolTip.text: "No Cluster membership command is connected in this checkpoint."
+                ToolTip.text: dialog.canApply
+                    ? "Apply this one device transition and verify refreshed ownership."
+                    : dialog.changedCount > 1
+                        ? "Reset the draft and change one device at a time."
+                        : "This device does not publish the guarded ownership operation."
+                onClicked: shell.backendClient.changeLightingController(
+                    dialog.changedMember.key,
+                    dialog.changedMember.initialSelected ? "rgb-cluster" : "individual",
+                    dialog.changedMember.selected ? "rgb-cluster" : "individual"
+                )
             }
+        }
+
+        Label {
+            Layout.fillWidth: true
+            visible: shell.backendClient.commandMessage !== ""
+            text: shell.backendClient.commandMessage
+            color: shell.backendClient.commandStatus === "succeeded" ? shell.successColor : shell.warningColor
+            wrapMode: Text.WordWrap
         }
     }
 }

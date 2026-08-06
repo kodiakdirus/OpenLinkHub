@@ -93,17 +93,18 @@ type BatteryInput struct {
 }
 
 type DeviceInput struct {
-	ID                        string
-	Product                   string
-	ProductID                 uint16
-	ProductType               uint16
-	DeviceType                string
-	Firmware                  string
-	Hidden                    bool
-	Detail                    any
-	Battery                   *BatteryInput
-	LightingData              any
-	LightingChannelAssignment bool
+	ID                          string
+	Product                     string
+	ProductID                   uint16
+	ProductType                 uint16
+	DeviceType                  string
+	Firmware                    string
+	Hidden                      bool
+	Detail                      any
+	Battery                     *BatteryInput
+	LightingData                any
+	LightingChannelAssignment   bool
+	LightingOwnershipTransition bool
 }
 
 type Input struct {
@@ -279,6 +280,30 @@ type LightingAssignmentResult struct {
 	Recovery         string         `json:"recovery"`
 	Persistence      string         `json:"persistence"`
 	Issues           []CommandIssue `json:"issues"`
+}
+
+type LightingOwnershipCommand struct {
+	ExpectedRevision    uint64 `json:"expectedRevision"`
+	DeviceID            string `json:"deviceId"`
+	ExpectedController  string `json:"expectedController"`
+	RequestedController string `json:"requestedController"`
+}
+
+type LightingOwnershipResult struct {
+	Operation              string         `json:"operation"`
+	Status                 string         `json:"status"`
+	Message                string         `json:"message"`
+	Changed                bool           `json:"changed"`
+	RefreshRequired        bool           `json:"refreshRequired"`
+	DeviceID               string         `json:"deviceId,omitempty"`
+	PreviousController     string         `json:"previousController,omitempty"`
+	RequestedController    string         `json:"requestedController,omitempty"`
+	ObservedController     string         `json:"observedController,omitempty"`
+	AffectedTargetCount    int            `json:"affectedTargetCount"`
+	SavedIndividualSummary string         `json:"savedIndividualSummary,omitempty"`
+	Recovery               string         `json:"recovery"`
+	Persistence            string         `json:"persistence"`
+	Issues                 []CommandIssue `json:"issues"`
 }
 
 type DeviceCapability struct {

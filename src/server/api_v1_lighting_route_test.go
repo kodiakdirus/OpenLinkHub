@@ -28,6 +28,10 @@ type fakeChannelLightingDriver struct{}
 
 func (*fakeChannelLightingDriver) UpdateRgbProfile(int, string) uint8 { return 1 }
 
+type fakeOwnershipDriver struct{}
+
+func (*fakeOwnershipDriver) ProcessSetRgbCluster(bool) uint8 { return 1 }
+
 func TestChannelLightingCapabilityResolverFailsClosed(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -44,6 +48,28 @@ func TestChannelLightingCapabilityResolverFailsClosed(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			if got := supportsChannelLightingAssignment(test.device); got != test.want {
 				t.Fatalf("supportsChannelLightingAssignment() = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestLightingOwnershipCapabilityResolverFailsClosed(t *testing.T) {
+	tests := []struct {
+		name   string
+		device *common.Device
+		want   bool
+	}{
+		{name: "link hub", device: &common.Device{ProductType: common.ProductTypeLinkHub, Instance: &fakeOwnershipDriver{}}, want: true},
+		{name: "k100 air wireless", device: &common.Device{ProductType: common.ProductTypeK100AirWU, Instance: &fakeOwnershipDriver{}}, want: true},
+		{name: "scimitar wireless", device: &common.Device{ProductType: common.ProductTypeScimitarRgbEliteWU, Instance: &fakeOwnershipDriver{}}, want: true},
+		{name: "wrong family", device: &common.Device{ProductType: common.ProductTypeK100, Instance: &fakeOwnershipDriver{}}, want: false},
+		{name: "missing method", device: &common.Device{ProductType: common.ProductTypeLinkHub, Instance: struct{}{}}, want: false},
+		{name: "missing device", device: nil, want: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := supportsLightingOwnershipTransition(test.device); got != test.want {
+				t.Fatalf("supportsLightingOwnershipTransition() = %v, want %v", got, test.want)
 			}
 		})
 	}
