@@ -216,3 +216,8 @@ file paths.
    lease, one reversible assignment, cooling/input validation, and full backout.
 
 No later checkpoint is authorized merely by accepting this design.
+When a device reports that OpenRGB integration or RGB Cluster control is
+active, its physical lighting targets remain visible but do not publish
+`assign-profile`. The target description identifies the controlling subsystem;
+the client must not imply that a per-target assignment can succeed while that
+subsystem owns the device.

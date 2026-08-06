@@ -87,6 +87,8 @@ class QmlStateTests(unittest.TestCase):
 
         self.assertIn('selectedOperations.indexOf("assign-profile")', editor)
         self.assertIn("backendClient.assignLightingProfile", editor)
+        self.assertIn("commandFeedbackMessage", editor)
+        self.assertIn("Not applied", editor)
         self.assertIn("Parameter edits remain a local preview", editor)
         self.assertIn('"/api/v1/lighting/assignment"', controller)
         self.assertIn('"expectedRevision": self._contract_revision', controller)

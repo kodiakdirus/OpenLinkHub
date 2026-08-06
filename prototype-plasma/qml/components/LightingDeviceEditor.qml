@@ -28,6 +28,10 @@ ColumnLayout {
     property string targetModelSignature: ""
     property string profileModelSignature: ""
     property string profileSource: ""
+    property bool commandFeedbackVisible: false
+    property bool commandFeedbackListening: false
+    property string commandFeedbackStatus: "idle"
+    property string commandFeedbackMessage: ""
     readonly property var selectedTarget: targetForKey(selectedTargetKey)
     readonly property var selectedProfile: profileForKey(selectedProfileKey)
     readonly property var selectedOperations: selectedTarget.operations || []
@@ -147,6 +151,20 @@ ColumnLayout {
     onModelDataChanged: Qt.callLater(reconcileModel)
     onDeviceChanged: Qt.callLater(reconcileModel)
     Component.onCompleted: reconcileModel()
+
+    Connections {
+        target: editor.shell.backendClient
+
+        function onCommandChanged() {
+            if (!editor.commandFeedbackListening) return
+            editor.commandFeedbackStatus = editor.shell.backendClient.commandStatus
+            editor.commandFeedbackMessage = editor.shell.backendClient.commandMessage
+            if (!editor.shell.backendClient.commandBusy
+                    && editor.commandFeedbackStatus !== "working") {
+                editor.commandFeedbackListening = false
+            }
+        }
+    }
 
     GridLayout {
         Layout.fillWidth: true
@@ -441,15 +459,46 @@ ColumnLayout {
                     enabled: editor.canAssignSelected
                         && !editor.shell.backendClient.commandBusy
                         && editor.selectedProfileKey !== editor.selectedTarget.activeProfile
-                    onClicked: editor.shell.backendClient.assignLightingProfile(
-                        editor.device.id,
-                        editor.selectedTargetKey,
-                        editor.selectedProfileKey
-                    )
+                    onClicked: {
+                        editor.commandFeedbackVisible = true
+                        editor.commandFeedbackListening = true
+                        editor.commandFeedbackStatus = "working"
+                        editor.commandFeedbackMessage = "Applying lighting effect…"
+                        editor.shell.backendClient.assignLightingProfile(
+                            editor.device.id,
+                            editor.selectedTargetKey,
+                            editor.selectedProfileKey
+                        )
+                    }
                     ToolTip.visible: hovered
                     ToolTip.text: editor.canAssignSelected
                         ? "Assign this existing OpenLinkHub effect and verify it by read-back."
                         : "The backend has not authorized assignment for this target."
+                }
+            }
+
+            RowLayout {
+                visible: editor.commandFeedbackVisible
+                Layout.fillWidth: true
+
+                StatusBadge {
+                    shell: editor.shell
+                    text: editor.commandFeedbackStatus === "working"
+                        ? "Applying"
+                        : editor.commandFeedbackStatus === "succeeded"
+                            ? "Applied"
+                            : "Not applied"
+                    badgeColor: editor.commandFeedbackStatus === "succeeded"
+                        ? editor.shell.successColor
+                        : editor.commandFeedbackStatus === "working"
+                            ? editor.shell.accentColor
+                            : editor.shell.warningColor
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: editor.commandFeedbackMessage
+                    color: editor.shell.mutedText
+                    wrapMode: Text.WordWrap
                 }
             }
         }

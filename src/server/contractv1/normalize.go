@@ -662,6 +662,8 @@ func normalizeLighting(
 		profileIDs[profile.ID] = true
 		supportedProfileIDs = append(supportedProfileIDs, profile.ID)
 	}
+	assignmentBlockReason := lightingAssignmentBlockReason(detail)
+	assignmentAvailable := channelAssignment && assignmentBlockReason == ""
 	targets := make([]LightingTarget, 0)
 	for _, channel := range channels {
 		if channel.LightingEffect == nil {
@@ -680,15 +682,19 @@ func normalizeLighting(
 			name = channel.Name
 		}
 		operations := []string{"read"}
-		if channelAssignment {
+		if assignmentAvailable {
 			operations = append(operations, "assign-profile")
+		}
+		description := fmt.Sprintf("Channel %s · %s", channel.ID, channel.Description)
+		if assignmentBlockReason != "" {
+			description += " · " + assignmentBlockReason
 		}
 		targets = append(targets, LightingTarget{
 			ID:                  fmt.Sprintf("channel:%d", channelID),
 			Scope:               "channel",
 			ChannelID:           &channelID,
 			Name:                fmt.Sprintf("%s · Ch %s", name, channel.ID),
-			Description:         fmt.Sprintf("Channel %s · %s", channel.ID, channel.Description),
+			Description:         description,
 			ActiveProfile:       active,
 			SupportedProfileIDs: append([]string(nil), supportedProfileIDs...),
 			Operations:          operations,
@@ -720,6 +726,17 @@ func normalizeLighting(
 		Profiles:     profiles,
 		ProfileCount: len(profiles),
 	}
+}
+
+func lightingAssignmentBlockReason(detail map[string]any) string {
+	profile := mapping(lookup(detail, "DeviceProfile"))
+	if enabled, ok := booleanValue(lookup(profile, "OpenRGBIntegration")); ok && enabled {
+		return "Managed by OpenRGB"
+	}
+	if enabled, ok := booleanValue(lookup(profile, "RGBCluster")); ok && enabled {
+		return "Managed by RGB Cluster"
+	}
+	return ""
 }
 
 func colorHex(color map[string]any) string {

@@ -228,6 +228,36 @@ func TestLightingAssignmentRequiresExplicitChannelAuthorization(t *testing.T) {
 	}
 }
 
+func TestLightingAssignmentIsSuppressedByExternalLightingControl(t *testing.T) {
+	tests := []struct {
+		name   string
+		field  string
+		reason string
+	}{
+		{name: "rgb cluster", field: "RGBCluster", reason: "Managed by RGB Cluster"},
+		{name: "openrgb", field: "OpenRGBIntegration", reason: "Managed by OpenRGB"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := fixtureInput()
+			detail := input.Devices[0].Detail.(map[string]any)
+			detail["DeviceProfile"] = map[string]any{test.field: true}
+			targets := BuildSnapshot(input).Devices[0].Lighting.Targets
+			if len(targets) == 0 {
+				t.Fatal("expected normalized lighting targets")
+			}
+			for _, target := range targets {
+				if stringSliceContains(target.Operations, "assign-profile") {
+					t.Fatalf("externally managed target published assignment: %#v", target)
+				}
+				if !strings.Contains(target.Description, test.reason) {
+					t.Fatalf("target description %q does not disclose %q", target.Description, test.reason)
+				}
+			}
+		})
+	}
+}
+
 func TestSnapshotDoesNotLeakRawPathsOrInternalObjects(t *testing.T) {
 	payload, err := json.Marshal(BuildSnapshot(fixtureInput()))
 	if err != nil {
