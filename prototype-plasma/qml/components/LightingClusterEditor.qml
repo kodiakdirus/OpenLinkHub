@@ -8,10 +8,33 @@ Panel {
 
     required property var ownership
     required property var targets
+    required property var availableDevices
 
     signal closeRequested()
+    signal editMembersRequested()
 
     Layout.fillWidth: true
+
+    function lightingEditorFor(device) {
+        const tabs = device.tabs || []
+        for (let index = 0; index < tabs.length; ++index) {
+            if (tabs[index].name === "Lighting" && tabs[index].lightingEditor !== undefined) {
+                return tabs[index].lightingEditor
+            }
+        }
+        return null
+    }
+
+    function assignedDeviceCount() {
+        let count = 0
+        const devices = availableDevices || []
+        for (let index = 0; index < devices.length; ++index) {
+            const lighting = lightingEditorFor(devices[index])
+            if (lighting && lighting.ownership
+                    && lighting.ownership.controller === "rgb-cluster") count += 1
+        }
+        return count
+    }
 
     RowLayout {
         Layout.fillWidth: true
@@ -43,6 +66,11 @@ Panel {
             badgeColor: shell.warningColor
         }
         Button {
+            text: "Edit members…"
+            icon.name: "list-add"
+            onClicked: clusterEditor.editMembersRequested()
+        }
+        Button {
             text: "Close"
             icon.name: "window-close"
             onClicked: clusterEditor.closeRequested()
@@ -55,12 +83,12 @@ Panel {
         Layout.fillWidth: true
         Label {
             Layout.fillWidth: true
-            text: "Cluster members · " + targets.length
+            text: "Cluster devices · " + clusterEditor.assignedDeviceCount()
             color: shell.secondaryText
             font.weight: Font.DemiBold
         }
         Label {
-            text: "Current output: " + (ownership.label || "RGB Cluster")
+            text: "Lighting targets · " + targets.length
             color: shell.mutedText
         }
     }

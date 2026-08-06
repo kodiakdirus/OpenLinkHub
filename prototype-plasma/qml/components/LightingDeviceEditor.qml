@@ -196,6 +196,8 @@ ColumnLayout {
         shell: editor.shell
         ownership: editor.ownership
         targets: editor.targets
+        availableDevices: editor.shell.devices
+        onEditMembersRequested: clusterMembersDialog.openEditor()
         onCloseRequested: editor.clusterEditorOpen = false
     }
 
@@ -204,6 +206,12 @@ ColumnLayout {
         shell: editor.shell
         ownership: editor.ownership
         targets: editor.targets
+    }
+
+    LightingClusterMembersDialog {
+        id: clusterMembersDialog
+        shell: editor.shell
+        availableDevices: editor.shell.devices
     }
 
     GridLayout {

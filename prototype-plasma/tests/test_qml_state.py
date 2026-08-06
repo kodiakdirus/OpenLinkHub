@@ -109,6 +109,9 @@ class QmlStateTests(unittest.TestCase):
         cluster = (QML_ROOT / "components" / "LightingClusterEditor.qml").read_text(
             encoding="utf-8"
         )
+        members = (
+            QML_ROOT / "components" / "LightingClusterMembersDialog.qml"
+        ).read_text(encoding="utf-8")
         controller = (prototype / "backend" / "controller.py").read_text(
             encoding="utf-8"
         )
@@ -123,6 +126,14 @@ class QmlStateTests(unittest.TestCase):
         self.assertIn("enabled: false", dialog)
         self.assertIn('text: "RGB Cluster editor"', cluster)
         self.assertIn('text: "Design shell · no writes"', cluster)
+        self.assertIn('text: "Edit members…"', cluster)
+        self.assertIn("availableDevices: editor.shell.devices", editor)
+        self.assertIn('title: "Edit RGB Cluster members"', members)
+        self.assertIn("Attached channels follow their parent device", members)
+        self.assertIn('text: "Apply membership"', members)
+        self.assertIn("enabled: false", members)
+        self.assertIn("ownership.controller === \"rgb-cluster\"", members)
+        self.assertIn("ownership.controller === \"openrgb\"", members)
         self.assertNotIn("changeLightingController", editor)
         self.assertNotIn("/api/v1/lighting/ownership", controller)
 

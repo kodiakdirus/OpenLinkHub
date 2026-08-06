@@ -27,7 +27,13 @@ disabled in this checkpoint. Global profiles must not switch ownership
 implicitly; ownership is an explicit device-level decision.
 
 When RGB Cluster owns the device, “Open Cluster editor” reveals a non-writing
-workspace shell for the synchronized scene and its members. This establishes
+workspace shell for the synchronized scene and its members. Cluster membership
+is modeled at the top-level device boundary used by the backend: attached LINK
+Hub channels follow their parent Hub rather than appearing as independently
+selectable members. “Edit members…” opens a local draft checklist of all
+published lighting-capable devices. OpenRGB-owned devices are disclosed and
+locked. The draft can be changed and reset, but applying membership remains
+disabled until a separately reviewed guarded command exists. This establishes
 the information hierarchy without inventing a backend capability.
 
 ## Future guarded transaction
