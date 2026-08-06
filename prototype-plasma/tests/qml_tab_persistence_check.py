@@ -32,12 +32,20 @@ def settle(app: QGuiApplication) -> None:
 
 
 def invoke(target: QObject, method: str) -> None:
-    if not QMetaObject.invokeMethod(
-        target,
-        method,
-        Qt.ConnectionType.DirectConnection,
-    ):
-        raise RuntimeError(f"Could not invoke {method}.")
+    try:
+        QMetaObject.invokeMethod(
+            target,
+            method,
+            Qt.ConnectionType.DirectConnection,
+        )
+    except RuntimeError as error:
+        methods = [
+            bytes(target.metaObject().method(index).methodSignature()).decode()
+            for index in range(target.metaObject().methodCount())
+        ]
+        raise RuntimeError(
+            f"Could not invoke {method}; available methods: {methods}."
+        ) from error
 
 
 def main() -> int:
@@ -84,6 +92,88 @@ def main() -> int:
     if tab_bar.property("currentIndex") != selected_index:
         print("Telemetry-style model replacement reset the visible tab indicator.", file=sys.stderr)
         return 7
+
+    cluster_members = root.findChild(QObject, "clusterMembersDialog")
+    if cluster_members is None:
+        print("RGB Cluster member editor was not created.", file=sys.stderr)
+        return 25
+    ownership_devices = [
+        {
+            "id": "hub-1",
+            "name": "iCUE LINK System Hub",
+            "icon": "computer",
+            "tabs": [{
+                "name": "Lighting",
+                "lightingEditor": {
+                    "targets": [{"key": f"channel:{channel}"} for channel in range(7)],
+                    "ownership": {
+                        "controller": "rgb-cluster",
+                        "label": "RGB Cluster",
+                        "operations": ["read", "change-controller"],
+                    },
+                },
+            }],
+        },
+        {
+            "id": "keyboard-1",
+            "name": "K100 AIR",
+            "icon": "input-keyboard",
+            "tabs": [{
+                "name": "Lighting",
+                "lightingEditor": {
+                    "targets": [{"key": "device"}],
+                    "ownership": {
+                        "controller": "individual",
+                        "label": "Individual devices",
+                        "operations": ["read", "change-controller"],
+                    },
+                },
+            }],
+        },
+        {
+            "id": "mouse-1",
+            "name": "SCIMITAR ELITE",
+            "icon": "input-mouse",
+            "tabs": [{
+                "name": "Lighting",
+                "lightingEditor": {
+                    "targets": [{"key": "device"}],
+                    "ownership": {
+                        "controller": "individual",
+                        "label": "Individual devices",
+                        "operations": ["read", "change-controller"],
+                    },
+                },
+            }],
+        },
+    ]
+    cluster_members.setProperty("availableDevices", ownership_devices)
+    invoke(cluster_members, "open")
+    settle(app)
+    membership_draft = deepcopy(variant(cluster_members.property("draftMembers")))
+    if len(membership_draft) < 2:
+        print("RGB Cluster member editor has insufficient candidates.", file=sys.stderr)
+        return 26
+    membership_draft[1]["selected"] = not membership_draft[1]["initialSelected"]
+    drafted_key = membership_draft[1]["key"]
+    drafted_selection = membership_draft[1]["selected"]
+    cluster_members.setProperty("draftMembers", membership_draft)
+    settle(app)
+
+    membership_refresh = deepcopy(ownership_devices)
+    membership_refresh[0]["telemetry"] = "refreshed"
+    cluster_members.setProperty("availableDevices", membership_refresh)
+    settle(app)
+    refreshed_draft = variant(cluster_members.property("draftMembers"))
+    refreshed_member = next(
+        (member for member in refreshed_draft if member["key"] == drafted_key),
+        None,
+    )
+    if refreshed_member is None or refreshed_member["selected"] != drafted_selection:
+        print("Telemetry replacement reset the RGB Cluster membership draft.", file=sys.stderr)
+        return 27
+    cluster_members.setProperty("visible", False)
+    settle(app)
 
     page.setProperty("selectedTabKey", "Overview")
     settle(app)

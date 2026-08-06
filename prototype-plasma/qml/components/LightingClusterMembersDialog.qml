@@ -5,10 +5,12 @@ import org.kde.kirigami as Kirigami
 
 Dialog {
     id: dialog
+    objectName: "clusterMembersDialog"
 
     required property var shell
     required property var availableDevices
     property var draftMembers: []
+    property string publishedSignature: ""
     readonly property int selectedCount: draftMembers.filter(member => member.selected).length
     readonly property int changedCount: draftMembers.filter(member => member.selected !== member.initialSelected).length
     readonly property var changedMember: changedCount === 1
@@ -38,7 +40,7 @@ Dialog {
         return null
     }
 
-    function rebuildDraft() {
+    function publishedMembers() {
         const candidates = []
         const devices = availableDevices || []
         for (let index = 0; index < devices.length; ++index) {
@@ -59,6 +61,47 @@ Dialog {
                 canChange: (ownership.operations || []).indexOf("change-controller") >= 0
             })
         }
+        return candidates
+    }
+
+    function signatureFor(candidates) {
+        return JSON.stringify(candidates.map(member => [
+            member.key,
+            member.name,
+            member.icon,
+            member.description,
+            member.controller,
+            member.initialSelected,
+            member.locked,
+            member.canChange
+        ]))
+    }
+
+    function rebuildDraft() {
+        const candidates = publishedMembers()
+        publishedSignature = signatureFor(candidates)
+        draftMembers = candidates
+    }
+
+    function reconcileDraft() {
+        const candidates = publishedMembers()
+        const nextSignature = signatureFor(candidates)
+        if (nextSignature === publishedSignature) return
+
+        const previousByKey = ({})
+        for (let index = 0; index < draftMembers.length; ++index) {
+            previousByKey[draftMembers[index].key] = draftMembers[index]
+        }
+        for (let index = 0; index < candidates.length; ++index) {
+            const incoming = candidates[index]
+            const previous = previousByKey[incoming.key]
+            const baselineUnchanged = previous !== undefined
+                && previous.initialSelected === incoming.initialSelected
+            if (baselineUnchanged && previous.selected !== previous.initialSelected) {
+                incoming.selected = previous.selected
+            }
+        }
+        publishedSignature = nextSignature
         draftMembers = candidates
     }
 
@@ -100,12 +143,23 @@ Dialog {
     }
 
     function openEditor() {
-        rebuildDraft()
         open()
     }
 
+    onOpened: rebuildDraft()
+
     onAvailableDevicesChanged: {
-        if (visible && !shell.backendClient.commandBusy) Qt.callLater(rebuildDraft)
+        if (visible && !shell.backendClient.commandBusy) Qt.callLater(reconcileDraft)
+    }
+
+    Connections {
+        target: dialog.shell.backendClient
+
+        function onCommandChanged() {
+            if (dialog.visible && !dialog.shell.backendClient.commandBusy) {
+                Qt.callLater(dialog.reconcileDraft)
+            }
+        }
     }
 
     ColumnLayout {
@@ -202,7 +256,7 @@ Dialog {
                                 checked: modelData.selected
                                 enabled: !modelData.locked
                                 Accessible.name: "Include " + modelData.name + " in RGB Cluster"
-                                onToggled: dialog.setMemberSelected(index, checked)
+                                onClicked: dialog.setMemberSelected(index, checked)
                             }
                         }
                     }

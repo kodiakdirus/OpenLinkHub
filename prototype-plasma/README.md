@@ -92,8 +92,8 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   capability, target, and effect models instead of flashing application chrome
 - Telemetry updates values through stable identity-keyed presentation models;
   open cooling/profile choices, expanded channel details, global search,
-  per-device controls, Overview cells, filters, and scroll owners are not
-  recreated on an ordinary poll
+  per-device controls, RGB Cluster membership drafts, Overview cells, filters,
+  and scroll owners are not recreated on an ordinary poll
 - Stable Devices-page filter/card presentation with deterministic card ordering;
   user-relevant hidden wireless transports appear as receiver cards while
   internal cluster/helper records remain excluded
