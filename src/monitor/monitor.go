@@ -12,6 +12,7 @@ import (
 	"OpenLinkHub/src/inputmanager"
 	"OpenLinkHub/src/logger"
 	"OpenLinkHub/src/openrgb"
+	"OpenLinkHub/src/server"
 	"github.com/godbus/dbus/v5"
 	"os"
 	"slices"
@@ -89,6 +90,7 @@ func Init() {
 				openrgb.Close()
 				openrgb.ClearDeviceControllers()
 			}
+			server.StopLightingRuntime()
 			devices.Stop()
 			inputmanager.Stop()
 		}, func() {

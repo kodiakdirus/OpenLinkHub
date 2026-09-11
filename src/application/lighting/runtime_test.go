@@ -19,13 +19,13 @@ type fakeRuntime struct {
 func (f *fakeRuntime) State() RuntimeState {
 	return RuntimeState{Revision: 7, Mode: "unknown", Renderer: "running", Profile: "nebula", Members: []string{"hub", "keyboard"}, Operations: []string{"recover", "identify"}}
 }
-func (f *fakeRuntime) Recover(ctx context.Context) error {
+func (f *fakeRuntime) Recover(ctx context.Context, revision uint64) error {
 	if f.block != nil {
 		<-f.block
 	}
 	return nil
 }
-func (f *fakeRuntime) Identify(ctx context.Context, id string, until time.Time) error {
+func (f *fakeRuntime) Identify(ctx context.Context, revision uint64, id string, until time.Time) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.overlay, f.until = id, until
@@ -129,4 +129,106 @@ func TestRuntimeFailedRestorationRetainsLease(t *testing.T) {
 	if result = s.Identify(context.Background(), RuntimeCommand{ExpectedRevision: 7, DeviceID: "hub", DurationMS: 1000}); result.Status != "unavailable" {
 		t.Fatal(result)
 	}
+}
+
+func TestRuntimeRetainsSharedMutationGateAfterTimeout(t *testing.T) {
+	f := &fakeRuntime{block: make(chan struct{})}
+	gate := make(chan struct{}, 1)
+	s := NewRuntimeServiceWithGate(f, 10*time.Millisecond, gate)
+	if got := s.Recover(context.Background(), RuntimeCommand{ExpectedRevision: 7}); got.Status != "timeout" {
+		t.Fatal(got)
+	}
+	select {
+	case gate <- struct{}{}:
+		t.Fatal("legacy writer could overlap timed-out runtime operation")
+	default:
+	}
+	close(f.block)
+	deadline := time.After(time.Second)
+	for len(gate) != 0 {
+		select {
+		case <-deadline:
+			t.Fatal("gate never released")
+		case <-time.After(time.Millisecond):
+		}
+	}
+}
+
+type lateRuntime struct {
+	fakeRuntime
+	entered       chan struct{}
+	release       chan struct{}
+	panicIdentify bool
+}
+
+func (f *lateRuntime) Identify(ctx context.Context, revision uint64, id string, expiry time.Time) error {
+	if f.panicIdentify {
+		panic("fake identify failure")
+	}
+	close(f.entered)
+	<-f.release
+	return f.fakeRuntime.Identify(ctx, revision, id, expiry)
+}
+
+func TestLateIdentificationRestoresBeforeReleasingOperation(t *testing.T) {
+	f := &lateRuntime{entered: make(chan struct{}), release: make(chan struct{})}
+	s := NewRuntimeService(f, 10*time.Millisecond)
+	result := s.Identify(context.Background(), RuntimeCommand{ExpectedRevision: 7, DeviceID: "hub", DurationMS: 1000})
+	if result.Status != "timeout" {
+		t.Fatal(result)
+	}
+	<-f.entered
+	if got := s.Cancel(context.Background(), s.State().Lease.ID); got.Status != "busy" {
+		t.Fatal(got)
+	}
+	close(f.release)
+	deadline := time.After(time.Second)
+	for s.State().Lease != nil {
+		select {
+		case <-deadline:
+			t.Fatal("late identify lease leaked")
+		case <-time.After(time.Millisecond):
+		}
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.overlay != "" {
+		t.Fatal("late identify overlay survived cleanup")
+	}
+}
+
+func TestPanickingIdentifyStillRestoresLease(t *testing.T) {
+	f := &lateRuntime{panicIdentify: true}
+	s := NewRuntimeService(f, time.Second)
+	if got := s.Identify(context.Background(), RuntimeCommand{ExpectedRevision: 7, DeviceID: "hub", DurationMS: 1000}); got.Status != "unverified" {
+		t.Fatal(got)
+	}
+	if s.State().Lease != nil {
+		t.Fatal("panic left active lease")
+	}
+}
+
+type blockedRestore struct {
+	fakeRuntime
+	release chan struct{}
+}
+
+func (f *blockedRestore) Restore(ctx context.Context, id string) error {
+	<-f.release
+	return f.fakeRuntime.Restore(ctx, id)
+}
+func TestCloseDeadlineDoesNotReleaseBlockedRestoration(t *testing.T) {
+	f := &blockedRestore{release: make(chan struct{})}
+	s := NewRuntimeService(f, 10*time.Millisecond)
+	_ = s.Identify(context.Background(), RuntimeCommand{ExpectedRevision: 7, DeviceID: "hub", DurationMS: 1000})
+	if err := s.Close(context.Background()); err == nil {
+		t.Fatal("blocked restoration reported closed")
+	}
+	if len(s.State().Operations) != 0 {
+		t.Fatal("shutdown still advertises operations")
+	}
+	if got := s.Recover(context.Background(), RuntimeCommand{ExpectedRevision: 7}); got.Status != "busy" {
+		t.Fatal(got)
+	}
+	close(f.release)
 }

@@ -73,3 +73,33 @@ restoration failure, shutdown, and isolation of selected-member overlay bytes.
 No tests send real HID commands. Before deployment, preserve accepted source
 `07b215cc` / selector `60` and run the canonical CanisLabus Runbook 32.11 hardware
 acceptance, including cooling assignments and user-confirmed visible lighting.
+
+## Candidate review hardening
+
+The subsequent source review found and corrected these gaps before packaging:
+
+- Runtime operations now share admission with legacy/versioned lighting writes;
+  the active-lease guard runs inside that gate. A late runtime driver retains
+  both gates until actual completion, preventing a race with legacy mutations.
+- Recovery and identification pass the expected catalog revision into the
+  adapter and check it again under the Cluster lifecycle lock. Multiple channel
+  controllers belonging to one physical member are deduplicated in the catalog.
+- Lease expiry is installed before identification dispatch. Errors, panics,
+  cancellation, and late completion remove the override before releasing the
+  operation slot. Shutdown closes admission and joins in-flight identification
+  before checking/restoring its lease; a stalled restore has a bounded caller.
+- Sleep and normal shutdown invoke runtime cleanup before stopping devices.
+- Plasma discards pre-command polls, queues cancellation when an editor closes
+  during a request, and rejects malformed runtime catalogs. Oversized HTTP
+  command bodies are rejected rather than silently truncated.
+
+The family investigation confirmed ordinary blocking `Read` calls in LINK Hub,
+K100 AIR USB, receiver-backed K100, and Scimitar USB transfer methods. K100 AIR
+USB mode helpers call `Fatal` on transfer errors; the other reviewed helpers
+log errors without returning a verified physical mode. K100 connection-mode and
+sleep-mode commands are not hardware/software lighting-mode read-back. None is
+repurposed into a physical-mode recovery operation in this candidate.
+
+The reviewed binary must include the separately tracked CanisLabus K100 toggle
+patch in an isolated build tree, with source/patch/binary/UI checksums recorded.
+Building the unpatched source alone is not an equivalent deployment candidate.

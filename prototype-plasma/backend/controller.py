@@ -61,6 +61,8 @@ class BackendController(QObject):
 
         self._lighting_runtime: dict[str, Any] = {}
         self._runtime_refreshing = False
+        self._runtime_epoch = 0
+        self._runtime_cancel_pending = False
         self._runtime_lease_id = ""
         self._mode = "demo"
         self._connection_state = "demo"
@@ -87,6 +89,25 @@ class BackendController(QObject):
         self._cooling_zones: list[dict[str, Any]] = []
         self._zone_values: dict[str, str] = {}
 
+    @staticmethod
+    def _valid_runtime_state(state: Any) -> bool:
+        if not isinstance(state, dict):
+            return False
+        revision = state.get("revision")
+        if type(revision) is not int or not 0 <= revision <= 2**53 - 1:
+            return False
+        if state.get("mode") not in {"unknown", "software-live", "hardware-memory", "transitioning"}:
+            return False
+        if state.get("renderer") not in {"running", "stalled", "stopped", "unavailable"}:
+            return False
+        members, operations = state.get("members"), state.get("operations")
+        if not isinstance(members, list) or not all(isinstance(item, str) and item for item in members):
+            return False
+        if not isinstance(operations, list) or not all(isinstance(item, str) and item in {"recover", "identify"} for item in operations):
+            return False
+        lease = state.get("lease")
+        return lease is None or (isinstance(lease, dict) and all(isinstance(lease.get(key), str) and lease[key] for key in ("id", "deviceId", "expiresAt", "status")))
+
     @pyqtProperty("QVariantMap", notify=lightingRuntimeChanged)
     def lightingRuntime(self) -> dict[str, Any]:
         return self._lighting_runtime
@@ -97,12 +118,13 @@ class BackendController(QObject):
             return
         self._runtime_refreshing = True
         generation = self._generation
+        epoch = self._runtime_epoch
 
         def accept(payload: dict[str, Any] | None, error: str | None) -> None:
             self._runtime_refreshing = False
-            if generation != self._generation:
+            if generation != self._generation or epoch != self._runtime_epoch:
                 return
-            if error or not payload or payload.get("apiVersion") != "1.0" or payload.get("kind") != "lighting-runtime" or not isinstance(payload.get("data"), dict):
+            if error or not payload or payload.get("apiVersion") != "1.0" or payload.get("kind") != "lighting-runtime" or not self._valid_runtime_state(payload.get("data")):
                 self._lighting_runtime = {"mode": "unknown", "renderer": "unavailable", "operations": []}
             else:
                 self._lighting_runtime = payload["data"]
@@ -113,7 +135,11 @@ class BackendController(QObject):
         self._get_document("/api/v1/lighting/runtime", accept)
 
     def _runtime_command(self, action: str, device_id: str = "") -> None:
-        if self._mode != "live" or self._command_busy:
+        if self._mode != "live":
+            return
+        if self._command_busy:
+            if action == "cancel":
+                self._runtime_cancel_pending = True
             return
         state = self._lighting_runtime
         if action != "cancel" and action not in state.get("operations", []):
@@ -131,22 +157,29 @@ class BackendController(QObject):
             if not self._runtime_lease_id:
                 return
             payload = {"leaseId": self._runtime_lease_id}
+        self._runtime_epoch += 1
         generation = self._generation
         self._set_command(True, "working", "Updating temporary lighting control…")
 
         def accept(document: dict[str, Any] | None, error: str | None) -> None:
             if generation != self._generation:
                 return
+            self._runtime_epoch += 1
             if error or not document or document.get("apiVersion") != "1.0" or document.get("kind") != "lighting-runtime-result" or not isinstance(document.get("data"), dict):
                 self._set_command(False, "unverified", error or "The lighting result could not be verified.")
             else:
                 result = document["data"]
                 self._set_command(False, str(result.get("status", "unverified")), str(result.get("message", "Lighting outcome unverified.")))
-                lease = result.get("state", {}).get("lease", {})
+                observed = result.get("state")
+                lease = observed.get("lease") if isinstance(observed, dict) else None
+                lease = lease if isinstance(lease, dict) else {}
                 if action == "identify" and result.get("status") == "identifying":
                     self._runtime_lease_id = str(lease.get("id", ""))
                 elif action == "cancel" and result.get("status") == "restored":
                     self._runtime_lease_id = ""
+            if self._runtime_cancel_pending:
+                self._runtime_cancel_pending = False
+                self.cancelLightingIdentification()
             self.refreshLightingRuntime()
 
         path = "/api/v1/lighting/recover" if action == "recover" else "/api/v1/lighting/identify"

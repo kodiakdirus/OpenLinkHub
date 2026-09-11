@@ -55,3 +55,25 @@ func TestIdentificationOnlyOverlaysSelectedDeviceUntilExpiry(t *testing.T) {
 		t.Fatal("identification changed saved state")
 	}
 }
+
+func TestRecoveryRechecksRevisionUnderLifecycleLock(t *testing.T) {
+	d := &Device{DeviceProfile: &DeviceProfile{RGBProfile: "nebula"}}
+	d.updateRuntimeState()
+	if err := d.recoverRenderer(context.Background(), d.runtimeState().Revision+1); err == nil {
+		t.Fatal("stale catalog restarted renderer")
+	}
+	if d.renderer.State() != "stopped" {
+		t.Fatal("stale request changed renderer")
+	}
+}
+
+func TestCatalogDeduplicatesPhysicalMembers(t *testing.T) {
+	d := &Device{DeviceProfile: &DeviceProfile{RGBProfile: "nebula"}, Controllers: []*common.ClusterController{
+		{Serial: "hub", LedChannels: 1, WriteColorEx: func([]byte, int) {}},
+		{Serial: "hub", LedChannels: 1, WriteColorEx: func([]byte, int) {}},
+	}}
+	d.updateRuntimeState()
+	if got := d.runtimeState().Members; !reflect.DeepEqual(got, []string{"hub"}) {
+		t.Fatal(got)
+	}
+}

@@ -33,8 +33,8 @@ type Lease struct {
 // Restore must remove the overlay and read back its removal.
 type RuntimeDriver interface {
 	State() RuntimeState
-	Recover(context.Context) error
-	Identify(context.Context, string, time.Time) error
+	Recover(context.Context, uint64) error
+	Identify(context.Context, uint64, string, time.Time) error
 	Restore(context.Context, string) error
 }
 
@@ -57,6 +57,7 @@ type RuntimeService struct {
 	driver  RuntimeDriver
 	timeout time.Duration
 	slot    chan struct{}
+	shared  chan struct{}
 	mu      sync.Mutex
 	lease   *Lease
 	timer   *time.Timer
@@ -67,10 +68,45 @@ func NewRuntimeService(driver RuntimeDriver, timeout time.Duration) *RuntimeServ
 	return &RuntimeService{driver: driver, timeout: timeout, slot: make(chan struct{}, 1)}
 }
 
+// NewRuntimeServiceWithGate shares admission with legacy/versioned lighting
+// mutations. The gate is held until the driver actually finishes, not just
+// until the HTTP caller times out.
+func NewRuntimeServiceWithGate(driver RuntimeDriver, timeout time.Duration, gate chan struct{}) *RuntimeService {
+	s := NewRuntimeService(driver, timeout)
+	s.shared = gate
+	return s
+}
+
+func (s *RuntimeService) acquire() bool {
+	select {
+	case s.slot <- struct{}{}:
+	default:
+		return false
+	}
+	if s.shared != nil {
+		select {
+		case s.shared <- struct{}{}:
+		default:
+			<-s.slot
+			return false
+		}
+	}
+	return true
+}
+func (s *RuntimeService) release() {
+	if s.shared != nil {
+		<-s.shared
+	}
+	<-s.slot
+}
+
 func (s *RuntimeService) State() RuntimeState {
 	state := s.driver.State()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		state.Operations = []string{}
+	}
 	if s.lease != nil {
 		value := *s.lease
 		state.Lease = &value
@@ -79,27 +115,26 @@ func (s *RuntimeService) State() RuntimeState {
 }
 
 func (s *RuntimeService) run(ctx context.Context, operation func(context.Context) RuntimeResult) RuntimeResult {
-	select {
-	case s.slot <- struct{}{}:
-	default:
+	if !s.acquire() {
 		return RuntimeResult{Status: "busy", Message: "A lighting operation is still running; no overlapping command was started."}
 	}
 	ctx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 	result := make(chan RuntimeResult, 1)
 	go func() {
+		value := RuntimeResult{Status: "unverified", Message: "Lighting adapter failed; physical outcome is unverified."}
 		defer func() {
-			if recover() != nil {
-				result <- RuntimeResult{Status: "unverified", Message: "Lighting adapter failed; physical outcome is unverified."}
-			}
+			_ = recover()
+			s.release()
+			result <- value
 		}()
-		defer func() { <-s.slot }()
 		if ctx.Err() != nil {
-			result <- RuntimeResult{Status: "timeout", Message: "Lighting command expired before dispatch."}
+			value = RuntimeResult{Status: "timeout", Message: "Lighting command expired before dispatch."}
 			return
 		}
-		result <- operation(ctx)
+		value = operation(ctx)
 	}()
+
 	select {
 	case value := <-result:
 		return value
@@ -134,7 +169,7 @@ func (s *RuntimeService) Recover(ctx context.Context, command RuntimeCommand) Ru
 		if result.State.Lease != nil {
 			return RuntimeResult{Status: "busy", Message: "End identification before recovering the synchronized renderer."}
 		}
-		if err := s.driver.Recover(ctx); err != nil {
+		if err := s.driver.Recover(ctx, command.ExpectedRevision); err != nil {
 			return RuntimeResult{Status: "unverified", Message: err.Error(), State: s.State()}
 		}
 		state := s.State()
@@ -175,20 +210,49 @@ func (s *RuntimeService) Identify(ctx context.Context, command RuntimeCommand) R
 		s.mu.Lock()
 		s.lease = lease
 		s.mu.Unlock()
-		if err := s.driver.Identify(ctx, lease.DeviceID, lease.ExpiresAt); err != nil {
-			cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.timeout)
-			defer cancel()
-			_ = s.restore(cleanup, lease.ID)
-			return RuntimeResult{Status: "unverified", Message: err.Error(), State: s.State()}
-		}
+		// Install expiry before dispatch: panics and late replies must not
+		// leave an active lease with no cleanup scheduled.
 		s.mu.Lock()
 		s.timer = time.AfterFunc(time.Until(lease.ExpiresAt), func() { s.expire(lease.ID) })
 		s.mu.Unlock()
+		applied := false
+		defer func() {
+			if !applied {
+				cleanup, cancel := context.WithTimeout(context.Background(), s.timeout)
+				defer cancel()
+				_ = s.restore(cleanup, lease.ID)
+			}
+		}()
+		if err := s.driver.Identify(ctx, command.ExpectedRevision, lease.DeviceID, lease.ExpiresAt); err != nil {
+			return RuntimeResult{Status: "unverified", Message: err.Error()}
+		}
+		if ctx.Err() != nil || !time.Now().Before(lease.ExpiresAt) {
+			return RuntimeResult{Status: "timeout", Message: "Identification finished after its deadline; the override is being removed."}
+		}
+		s.mu.Lock()
+		closed := s.closed
+		s.mu.Unlock()
+		if closed {
+			return RuntimeResult{Status: "unavailable", Message: "Lighting is shutting down; the override is being removed."}
+		}
+		applied = true
 		return RuntimeResult{Status: "identifying", Message: "Identifying this device temporarily; the saved scene is unchanged.", State: s.State()}
 	})
 }
 
-func (s *RuntimeService) restore(ctx context.Context, id string) error {
+func (s *RuntimeService) restore(ctx context.Context, id string) (err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.New("Identification restoration failed unexpectedly")
+		}
+		if err != nil {
+			s.mu.Lock()
+			if s.lease != nil && s.lease.ID == id {
+				s.lease.Status = "restore-unverified"
+			}
+			s.mu.Unlock()
+		}
+	}()
 	s.mu.Lock()
 	lease := s.lease
 	if lease == nil || lease.ID != id {
@@ -241,7 +305,10 @@ func (s *RuntimeService) expire(id string) {
 	// driver also enforces expiry at frame generation, so no queued renewal can
 	// extend an expired override while this cleanup waits.
 	s.slot <- struct{}{}
-	defer func() { <-s.slot }()
+	if s.shared != nil {
+		s.shared <- struct{}{}
+	}
+	defer s.release()
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	defer cancel()
 	_ = s.restore(ctx, id)
@@ -250,14 +317,37 @@ func (s *RuntimeService) expire(id string) {
 func (s *RuntimeService) Close(ctx context.Context) error {
 	s.mu.Lock()
 	s.closed = true
-	lease := s.lease
 	s.mu.Unlock()
-	if lease == nil {
-		return nil
+	ctx, cancel := context.WithTimeout(ctx, s.timeout)
+	defer cancel()
+	select {
+	case s.slot <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-	result := s.Cancel(ctx, lease.ID)
-	if result.Status != "restored" {
-		return errors.New(result.Message)
+	if s.shared != nil {
+		select {
+		case s.shared <- struct{}{}:
+		case <-ctx.Done():
+			<-s.slot
+			return ctx.Err()
+		}
 	}
-	return nil
+	done := make(chan error, 1)
+	go func() {
+		var err error
+		defer func() { s.release(); done <- err }()
+		s.mu.Lock()
+		lease := s.lease
+		s.mu.Unlock()
+		if lease != nil {
+			err = s.restore(ctx, lease.ID)
+		}
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }

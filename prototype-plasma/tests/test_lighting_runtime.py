@@ -56,3 +56,31 @@ class LightingRuntimeTests(unittest.TestCase):
         self.client.setMode("demo")
         callback({"apiVersion": "1.0", "kind": "lighting-runtime-result", "data": {"status": "identifying", "state": {"lease": {"id": "stale"}}}}, None)
         self.assertEqual(self.client._runtime_lease_id, "")
+
+    def test_pre_command_poll_cannot_discard_new_lease(self):
+        self.client._mode = "live"
+        self.client.refreshLightingRuntime()
+        _, old_poll = self.calls.pop()
+        self.client.identifyLighting("hub")
+        _, _, callback, _ = self.calls.pop()
+        callback({"apiVersion": "1.0", "kind": "lighting-runtime-result", "data": {"status": "identifying", "state": {"lease": {"id": "new"}}}}, None)
+        old_poll({"apiVersion": "1.0", "kind": "lighting-runtime", "data": {"revision": 7}}, None)
+        self.assertEqual(self.client._runtime_lease_id, "new")
+
+    def test_editor_close_during_identify_cancels_late_lease(self):
+        self.client._mode = "live"
+        self.client.identifyLighting("hub")
+        _, _, callback, _ = self.calls.pop()
+        self.client.cancelLightingIdentification()
+        self.assertTrue(self.client._runtime_cancel_pending)
+        callback({"apiVersion": "1.0", "kind": "lighting-runtime-result", "data": {"status": "identifying", "state": {"lease": {"id": "late"}}}}, None)
+        deletes = [call for call in self.calls if len(call) == 4 and call[3].get("method") == b"DELETE"]
+        self.assertEqual(len(deletes), 1)
+        self.assertEqual(deletes[0][1], {"leaseId": "late"})
+
+    def test_malformed_runtime_fields_disable_operations(self):
+        self.client._mode = "live"
+        self.client.refreshLightingRuntime()
+        _, callback = self.calls.pop()
+        callback({"apiVersion": "1.0", "kind": "lighting-runtime", "data": {"revision": 7, "mode": "unknown", "renderer": "running", "members": ["hub"], "operations": None}}, None)
+        self.assertEqual(self.client.lightingRuntime["operations"], [])

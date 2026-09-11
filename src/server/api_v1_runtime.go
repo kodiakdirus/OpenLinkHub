@@ -4,13 +4,14 @@ import (
 	"OpenLinkHub/src/application/lighting"
 	"OpenLinkHub/src/cluster"
 	"OpenLinkHub/src/server/contractv1"
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 	"time"
 )
 
-var apiV1Runtime = lighting.NewRuntimeService(cluster.RuntimeAdapter{}, 2*time.Second)
+var apiV1Runtime = lighting.NewRuntimeServiceWithGate(cluster.RuntimeAdapter{}, 2*time.Second, lightingMutationGate)
 
 func getLightingRuntime(w http.ResponseWriter, r *http.Request) {
 	state := apiV1Runtime.State()
@@ -22,7 +23,7 @@ func getLightingRuntime(w http.ResponseWriter, r *http.Request) {
 
 func runtimeCommand(w http.ResponseWriter, r *http.Request, action string) {
 	var command lighting.RuntimeCommand
-	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&command); err != nil {
 		http.Error(w, "Invalid lighting command", http.StatusBadRequest)
@@ -63,3 +64,11 @@ func runtimeCommand(w http.ResponseWriter, r *http.Request, action string) {
 func recoverLighting(w http.ResponseWriter, r *http.Request)      { runtimeCommand(w, r, "recover") }
 func identifyLighting(w http.ResponseWriter, r *http.Request)     { runtimeCommand(w, r, "identify") }
 func cancelIdentification(w http.ResponseWriter, r *http.Request) { runtimeCommand(w, r, "cancel") }
+
+// StopLightingRuntime closes admission and removes temporary overlays before
+// device shutdown. Process shutdown still owns the final termination deadline.
+func StopLightingRuntime() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_ = apiV1Runtime.Close(ctx)
+}

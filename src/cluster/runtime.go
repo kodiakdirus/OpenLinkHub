@@ -20,13 +20,13 @@ func (RuntimeAdapter) State() lighting.RuntimeState {
 	}
 	return Get().runtimeState()
 }
-func (RuntimeAdapter) Recover(ctx context.Context) error {
+func (RuntimeAdapter) Recover(ctx context.Context, revision uint64) error {
 	if Get() == nil {
 		return errors.New("Cluster is unavailable")
 	}
-	return Get().recoverRenderer(ctx)
+	return Get().recoverRenderer(ctx, revision)
 }
-func (RuntimeAdapter) Identify(ctx context.Context, serial string, expiry time.Time) error {
+func (RuntimeAdapter) Identify(ctx context.Context, revision uint64, serial string, expiry time.Time) error {
 	if Get() == nil {
 		return errors.New("Cluster is unavailable")
 	}
@@ -35,6 +35,9 @@ func (RuntimeAdapter) Identify(ctx context.Context, serial string, expiry time.T
 		return errors.New("A scene or membership change is still running")
 	}
 	defer d.lifecycle.Unlock()
+	if d.runtimeState().Revision != revision {
+		return errors.New("Lighting catalog changed before dispatch; refresh before retrying")
+	}
 	found := false
 	for _, member := range d.runtimeState().Members {
 		if member == serial {
@@ -50,6 +53,9 @@ func (RuntimeAdapter) Identify(ctx context.Context, serial string, expiry time.T
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if !time.Now().Before(expiry) {
+		return errors.New("Identification lease has expired")
 	}
 	d.overlayMu.Lock()
 	d.overlayDevice, d.overlayExpiry = serial, expiry
@@ -81,11 +87,14 @@ func (d *Device) stopRenderer() error {
 	return d.renderer.Stop(ctx)
 }
 
-func (d *Device) recoverRenderer(ctx context.Context) error {
+func (d *Device) recoverRenderer(ctx context.Context, revision uint64) error {
 	if !d.lifecycle.TryLock() {
 		return errors.New("A scene change is still running")
 	}
 	defer d.lifecycle.Unlock()
+	if d.runtimeState().Revision != revision {
+		return errors.New("Lighting catalog changed before dispatch; refresh before retrying")
+	}
 	if err := d.renderer.Stop(ctx); err != nil {
 		return errors.New("Renderer still has an unfinished writer; no overlapping renderer was started")
 	}
@@ -109,9 +118,11 @@ func (d *Device) recoverRenderer(ctx context.Context) error {
 
 func (d *Device) updateRuntimeState() {
 	state := lighting.RuntimeState{Mode: "unknown", Members: []string{}, Operations: []string{}}
+	seen := make(map[string]bool)
 	d.mutex.RLock()
 	for _, c := range d.Controllers {
-		if c != nil && c.WriteColorEx != nil && c.LedChannels > 0 {
+		if c != nil && c.WriteColorEx != nil && c.LedChannels > 0 && !seen[c.Serial] {
+			seen[c.Serial] = true
 			state.Members = append(state.Members, c.Serial)
 		}
 	}

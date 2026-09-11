@@ -2515,9 +2515,21 @@ func getDeviceID(uri string, r *http.Request) (string, bool) {
 
 func handleFunc(mux *http.ServeMux, path, method string, handler func(w http.ResponseWriter, r *http.Request)) {
 	lightingWrite := method != http.MethodGet && (strings.HasPrefix(path, "/api/color") || strings.HasPrefix(path, "/api/brightness"))
+	guardedLighting := lightingWrite || path == "/api/v1/lighting/assignment" || path == "/api/v1/lighting/ownership"
+	if guardedLighting {
+		next := handler
+		handler = func(w http.ResponseWriter, r *http.Request) {
+			if apiV1Runtime.State().Lease != nil {
+				http.Error(w, "End identification before changing lighting.", http.StatusConflict)
+				return
+			}
+			next(w, r)
+		}
+	}
 	if lightingWrite {
 		handler = boundedHandler(handler, lightingMutationGate, 3*time.Second)
 	}
+
 	switch path {
 	case "/api/v1/service", "/api/v1/capabilities", "/api/v1/snapshot":
 		handler = boundedHandler(handler, snapshotGate, 3*time.Second)
@@ -2527,10 +2539,6 @@ func handleFunc(mux *http.ServeMux, path, method string, handler func(w http.Res
 
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == method {
-			if (lightingWrite || path == "/api/v1/lighting/assignment" || path == "/api/v1/lighting/ownership") && apiV1Runtime.State().Lease != nil {
-				http.Error(w, "End identification before changing lighting.", http.StatusConflict)
-				return
-			}
 			handler(w, r)
 		} else {
 			http.Error(w, language.GetValue("txtMethodNotAllowed"), http.StatusMethodNotAllowed)
