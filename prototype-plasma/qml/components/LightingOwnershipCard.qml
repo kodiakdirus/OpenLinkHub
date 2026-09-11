@@ -93,7 +93,7 @@ Panel {
         Layout.fillWidth: true
         Label {
             Layout.fillWidth: true
-            text: "Controller transitions are reviewable in this checkpoint, but remain disconnected from the backend."
+            text: "Review the affected device before applying a controller change. Published operations verify the resulting ownership."
             color: shell.mutedText
             wrapMode: Text.WordWrap
         }

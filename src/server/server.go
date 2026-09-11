@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Response contains data what is sent back to a client
@@ -2513,8 +2514,23 @@ func getDeviceID(uri string, r *http.Request) (string, bool) {
 }
 
 func handleFunc(mux *http.ServeMux, path, method string, handler func(w http.ResponseWriter, r *http.Request)) {
+	lightingWrite := method != http.MethodGet && (strings.HasPrefix(path, "/api/color") || strings.HasPrefix(path, "/api/brightness"))
+	if lightingWrite {
+		handler = boundedHandler(handler, lightingMutationGate, 3*time.Second)
+	}
+	switch path {
+	case "/api/v1/service", "/api/v1/capabilities", "/api/v1/snapshot":
+		handler = boundedHandler(handler, snapshotGate, 3*time.Second)
+	case "/api/v1/devices/label", "/api/v1/lighting/assignment", "/api/v1/lighting/ownership":
+		handler = boundedHandler(handler, lightingMutationGate, 3*time.Second)
+	}
+
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == method {
+			if (lightingWrite || path == "/api/v1/lighting/assignment" || path == "/api/v1/lighting/ownership") && apiV1Runtime.State().Lease != nil {
+				http.Error(w, "End identification before changing lighting.", http.StatusConflict)
+				return
+			}
 			handler(w, r)
 		} else {
 			http.Error(w, language.GetValue("txtMethodNotAllowed"), http.StatusMethodNotAllowed)
@@ -2527,6 +2543,11 @@ func setRoutes() http.Handler {
 	r := http.NewServeMux()
 	fs := http.FileServer(http.Dir("./static"))
 	r.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	handleFunc(r, "/api/v1/lighting/runtime", http.MethodGet, getLightingRuntime)
+	handleFunc(r, "/api/v1/lighting/recover", http.MethodPut, recoverLighting)
+	r.HandleFunc("PUT /api/v1/lighting/identify", identifyLighting)
+	r.HandleFunc("DELETE /api/v1/lighting/identify", cancelIdentification)
 
 	// GET
 	handleFunc(r, "/api/v1/service", http.MethodGet, getServiceV1)

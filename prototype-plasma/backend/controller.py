@@ -42,6 +42,7 @@ class BackendController(QObject):
     refreshChanged = pyqtSignal()
     apiCallCountChanged = pyqtSignal()
     commandChanged = pyqtSignal()
+    lightingRuntimeChanged = pyqtSignal()
 
     def __init__(
         self,
@@ -58,6 +59,9 @@ class BackendController(QObject):
         self._timer.setInterval(max(1000, refresh_interval_ms))
         self._timer.timeout.connect(self.refresh)
 
+        self._lighting_runtime: dict[str, Any] = {}
+        self._runtime_refreshing = False
+        self._runtime_lease_id = ""
         self._mode = "demo"
         self._connection_state = "demo"
         self._status_text = "Demo data"
@@ -82,6 +86,83 @@ class BackendController(QObject):
         self._overview_metrics: list[dict[str, Any]] = []
         self._cooling_zones: list[dict[str, Any]] = []
         self._zone_values: dict[str, str] = {}
+
+    @pyqtProperty("QVariantMap", notify=lightingRuntimeChanged)
+    def lightingRuntime(self) -> dict[str, Any]:
+        return self._lighting_runtime
+
+    @pyqtSlot()
+    def refreshLightingRuntime(self) -> None:
+        if self._mode != "live" or self._runtime_refreshing:
+            return
+        self._runtime_refreshing = True
+        generation = self._generation
+
+        def accept(payload: dict[str, Any] | None, error: str | None) -> None:
+            self._runtime_refreshing = False
+            if generation != self._generation:
+                return
+            if error or not payload or payload.get("apiVersion") != "1.0" or payload.get("kind") != "lighting-runtime" or not isinstance(payload.get("data"), dict):
+                self._lighting_runtime = {"mode": "unknown", "renderer": "unavailable", "operations": []}
+            else:
+                self._lighting_runtime = payload["data"]
+                if not self._lighting_runtime.get("lease"):
+                    self._runtime_lease_id = ""
+            self.lightingRuntimeChanged.emit()
+
+        self._get_document("/api/v1/lighting/runtime", accept)
+
+    def _runtime_command(self, action: str, device_id: str = "") -> None:
+        if self._mode != "live" or self._command_busy:
+            return
+        state = self._lighting_runtime
+        if action != "cancel" and action not in state.get("operations", []):
+            self._set_command(False, "rejected", "Refresh lighting status; this operation is not published.")
+            return
+        if action == "identify" and device_id not in state.get("members", []):
+            self._set_command(False, "rejected", "This device is not a published Cluster member.")
+            return
+        payload: dict[str, Any] = {"expectedRevision": state.get("revision", 0)}
+        if action == "identify":
+            payload.update(deviceId=device_id, durationMs=3000)
+            if self._runtime_lease_id:
+                payload["leaseId"] = self._runtime_lease_id
+        if action == "cancel":
+            if not self._runtime_lease_id:
+                return
+            payload = {"leaseId": self._runtime_lease_id}
+        generation = self._generation
+        self._set_command(True, "working", "Updating temporary lighting control…")
+
+        def accept(document: dict[str, Any] | None, error: str | None) -> None:
+            if generation != self._generation:
+                return
+            if error or not document or document.get("apiVersion") != "1.0" or document.get("kind") != "lighting-runtime-result" or not isinstance(document.get("data"), dict):
+                self._set_command(False, "unverified", error or "The lighting result could not be verified.")
+            else:
+                result = document["data"]
+                self._set_command(False, str(result.get("status", "unverified")), str(result.get("message", "Lighting outcome unverified.")))
+                lease = result.get("state", {}).get("lease", {})
+                if action == "identify" and result.get("status") == "identifying":
+                    self._runtime_lease_id = str(lease.get("id", ""))
+                elif action == "cancel" and result.get("status") == "restored":
+                    self._runtime_lease_id = ""
+            self.refreshLightingRuntime()
+
+        path = "/api/v1/lighting/recover" if action == "recover" else "/api/v1/lighting/identify"
+        self._put_document(path, payload, accept, method=b"DELETE" if action == "cancel" else b"PUT")
+
+    @pyqtSlot()
+    def recoverLighting(self) -> None:
+        self._runtime_command("recover")
+
+    @pyqtSlot(str)
+    def identifyLighting(self, device_id: str) -> None:
+        self._runtime_command("identify", device_id)
+
+    @pyqtSlot()
+    def cancelLightingIdentification(self) -> None:
+        self._runtime_command("cancel")
 
     @staticmethod
     def _validate_endpoint(endpoint: str) -> None:
@@ -195,6 +276,9 @@ class BackendController(QObject):
         normalized = mode.strip().casefold()
         if normalized not in {"demo", "live"} or normalized == self._mode:
             return
+        self._lighting_runtime = {}
+        self._runtime_lease_id = ""
+        self.lightingRuntimeChanged.emit()
         self._mode = normalized
         self.modeChanged.emit()
 
@@ -677,16 +761,19 @@ class BackendController(QObject):
         path: str,
         payload: Mapping[str, Any],
         callback: JsonCallback,
+        *,
+        method: bytes = b"PUT",
     ) -> None:
         request = QNetworkRequest(QUrl(self._endpoint + path))
         request.setRawHeader(b"Accept", b"application/json")
         request.setRawHeader(b"Content-Type", b"application/json")
         request.setRawHeader(b"User-Agent", b"OpenLinkHub-Plasma-Phase3")
         request.setTransferTimeout(4500)
-        reply = self._manager.put(
-            request,
-            json.dumps(payload, separators=(",", ":")).encode("utf-8"),
-        )
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        if method == b"DELETE" and path == "/api/v1/lighting/identify":
+            reply = self._manager.sendCustomRequest(request, b"DELETE", body)
+        else:
+            reply = self._manager.put(request, body)
         self._api_call_count += 1
         self.apiCallCountChanged.emit()
 

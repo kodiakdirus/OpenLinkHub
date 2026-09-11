@@ -233,3 +233,12 @@ registered API routes:
   revisions, dry-run validation, and rollback reports do not yet exist;
 - native Plasma System Monitor publication does not yet exist; Prometheus is the
   current monitoring export.
+
+### Runtime recovery and identification (source checkpoint)
+
+- `GET /api/v1/lighting/runtime`: independent renderer observations and supported operations.
+- `PUT /api/v1/lighting/recover`: guarded saved Cluster renderer restart.
+- `PUT /api/v1/lighting/identify`: bounded, non-persistent whole-member locator lease.
+- `DELETE /api/v1/lighting/identify`: idempotent cancellation using the matching lease ID.
+
+See `LIGHTING_RUNTIME.md` for physical-mode limitations and revision scope.

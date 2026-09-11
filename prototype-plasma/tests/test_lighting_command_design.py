@@ -22,7 +22,7 @@ class LightingCommandDesignTests(unittest.TestCase):
         cls.schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         cls.design = DESIGN.read_text(encoding="utf-8")
 
-    def test_assignment_is_operational_but_identification_is_not(self) -> None:
+    def test_assignment_and_leased_identification_have_separate_boundaries(self) -> None:
         self.assertIn("Assignment checkpoint implemented", self.design)
         current_contract = CURRENT_CONTRACT.read_text(encoding="utf-8")
         server = "\n".join(
@@ -33,7 +33,7 @@ class LightingCommandDesignTests(unittest.TestCase):
         self.assertIn("/api/v1/lighting/assignment", current_contract)
         self.assertIn("/api/v1/lighting/assignment", server)
         self.assertNotIn("/api/v1/lighting/identify", current_contract)
-        self.assertNotIn("/api/v1/lighting/identify", server)
+        self.assertIn("/api/v1/lighting/identify", server)
 
     def test_legacy_adapter_is_connected_only_through_the_typed_service(self) -> None:
         adapter = LEGACY_ADAPTER.read_text(encoding="utf-8")

@@ -123,6 +123,15 @@ written. The client exposes no generic mutation method; cooling, lighting,
 input, audio, display, global-profile, and administrative changes remain local
 previews.
 
+## Source-only runtime checkpoint
+
+The Lighting page now includes independent renderer health, a reviewed saved
+Cluster renderer restart, and a three-second whole-member locator lease.
+Physical mode stays `unknown` where the driver has no reviewed read-back.
+The checkpoint also bounds stalled API callers and suspend/shutdown recovery.
+See [runtime details and remaining hardware acceptance](docs/LIGHTING_RUNTIME.md).
+These changes are not deployed by running source tests.
+
 ## Architecture boundary
 
 The intended production boundary remains:

@@ -7,7 +7,7 @@ LINK System Hub channels. Identification remains design-only.
 registry snapshot, target metadata, fake recovery tests, fail-closed legacy
 adapter, versioned route, and Plasma client adapter are implemented. An exact
 LINK Hub driver/method check publishes `assign-profile` only on channel targets.
-No target publishes `identify`.
+A separate runtime catalog now publishes whole-Cluster-member identification; target-scoped `identify` remains unpublished. See `LIGHTING_RUNTIME.md`.
 
 ## Goal
 
@@ -134,6 +134,10 @@ It must not claim durable persistence while service persistence remains
 dispatch to the driver.
 
 ## Transient target identification
+
+The source runtime checkpoint implements a narrower whole-Cluster-member lease.
+The target-scoped design below remains the extension plan; see
+`LIGHTING_RUNTIME.md` for implemented routes, revision scope, and limitations.
 
 Proposed routes:
 

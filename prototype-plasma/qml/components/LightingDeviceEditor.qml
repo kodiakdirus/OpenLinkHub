@@ -183,6 +183,12 @@ ColumnLayout {
         }
     }
 
+    LightingRuntimeCard {
+        shell: editor.shell
+        deviceId: editor.device.id || ""
+        visible: editor.shell.liveMode
+    }
+
     LightingOwnershipCard {
         shell: editor.shell
         ownership: editor.ownership
