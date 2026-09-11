@@ -165,6 +165,7 @@ type Product struct {
 }
 
 var (
+	stopOnce            sync.Once
 	mutex               sync.Mutex
 	cls                 *cluster.Device
 	expectedPermissions = []os.FileMode{os.FileMode(0600), os.FileMode(0660)}
@@ -180,6 +181,11 @@ var (
 
 // Stop will stop all active devices
 func Stop() {
+	stopOnce.Do(stopDevices)
+}
+
+// stopDevices runs once: suspend and termination must not stop drivers concurrently.
+func stopDevices() {
 	// Stop all cluster operations
 	cls.Stop()
 
