@@ -160,3 +160,12 @@ adapter instead. It never accesses Corsair USB devices or service-owned files.
 Global profiles still require a backend-owned composition contract so their
 cooling, lighting, and per-device references can eventually be validated,
 applied, and recovered as one operation.
+
+## Live fan curves
+
+Cooling → Manage cooling profiles now edits existing saved **fan** curves in
+Live mode. Radiator20 is selected when available. Save applies immediately to
+all fans using that profile, with a fresh-baseline check, private recovery copy,
+and full-profile read-back. Pump curves and assignments are preserved. The
+existing deployed graph-profile API is used; no backend restart is required.
+See [Cooling curve behavior and limits](docs/COOLING_CURVES.md).

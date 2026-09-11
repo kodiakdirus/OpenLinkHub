@@ -25,7 +25,7 @@ Item {
     ]
 
     function openPrimaryDialog() {
-        coolingProfiles.open()
+        shell.liveMode ? liveCoolingProfiles.open() : coolingProfiles.open()
     }
 
     function openFirstProfilePopup() {
@@ -141,7 +141,7 @@ Item {
                     text: "Manage cooling profiles"
                     icon.name: "document-edit"
                     highlighted: true
-                    onClicked: coolingProfiles.open()
+                    onClicked: shell.liveMode ? liveCoolingProfiles.open() : coolingProfiles.open()
                 }
 
                 ComboBox {
@@ -249,7 +249,7 @@ Item {
                     Button {
                         text: "Open curve editor"
                         icon.name: "document-edit"
-                        onClicked: coolingProfiles.open()
+                        onClicked: shell.liveMode ? liveCoolingProfiles.open() : coolingProfiles.open()
                     }
                 }
             }
@@ -557,4 +557,9 @@ Item {
         id: coolingProfiles
         shell: page.shell
     }
+    LiveCoolingProfilesDialog {
+        id: liveCoolingProfiles
+        shell: page.shell
+    }
+
 }

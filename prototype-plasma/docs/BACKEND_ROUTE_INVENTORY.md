@@ -58,7 +58,7 @@ Count: 161 `/api` registrations: 45 `GET`, 100 `POST`, 10 `PUT`, and 6 `DELETE`.
 - `POST /api/temperatures/new` — create fixed/graph profile.
 - `POST /api/temperatures/setLiquidTemperatureSource` — select coolant source.
 - `PUT /api/temperatures/update` — update fixed profile.
-- `PUT /api/temperatures/updateGraph` — update graph profile.
+- `PUT /api/temperatures/updateGraph` — live existing fan-curve editor uses updateType=1, baseline comparison, local backup, and full-profile read-back; pump editing remains unavailable.
 - `DELETE /api/temperatures/delete` — delete profile.
 - `POST /api/speed` — assign a cooling profile to a channel.
 - `POST /api/speed/manual` — direct output; protected timed diagnostic only.

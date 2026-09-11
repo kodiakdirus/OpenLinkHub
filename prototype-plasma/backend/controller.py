@@ -21,6 +21,8 @@ from PyQt6.QtNetwork import (
     QNetworkRequest,
 )
 
+from .cooling import backup_profile, catalog, fan_points
+
 from .models import (
     ApiEnvelope,
     ContractSnapshot,
@@ -43,6 +45,8 @@ class BackendController(QObject):
     apiCallCountChanged = pyqtSignal()
     commandChanged = pyqtSignal()
     lightingRuntimeChanged = pyqtSignal()
+    coolingChanged = pyqtSignal()
+    fanCurveSaved = pyqtSignal(str)
 
     def __init__(
         self,
@@ -59,6 +63,10 @@ class BackendController(QObject):
         self._timer.setInterval(max(1000, refresh_interval_ms))
         self._timer.timeout.connect(self.refresh)
 
+        self._cooling_profiles = {}
+        self._cooling_busy = False
+        self._cooling_message = ""
+        self._cooling_epoch = 0
         self._lighting_runtime: dict[str, Any] = {}
         self._runtime_refreshing = False
         self._runtime_epoch = 0
@@ -88,6 +96,113 @@ class BackendController(QObject):
         self._overview_metrics: list[dict[str, Any]] = []
         self._cooling_zones: list[dict[str, Any]] = []
         self._zone_values: dict[str, str] = {}
+
+    @pyqtProperty("QVariantMap", notify=coolingChanged)
+    def coolingProfiles(self):
+        return self._cooling_profiles
+
+    @pyqtProperty(bool, notify=coolingChanged)
+    def coolingBusy(self):
+        return self._cooling_busy
+
+    @pyqtProperty(str, notify=coolingChanged)
+    def coolingMessage(self):
+        return self._cooling_message
+
+    @pyqtSlot()
+    def loadCoolingProfiles(self):
+        if self._mode != "live" or self._cooling_busy or self._command_busy:
+            return
+        self._cooling_busy = True
+        self._cooling_epoch += 1
+        epoch = self._cooling_epoch
+        self._cooling_message = "Loading saved curves…"
+        self.coolingChanged.emit()
+
+        def received(payload, error):
+            if epoch != self._cooling_epoch or self._mode != "live":
+                return
+            self._cooling_busy = False
+            try:
+                if error:
+                    raise ValueError(error)
+                self._cooling_profiles = catalog(payload)
+                self._cooling_message = "Loaded saved fan curves. Save applies to every channel using the selected profile."
+            except ValueError as exc:
+                self._cooling_profiles = {}
+                self._cooling_message = str(exc)
+            self.coolingChanged.emit()
+        self._get_document("/api/temperatures/", received)
+
+    @pyqtSlot(str, str)
+    def saveFanCurve(self, name, points_json):
+        if self._mode != "live" or self._cooling_busy or self._command_busy:
+            return
+        try:
+            points = fan_points(json.loads(points_json))
+            original = self._cooling_profiles[name]
+        except (ValueError, KeyError, TypeError) as exc:
+            self._cooling_message = str(exc)
+            self.coolingChanged.emit()
+            return
+        self._cooling_busy = True
+        self._cooling_epoch += 1
+        epoch = self._cooling_epoch
+        self._cooling_message = "Checking the saved profile…"
+        self._set_command(True, "pending", self._cooling_message)
+        self.coolingChanged.emit()
+
+        def current():
+            return epoch == self._cooling_epoch and self._mode == "live"
+
+        def finish(message, status="failed"):
+            if not current():
+                return
+            self._cooling_busy = False
+            self._cooling_message = message
+            self._set_command(False, status, message)
+            self.coolingChanged.emit()
+
+        def checked(payload, error):
+            if not current():
+                return
+            try:
+                if error:
+                    raise ValueError(error)
+                fresh = catalog(payload).get(name)
+                if fresh != original:
+                    raise ValueError("This profile changed elsewhere. Reload before saving; your draft has not been sent.")
+                backup = backup_profile(name, fresh)
+            except (ValueError, OSError) as exc:
+                finish(str(exc))
+                return
+
+            def saved(response, save_error):
+                if not current():
+                    return
+                accepted = not save_error and isinstance(response, dict) and response.get("status") == 1
+
+                def verified(readback, read_error):
+                    if not current():
+                        return
+                    try:
+                        if read_error:
+                            raise ValueError(read_error)
+                        actual = catalog(readback).get(name)
+                        expected = json.loads(json.dumps(original))
+                        expected["points"]["1"] = points
+                        if actual != expected:
+                            raise ValueError("Saved profile differs from the requested curve.")
+                        self._cooling_profiles[name] = actual
+                    except ValueError as exc:
+                        finish(f"Save outcome unverified: {exc} Previous profile: {backup}. Reload before retrying.", "unverified")
+                        return
+                    note = "Saved and read back." if accepted else "The save response was uncertain, but read-back confirms the curve."
+                    finish(f"{name}: {note} Previous profile: {backup}", "verified")
+                    self.fanCurveSaved.emit(name)
+                self._get_document("/api/temperatures/", verified)
+            self._put_document("/api/temperatures/updateGraph", {"profile": name, "updateType": 1, "points": points}, saved)
+        self._get_document("/api/temperatures/", checked)
 
     @staticmethod
     def _valid_runtime_state(state: Any) -> bool:
@@ -309,6 +424,11 @@ class BackendController(QObject):
         normalized = mode.strip().casefold()
         if normalized not in {"demo", "live"} or normalized == self._mode:
             return
+        self._cooling_epoch += 1
+        self._cooling_busy = False
+        self._cooling_profiles = {}
+        self._cooling_message = ""
+        self.coolingChanged.emit()
         self._lighting_runtime = {}
         self._runtime_lease_id = ""
         self.lightingRuntimeChanged.emit()
