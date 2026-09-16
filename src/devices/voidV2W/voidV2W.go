@@ -152,6 +152,10 @@ var (
 func Init(vendorId, slipstreamId, productId uint16, dev *hid.Device, endpoint byte, serial string) *Device {
 	// Set global working directory
 	pwd = config.GetConfig().ConfigPath
+	product := "VOID WIRELESS V2"
+	if productId == 10759 {
+		product = "VOID MAX WIRELESS V2"
+	}
 
 	// Init new struct with HID device
 	d := &Device{
@@ -169,7 +173,7 @@ func Init(vendorId, slipstreamId, productId uint16, dev *hid.Device, endpoint by
 			2: "66 %",
 			3: "100 %",
 		},
-		Product: "VOID WIRELESS V2",
+		Product: product,
 		SleepModes: map[int]string{
 			1:  "1 minute",
 			5:  "5 minutes",
@@ -889,6 +893,7 @@ func (d *Device) saveDeviceProfile() {
 			9:  {Name: "8K", Value: 0},
 			10: {Name: "16K", Value: 0},
 		}
+		deviceProfile.SideToneValue = 100
 	} else {
 		if d.DeviceProfile.Equalizers == nil {
 			deviceProfile.Equalizers = map[int]Equalizer{

@@ -62,15 +62,14 @@ const (
 )
 
 var (
-	bufferSize       = 64
-	bufferSizeWrite  = bufferSize + 1
-	headerSize       = 2
-	deviceKeepAlive  = 2000
-	cmdReadDongle    = []byte{0x03}
-	cmdRead          = []byte{0x04}
-	transferTimeout  = 200
-	mouseProductId   = uint16(11048)
-	mouseProductIdMg = uint16(11049)
+	bufferSize      = 64
+	bufferSizeWrite = bufferSize + 1
+	headerSize      = 2
+	deviceKeepAlive = 2000
+	cmdReadDongle   = []byte{0x03}
+	cmdRead         = []byte{0x04}
+	transferTimeout = 200
+	mouseProductId  = uint16(11048)
 )
 
 func Init(vendorId, productId uint16, _, path string, callback func(device *common.Device)) *common.Device {
@@ -305,16 +304,15 @@ func (d *Device) GetDevice() *hid.Device {
 func (d *Device) getDevices() {
 	var devices = make(map[int]*Devices)
 
+	if d.ProductId == 11060 {
+		mouseProductId = 11049
+	}
 	devices[0] = &Devices{
 		Type:      1,
 		Endpoint:  0x08,
 		Serial:    strconv.Itoa(int(mouseProductId)),
 		VendorId:  d.VendorId,
 		ProductId: mouseProductId,
-	}
-
-	if d.ProductId == 11060 {
-		devices[0].ProductId = mouseProductIdMg
 	}
 	d.Devices = devices
 }
@@ -563,6 +561,7 @@ func (d *Device) mouseListener() {
 
 		var dev = d.findDevice()
 		if d.mouse != nil {
+			var pressedButtons byte
 			for {
 				if dev == nil {
 					continue
@@ -586,25 +585,29 @@ func (d *Device) mouseListener() {
 
 					// Buttons
 					if ev.Type == EvKey && (ev.Code == BtnBack || ev.Code == BtnForward || ev.Code == BtnMiddle || ev.Code == BtnLeft || ev.Code == BtnRight) {
-						var val byte = 0
+						var val byte
 						switch ev.Code {
-						case 272:
+						case BtnLeft:
 							val = 1
-						case 273:
+						case BtnRight:
 							val = 2
-						case 274:
+						case BtnMiddle:
 							val = 4
-						case 275:
+						case BtnBack:
 							val = 8
-						case 276:
+						case BtnForward:
 							val = 16
 						}
 
-						if ev.Value == 1 {
-							dev.TriggerKeyAssignment(val)
-						} else {
-							dev.TriggerKeyAssignment(0)
+						switch ev.Value {
+						case 1:
+							pressedButtons |= val
+						case 0:
+							pressedButtons &^= val
+						default:
+							continue
 						}
+						dev.TriggerKeyAssignment(pressedButtons)
 					}
 
 					// Mouse position

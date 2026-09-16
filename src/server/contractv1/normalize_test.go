@@ -294,6 +294,51 @@ func TestAuthoritativeRGBClusterOwnershipDoesNotDependOnLegacyDetail(t *testing.
 	}
 }
 
+func TestTimewarpSuppressesOnlyOverriddenChannelAssignmentsAndControllerChanges(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		capable bool
+		enabled bool
+		present bool
+	}{
+		{name: "active", capable: true, enabled: true, present: true},
+		{name: "disabled", capable: true, present: true},
+		{name: "unsupported channel", enabled: true, present: true},
+		{name: "removed channel", capable: true, enabled: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			input := fixtureInput()
+			detail := input.Devices[0].Detail.(map[string]any)
+			channels := detail["devices"].(map[string]any)
+			channels["1"].(map[string]any)["TimewarpCapable"] = test.capable
+			id := "1"
+			if !test.present {
+				id = "99"
+			}
+			detail["DeviceProfile"] = map[string]any{
+				"Timewarp": map[string]any{id: map[string]any{"Enabled": test.enabled}},
+			}
+			device := BuildSnapshot(input).Devices[0]
+			blocked := test.capable && test.enabled && test.present
+			if stringSliceContains(device.Lighting.Ownership.Operations, "change-controller") == blocked {
+				t.Fatalf("Timewarp controller guard missing or overbroad: %#v", device.Lighting.Ownership)
+			}
+			if blocked && !strings.Contains(device.Lighting.Ownership.Description, "Timewarp") {
+				t.Fatal("controller guard must explain Timewarp")
+			}
+			for _, target := range device.Lighting.Targets {
+				wantBlocked := blocked && target.ID == "channel:1"
+				if stringSliceContains(target.Operations, "assign-profile") == wantBlocked {
+					t.Fatalf("incorrect per-channel assignment guard: %#v", target)
+				}
+				if wantBlocked && (!strings.Contains(target.Description, "Timewarp") || target.ActiveProfile != "static") {
+					t.Fatalf("overridden saved effect must be retained and explained: %#v", target)
+				}
+			}
+		})
+	}
+}
+
 func TestAuthoritativeRGBClusterOwnershipOverridesStaleLegacyDetail(t *testing.T) {
 	input := fixtureInput()
 	detail := input.Devices[0].Detail.(map[string]any)

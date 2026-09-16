@@ -2198,7 +2198,7 @@ $(document).ready(function () {
         const keyboardRgbProfile = $('.keyboardRgbProfile');
         if (keyboardRgbProfile.length > 0 && typeof (deviceProfile.RGBProfile === "string") || deviceProfile.SlipstreamRGBProfile === "string") {
             let rgbProfileValue = "0;" + deviceProfile.RGBProfile;
-            if (deviceProfile.SlipstreamRGBProfile.length > 0) {
+            if (deviceProfile.SlipstreamRGBProfile != null && deviceProfile.SlipstreamRGBProfile.length > 0) {
                 rgbProfileValue = "0;" + deviceProfile.SlipstreamRGBProfile;
             }
             if (keyboardRgbProfile.find('option[value="' + rgbProfileValue + '"]').length > 0) {
@@ -3754,6 +3754,163 @@ $(document).ready(function () {
         });
     });
 
+    $('.timeWarp').on('click', function () {
+        const deviceId = $("#deviceId").val();
+        const channelId = $(this).attr("data-info");
+
+        const pf = {};
+        pf["deviceId"] = deviceId;
+        pf["channelId"] = parseInt(channelId);
+        pf["subDeviceId"] = 0;
+        const json = JSON.stringify(pf, null, 2);
+
+        $.ajax({
+            url: '/api/color/getTimewarp',
+            type: 'POST',
+            data: json,
+            cache: false,
+            success: function(response) {
+                try {
+                    if (response.status === 1) {
+                        const data = response.data;
+                        const color = rgbToHex(data.Color.red, data.Color.green, data.Color.blue);
+
+                        let modalElement = `
+                          <div class="modal fade" id="systemModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-custom modal-500">
+                              <div class="modal-content">
+                        
+                                <div class="modal-header">
+                                  <h5 class="modal-title">${i18n.t('txtTimeWarp')}</h5>
+                                  <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="settings-list">
+                                        <div class="settings-row ">
+                                            <span class="settings-label text-ellipsis">${i18n.t('txtEnable')}</span>
+                                            <label class="system-toggle compact">
+                                                <input type="checkbox" id="enabledCheckbox" ${data.Enabled ? "checked" : ""}>
+                                                <span class="toggle-track"></span>
+                                            </label>
+                                        </div>
+    
+                                        <div class="settings-row rgb-editor">
+                                            <span class="settings-label text-ellipsis">${i18n.t('txtColor')}</span>
+                                            <div class="system-color">
+                                                <label for="startColor">
+                                                    <input type="color" id="startColor" value="${color}">
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div class="settings-row">
+                                            <span class="settings-label text-ellipsis">${i18n.t('txtDirection')}</span>
+                                            <div class="no-padding-top">
+                                                <select class="system-select compact full-width timewarpDirection" id="timewarpDirection">
+                                                    <option value="1" ${data.Direction === 1 ? "selected" : ""}>${i18n.t('txtStatic')}</option>
+                                                    <option value="2" ${data.Direction === 2 ? "selected" : ""}>${i18n.t('txtClockwise')}</option>
+                                                    <option value="3" ${data.Direction === 3 ? "selected" : ""}>${i18n.t('txtCounterClockwise')}</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="settings-row">
+                                            <span class="settings-label text-ellipsis">${i18n.t('txtSpeed')}</span>
+                                            <div class="system-slider no-padding-top">
+                                                <img src="/static/img/icons/icon-slow.svg" width="20" height="20" alt="Sloe" />
+                                                <label for="speedSlider" class="margin-lr-10">
+                                                    <input type="range" id="speedSlider" name="speedSlider" min="0" max="2" value="${data.Speed}" step="1">
+                                                </label>
+                                                <img src="/static/img/icons/icon-fast.svg" width="20" height="20" alt="Fast" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                        
+                                <div class="modal-footer">
+                                  <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">${i18n.t('txtClose')}</button>
+                                  <button class="btn btn-primary" type="button" id="btnSaveRgbTimewarp">${i18n.t('txtSave')}</button>
+                                </div>
+                        
+                              </div>
+                            </div>
+                          </div>
+                        `;
+                        const modal = $(modalElement).modal('toggle');
+
+                        modal.on('hidden.bs.modal', function () {
+                            modal.data('bs.modal', null);
+                            modal.remove();
+                        })
+
+                        modal.on('shown.bs.modal', function (e) {
+                            const $speedSlider = modal.find("#speedSlider");
+                            const $speedSliderValue = modal.find("#speedSliderValue");
+
+                            function updateSpeedSlider() {
+                                const min = Number($speedSlider.attr("min"));
+                                const max = Number($speedSlider.attr("max"));
+                                const value = Number($speedSlider.val());
+
+                                const percent = ((value - min) / (max - min)) * 100;
+
+                                $speedSlider.css("--slider-progress", percent + "%");
+                                $speedSliderValue.text(value);
+                            }
+
+                            if ($speedSlider.length) {
+                                $speedSlider.on("input", updateSpeedSlider);
+                                updateSpeedSlider();
+                            }
+
+                            modal.find('#btnSaveRgbTimewarp').on('click', function () {
+                                const pf = {};
+                                let color = {}
+
+                                let speed = $("#speedSlider").val();
+                                let direction = $("#timewarpDirection").val();
+                                const startColorVal = $("#startColor").val();
+                                const startColor = hexToRgb(startColorVal);
+                                const startColorRgb = {red:startColor.r, green:startColor.g, blue:startColor.b}
+
+                                const enabled = $("#enabledCheckbox").is(':checked');
+
+                                pf["deviceId"] = deviceId;
+                                pf["channelId"] = parseInt(channelId);
+                                pf["enabled"] = enabled;
+                                pf["startColor"] = startColorRgb;
+                                pf["speed"] = parseFloat(speed);
+                                pf["direction"] = parseInt(direction);
+                                const json = JSON.stringify(pf, null, 2);
+                                $.ajax({
+                                    url: '/api/color/setTimewarp',
+                                    type: 'POST',
+                                    data: json,
+                                    cache: false,
+                                    success: function(response) {
+                                        try {
+                                            if (response.status === 1) {
+                                                toast.success(response.message);
+                                            } else {
+                                                toast.warning(response.message);
+                                            }
+                                        } catch (err) {
+                                            toast.warning(response.message);
+                                        }
+                                    }
+                                });
+                            });
+                        })
+                    } else {
+                        toast.warning(response.data);
+                    }
+                } catch (err) {
+                    toast.warning(response.message);
+                }
+            }
+        });
+    });
+
     function createLinearLEDs(cnt, leds, spacing, data, startX = 0, startY = 0) {
         let count = leds.length;
         cnt.style.width = `${startX + count * spacing + spacing/2}px`;
@@ -4983,4 +5140,385 @@ $(document).ready(function () {
         $brightnessSlider.on("input", updateSlider);
         updateSlider();
     }
+
+    $('.configureWidget').on('click', function () {
+        const deviceId = $("#deviceId").val();
+        const widgetId = $(this).attr("data-info").split(';');
+
+        const pf = {};
+        pf["deviceId"] = deviceId;
+        pf["widgetId"] = parseInt(widgetId);
+        const json = JSON.stringify(pf, null, 2);
+
+        $.ajax({
+            url: '/api/xeneon/getWidget',
+            type: 'POST',
+            data: json,
+            cache: false,
+            success: function(response) {
+                try {
+                    if (response.status === 1) {
+                        let modalElement = '';
+
+                        const data = response.data;
+                        switch (data.template) {
+                            case 'xeneon-clock': {
+                                modalElement = `
+                                  <div class="modal fade" id="systemModal" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog modal-custom modal-500">
+                                      <div class="modal-content">
+                                
+                                        <div class="modal-header">
+                                          <h5 class="modal-title">${data.name}</h5>
+                                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="settings-list">
+                                                <div class="settings-row rgb-editor">
+                                                    <span class="settings-label text-ellipsis">${i18n.t('txtTimeColor')}</span>
+                                                    <div class="system-color">
+                                                        <label for="textColor">
+                                                            <input type="color" id="textColor" value="${data.textColor}">
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="settings-row rgb-editor">
+                                                    <span class="settings-label text-ellipsis">${i18n.t('txtDateColor')}</span>
+                                                    <div class="system-color">
+                                                        <label for="subTextColor">
+                                                            <input type="color" id="subTextColor" value="${data.subTextColor}">
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="settings-row rgb-editor">
+                                                    <span class="settings-label text-ellipsis">${i18n.t('txtTimeSize')}</span>
+                                                    <div class="system-input text-input compact">
+                                                        <label for="fontSize">
+                                                            <input type="text" id="fontSize" autocomplete="off" value="${data.fontSize}">
+                                                        </label>
+                                                    </div> 
+                                                </div>
+                                                
+                                                <div class="settings-row rgb-editor">
+                                                    <span class="settings-label text-ellipsis">${i18n.t('txtDateSize')}</span>
+                                                    <div class="system-input text-input compact">
+                                                        <label for="subFontSize">
+                                                            <input type="text" id="subFontSize" autocomplete="off" value="${data.subFontSize}">
+                                                        </label>
+                                                    </div> 
+                                                </div>
+                                                
+                                                <div class="settings-row rgb-editor">
+                                                    <span class="settings-label text-ellipsis">${i18n.t('txtTimePosition')}</span>
+                                                    <div class="system-input text-input compact max-width-120">
+                                                        <label for="timePositionLeft">
+                                                            <input type="text" id="timePositionLeft" autocomplete="off" value="${data.left}">
+                                                        </label>
+                                                    </div>
+                                                    <div class="system-input text-input compact max-width-120">
+                                                        <label for="timePositionRight">
+                                                            <input type="text" id="timePositionRight" autocomplete="off" value="${data.top}">
+                                                        </label>
+                                                    </div> 
+                                                </div>
+                                                
+                                                <div class="settings-row rgb-editor">
+                                                    <span class="settings-label text-ellipsis">${i18n.t('txtDatePosition')}</span>
+                                                    <div class="system-input text-input compact max-width-120">
+                                                        <label for="datePositionLeft">
+                                                            <input type="text" id="datePositionLeft" autocomplete="off" value="${data.subLeft}">
+                                                        </label>
+                                                    </div>
+                                                    <div class="system-input text-input compact max-width-120">
+                                                        <label for="datePositionRight">
+                                                            <input type="text" id="datePositionRight" autocomplete="off" value="${data.subTop}">
+                                                        </label>
+                                                    </div> 
+                                                </div>
+                                                
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                          <button class="btn btn-secondary" type="button" data-bs-dismiss="modal">${i18n.t('txtClose')}</button>
+                                          <button class="btn btn-primary" type="button" id="btnSaveWidget">${i18n.t('txtSave')}</button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                `;
+                            }
+                            break;
+                        }
+                        console.log(data)
+                        const modal = $(modalElement).modal('toggle');
+
+                        modal.on('hidden.bs.modal', function () {
+                            modal.data('bs.modal', null);
+                            modal.remove();
+                        })
+
+                        modal.on('shown.bs.modal', function (e) {
+                            modal.find('#btnSaveWidget').on('click', function () {
+                                
+                            });
+                        })
+                    } else {
+                        toast.warning(response.data);
+                    }
+                } catch (err) {
+                    toast.warning(response.message);
+                }
+            }
+        });
+    });
+
+    $('.configureHardwareLights').on('click', function () {
+        const deviceId = $("#deviceId").val();
+
+        const pf = {};
+        pf["deviceId"] = deviceId;
+        const json = JSON.stringify(pf, null, 2);
+
+        $.ajax({
+            url: '/api/devices/getHardwareLights',
+            type: 'POST',
+            data: json,
+            cache: false,
+            success: function(response) {
+                try {
+                    if (response.status === 1) {
+                        const data = response.data;
+
+                        let modalElement = `
+                          <div class="modal fade" id="systemModal" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-custom modal-1200">
+                              <div class="modal-content">
+                                <div class="modal-header">
+                                  <h5 class="modal-title" id="setupKeyAssignments">${i18n.t('txtHardwareLights')}</h5>
+                                  <button class="btn-close btn-close-white" type="button" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                  <form>
+                                    <div class="mb-3">
+                                        <table class="dataTable text-sm">
+                                            <thead>
+                                            <tr>
+                                                <th>${i18n.t('txtKey')}</th>
+                                                <th>${i18n.t('txtProfileName')}</th>
+                                                <th>${i18n.t('txtStartColor')}</th>
+                                                <th>${i18n.t('txtEndColor')}</th>
+                                                <th>${i18n.t('txtAlternateColors')}</th>
+                                                <th>${i18n.t('txtDirection')}</th>
+                                                <th>${i18n.t('txtSpeed')}</th>
+                                                <th>${i18n.t('txtSave')}</th>
+                                            </tr>
+                                            </thead>
+                                            <tbody id="hardwareLightsRows"></tbody>
+                                        </table>
+                                    </div>
+                                  </form>
+                                </div>
+                                <div class="modal-footer">
+                                  <button class="system-button secondary" type="button" data-bs-dismiss="modal">${i18n.t('txtClose')}</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        `;
+                        const modal = $(modalElement).modal('toggle');
+
+                        modal.on('hidden.bs.modal', function () {
+                            modal.data('bs.modal', null);
+                            modal.remove();
+                        })
+
+                        modal.on('shown.bs.modal', function (e) {
+
+                            const tbody = modal.find('#hardwareLightsRows');
+                            $.each(data, function(key, profile) {
+                                const startColor = profile.startColor !== null
+                                    ? profile.startColor.Hex
+                                    : '#000000';
+
+                                const endColor = profile.endColor !== null
+                                    ? profile.endColor.Hex
+                                    : '#000000';
+
+                                const noColor = profile.noColor;
+                                const singleColor = profile.singleColor;
+                                const alternateDisabled = !profile.canAlternate ? 'disabled' : '';
+                                const directionDisabled = !profile.hasDirection ? 'disabled' : '';
+                                const speedDisabled = !profile.hasSpeed ? 'disabled' : '';
+
+                                let colorHtml = '';
+                                if (noColor) {
+                                    colorHtml = `
+                                        <td class="key-assignments">N/A</td>
+                                        <td class="key-assignments">N/A</td>
+                                    `;
+                                } else {
+                                    if (singleColor) {
+                                        colorHtml = `
+                                            <td class="key-assignments">
+                                                 <div class="system-color compact">
+                                                    <input type="color" class="hardware-start-color" value="${startColor}">
+                                                </div>
+                                            </td>
+                                            <td class="key-assignments">N/A</td>
+                                        `;
+                                    } else {
+                                        colorHtml = `
+                                            <td class="key-assignments">
+                                                 <div class="system-color compact">
+                                                    <input type="color" class="hardware-start-color" value="${startColor}">
+                                                 </div>
+                                            </td>
+                                            <td class="key-assignments">
+                                                 <div class="system-color compact">
+                                                    <input type="color" class="hardware-end-color" value="${endColor}">
+                                                </div>
+                                            </td>
+                                        `;
+                                    }
+                                }
+
+                                const row = `
+                                    <tr data-key="${key}">
+                                        <td class="key-assignments">${key}</td>
+                                        <td class="key-assignments">${profile.name}</td>
+                                        ${colorHtml}
+                                        <td class="key-assignments">
+                                            <label class="system-toggle compact">
+                                                <input
+                                                    type="checkbox"
+                                                    class="hardware-alternate"
+                                                    ${profile.alternate ? 'checked' : ''}
+                                                    ${alternateDisabled}
+                                                >
+                                                <span class="toggle-track"></span>
+                                            </label>
+                                        </td>
+                                        <td class="key-assignments">
+                                            <select class="system-select compact full-width hardware-direction" ${directionDisabled}>
+                                                <option value="0" ${profile.direction === 0 ? 'selected' : ''}>${i18n.t('txtLeft')}</option>
+                                                <option value="1" ${profile.direction === 1 ? 'selected' : ''}>${i18n.t('txtRight')}</option>
+                                            </select>
+                                        </td>
+                                        <td class="key-assignments">
+                                            <select class="system-select compact full-width hardware-speed" ${speedDisabled}>
+                                                <option value="0" ${profile.speed === 0 ? 'selected' : ''}>${i18n.t('txtFast')}</option>
+                                                <option value="1" ${profile.speed === 1 ? 'selected' : ''}>${i18n.t('txtNormal')}</option>
+                                                <option value="2" ${profile.speed === 2 ? 'selected' : ''}>${i18n.t('txtSlow')}</option>
+                                            </select>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-primary btnSaveHardwareColors" type="button" data-key="${key}">${i18n.t('txtSave')}</button>
+                                        </td>
+                                    </tr>
+                                `;
+                                tbody.append(row);
+                            });
+
+
+                            modal.find('.btnSaveHardwareColors').on('click', function () {
+                                const key = $(this).attr('data-key');
+                                const row = $(this).closest('tr');
+
+                                const startColor = row.find('.hardware-start-color').val();
+                                const endColor = row.find('.hardware-end-color').val();
+                                const alternate = row.find('.hardware-alternate').is(':checked');
+                                const direction = parseInt(row.find('.hardware-direction').val());
+                                const speed = parseFloat(row.find('.hardware-speed').val());
+
+                                const pf = {};
+                                pf["deviceId"] = deviceId;
+                                pf["keyId"] = parseInt(key);
+
+                                if (startColor) {
+                                    const startColorRgb = hexToRgb(startColor);
+                                    if (startColorRgb !== null) {
+                                        pf["startColor"] = {
+                                            red: startColorRgb.r,
+                                            green: startColorRgb.g,
+                                            blue: startColorRgb.b
+                                        };
+                                    }
+                                }
+
+                                if (endColor) {
+                                    const endColorRgb = hexToRgb(endColor);
+                                    if (endColorRgb !== null) {
+                                        pf["endColor"] = {
+                                            red: endColorRgb.r,
+                                            green: endColorRgb.g,
+                                            blue: endColorRgb.b
+                                        };
+                                    }
+                                }
+
+                                pf["alternateColors"] = alternate;
+                                pf["direction"] = direction;
+                                pf["speed"] = speed;
+
+                                const json = JSON.stringify(pf, null, 2);
+                                $.ajax({
+                                    url: '/api/devices/setHardwareLights',
+                                    type: 'POST',
+                                    data: json,
+                                    cache: false,
+                                    success: function(response) {
+                                        try {
+                                            if (response.status === 1) {
+                                                toast.success(response.message);
+                                            } else {
+                                                toast.warning(response.message);
+                                            }
+                                        } catch (err) {
+                                            toast.warning(response.message);
+                                        }
+                                    }
+                                });
+                            });
+                        })
+                    } else {
+                        toast.warning(response.data);
+                    }
+                } catch (err) {
+                    toast.warning(response.message);
+                }
+            }
+        });
+    });
+
+    $('.setHardwareLight').on('change', function () {
+        const deviceId = $("#deviceId").val();
+        const profile = $(this).val();
+
+        const pf = {};
+        pf["deviceId"] = deviceId;
+        pf["hardwareLight"] = parseInt(profile);
+
+        const json = JSON.stringify(pf, null, 2);
+
+        $.ajax({
+            url: '/api/devices/setHardwareLight',
+            type: 'POST',
+            data: json,
+            cache: false,
+            success: function(response) {
+                console.log(response)
+                try {
+                    if (response.status === 1) {
+                        toast.success(response.message);
+                    } else {
+                        toast.warning(response.message);
+                    }
+                } catch (err) {
+                    toast.warning(response.message);
+                }
+            }
+        });
+    });
 });

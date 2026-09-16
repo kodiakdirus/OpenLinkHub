@@ -667,7 +667,7 @@ func normalizeLighting(
 		supportedProfileIDs = append(supportedProfileIDs, profile.ID)
 	}
 	assignmentBlockReason := lightingAssignmentBlockReason(detail, rgbCluster)
-	assignmentAvailable := channelAssignment && assignmentBlockReason == ""
+	timewarpChannels := activeTimewarpChannels(detail)
 	targets := make([]LightingTarget, 0)
 	for _, channel := range channels {
 		if channel.LightingEffect == nil {
@@ -686,12 +686,16 @@ func normalizeLighting(
 			name = channel.Name
 		}
 		operations := []string{"read"}
-		if assignmentAvailable {
+		blockReason := assignmentBlockReason
+		if blockReason == "" && timewarpChannels[channel.ID] {
+			blockReason = "Timewarp is active; the saved RGB effect is inactive on this channel. Disable Timewarp in the Web UI before assigning an effect."
+		}
+		if channelAssignment && blockReason == "" {
 			operations = append(operations, "assign-profile")
 		}
 		description := fmt.Sprintf("Channel %s · %s", channel.ID, channel.Description)
-		if assignmentBlockReason != "" {
-			description += " · " + assignmentBlockReason
+		if blockReason != "" {
+			description += " · " + blockReason
 		}
 		targets = append(targets, LightingTarget{
 			ID:                  fmt.Sprintf("channel:%d", channelID),
@@ -752,7 +756,11 @@ func normalizeLightingOwnership(detail map[string]any, targets []LightingTarget,
 	}
 
 	operations := []string{"read"}
-	if transitionAvailable && controller != "openrgb" {
+	timewarpActive := len(activeTimewarpChannels(detail)) > 0
+	if timewarpActive {
+		description = "Timewarp is enabled on one or more channels and overrides their saved RGB effects. Other channels retain their current controller. Disable Timewarp in the Web UI before changing the device's lighting controller."
+	}
+	if transitionAvailable && controller != "openrgb" && !timewarpActive {
 		operations = append(operations, "change-controller")
 	}
 	return LightingOwnership{
@@ -800,6 +808,22 @@ func lightingAssignmentBlockReason(detail map[string]any, rgbCluster *bool) stri
 		return "Managed by RGB Cluster"
 	}
 	return ""
+}
+
+// Match the LINK driver's Timewarp guard: only attached, capable channels with
+// an enabled saved effect block assignments and whole-device ownership changes.
+func activeTimewarpChannels(detail map[string]any) map[string]bool {
+	active := make(map[string]bool)
+	profile := mapping(lookup(detail, "DeviceProfile"))
+	effects := mapping(lookup(profile, "Timewarp"))
+	for id, value := range mapping(lookup(detail, "devices")) {
+		channel := mapping(value)
+		if boolValue(lookup(channel, "TimewarpCapable")) &&
+			boolValue(lookup(mapping(effects[id]), "Enabled")) {
+			active[id] = true
+		}
+	}
+	return active
 }
 
 func rgbClusterEnabled(profile map[string]any, authoritative *bool) bool {

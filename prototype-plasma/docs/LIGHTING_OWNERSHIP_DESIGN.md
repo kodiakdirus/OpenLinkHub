@@ -17,6 +17,15 @@ Hub, K100 AIR wireless, and Scimitar wireless product families when the live
 driver implements the exact whole-device RGB Cluster method. OpenRGB-owned
 devices remain observable but cannot publish or receive this command.
 
+Upstream Timewarp support also constrains LINK Hub operations. An attached
+Timewarp-capable channel with Timewarp enabled does not publish `assign-profile`,
+because its saved RGB effect would not control the visible output. Other
+channels retain their assignment capability. While any such channel is enabled,
+the Hub does not publish `change-controller`, matching the driver's rejection
+of RGB Cluster transitions. The catalog explains how to disable Timewarp in
+the Web UI; the GUI does not edit Timewarp. Disabled, unsupported, and detached
+channel entries do not suppress operations.
+
 ## Review interaction
 
 The device Lighting tab contains a persistent controller card. “Change control

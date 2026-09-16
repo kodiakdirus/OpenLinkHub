@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/sstallion/go-hid"
+	"strconv"
 )
 
 const (
@@ -322,7 +323,7 @@ func (d *Device) getManufacturer() {
 
 // getSerial will return device serial number
 func (d *Device) getSerial() {
-	d.Serial = "11048"
+	d.Serial = strconv.Itoa(int(d.ProductId))
 }
 
 // GetDeviceTemplate will return device template name
@@ -1480,6 +1481,7 @@ func (d *Device) mouseListener() {
 		}
 
 		if d.mouse != nil {
+			var pressedButtons byte = 0
 			for {
 				select {
 				default:
@@ -1499,25 +1501,29 @@ func (d *Device) mouseListener() {
 
 					// Buttons
 					if ev.Type == EvKey && (ev.Code == BtnBack || ev.Code == BtnForward || ev.Code == BtnMiddle || ev.Code == BtnLeft || ev.Code == BtnRight) {
-						var val byte = 0
+						var val byte
 						switch ev.Code {
-						case 272:
+						case BtnLeft:
 							val = 1
-						case 273:
+						case BtnRight:
 							val = 2
-						case 274:
+						case BtnMiddle:
 							val = 4
-						case 275:
+						case BtnBack:
 							val = 8
-						case 276:
+						case BtnForward:
 							val = 16
 						}
 
-						if ev.Value == 1 {
-							d.triggerKeyAssignment(val)
-						} else {
-							d.triggerKeyAssignment(0)
+						switch ev.Value {
+						case 1:
+							pressedButtons |= val
+						case 0:
+							pressedButtons &^= val
+						default:
+							continue
 						}
+						d.triggerKeyAssignment(pressedButtons)
 					}
 
 					// Mouse position

@@ -7,7 +7,7 @@ This is the planning coverage baseline for the native Plasma client. Dynamic
 suffixes such as a device serial, profile name, macro ID, or key ID are implied
 by routes ending in `/`.
 
-Count: 161 `/api` registrations: 45 `GET`, 100 `POST`, 10 `PUT`, and 6 `DELETE`.
+Count: 172 `/api` registrations: 46 `GET`, 107 `POST`, 12 `PUT`, and 7 `DELETE`.
 `GET /api/metrics` is registered only when metrics are enabled.
 
 ## Service, overview, and monitoring
@@ -77,12 +77,17 @@ Count: 161 `/api` registrations: 45 `GET`, 100 `POST`, 10 `PUT`, and 6 `DELETE`.
 - `POST /api/color/linkAdapter/bulk` — bulk Link adapter color.
 - `POST /api/color/getOverride` — read device RGB override helper.
 - `POST /api/color/setOverride` — set device RGB override.
+- `POST /api/color/getTimewarp` — read LINK channel Timewarp settings; Web UI only.
+- `POST /api/color/setTimewarp` — set LINK channel Timewarp; Web UI only. The versioned contract suppresses effect assignment on active Timewarp channels and whole-device controller transitions while Timewarp is enabled.
 - `POST /api/color/setTemperatureProbe` — temperature-reactive probe source.
 - `POST /api/color/getLedData` — read LED helper data.
 - `POST /api/color/setLedData` — set LED layout data.
 - `POST /api/color/setOpenRgbIntegration` — set OpenRGB ownership/integration.
 - `POST /api/color/setCluster` — set RGB cluster.
 - `POST /api/color/hardware` — assign hardware/offline lighting.
+- `POST /api/devices/getHardwareLights` — read supported hardware lighting modes.
+- `POST /api/devices/setHardwareLights` — select software or hardware lighting.
+- `POST /api/devices/setHardwareLight` — select a hardware lighting profile.
 - `POST /api/color/gradient/add` — add gradient color stop.
 - `POST /api/color/gradient/delete` — delete gradient color stop.
 - `POST /api/color/override/update` — update Commander Duo override.
@@ -140,6 +145,7 @@ Count: 161 `/api` registrations: 45 `GET`, 100 `POST`, 10 `PUT`, and 6 `DELETE`.
 - `POST /api/mouse/buttonOptimization` — button optimization.
 - `POST /api/mouse/leftHandMode` — left-hand mode.
 - `POST /api/mouse/liftHeight` — lift height.
+- `POST /api/mouse/surfaceSelection` — surface calibration selection; Web UI only.
 - `POST /api/mouse/updateKeyAssignment` — button assignment.
 
 ## Controller
@@ -195,6 +201,7 @@ Count: 161 `/api` registrations: 45 `GET`, 100 `POST`, 10 `PUT`, and 6 `DELETE`.
 - `POST /api/lcd/upload` — image/animation upload.
 - `PUT /api/lcd/modes` — update custom LCD mode/profile.
 - `POST /api/display/update` — display geometry/placement.
+- `POST /api/xeneon/getWidget` — read XENEON widget data; Web UI only.
 
 ## Dashboard compatibility
 
