@@ -285,7 +285,7 @@ func (d *Device) getManufacturer() {
 
 // getSerial will return device serial number
 func (d *Device) getSerial() {
-	d.Serial = "11048"
+	d.Serial = strconv.Itoa(int(d.ProductId))
 }
 
 // GetDeviceTemplate will return device template name
@@ -995,7 +995,7 @@ func (d *Device) UpdateLiftHeight(liftHeight int) uint8 {
 		return 0
 	}
 
-	if liftHeight < 2 || liftHeight > 6 {
+	if liftHeight < 1 || liftHeight > 3 {
 		return 0
 	}
 	if d.DeviceProfile.LiftHeight == liftHeight {

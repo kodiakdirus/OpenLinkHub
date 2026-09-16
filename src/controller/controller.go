@@ -57,6 +57,7 @@ func Start() {
 
 // Stop will stop device control
 func Stop() {
+	server.StopLightingRuntime()
 	devices.Stop()      // Devices
 	inputmanager.Stop() // Cleanup virtual devices
 	audio.StopAudio()   // Virtual Audio

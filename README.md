@@ -7,6 +7,45 @@ Manage RGB lighting, fan speeds, system metrics, as well as keyboards, mice, and
 
 **Available in other languages:** [Portuguese (Brazil)](README-pt_BR.md)
 
+## Interface preview
+
+### Native Plasma prototype
+
+The in-progress Qt 6/Kirigami desktop client brings OpenLinkHub controls into a
+native KDE Plasma experience. It includes capability-aware device pages,
+cooling curves, lighting scenes, profiles, telemetry, and guarded live-service
+integration. See [the prototype guide](prototype-plasma/README.md) to run it in
+self-contained Demo mode.
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/plasma-overview.png" alt="OpenLinkHub Plasma overview dashboard">
+      <br><sub><b>Overview</b> — system telemetry, cooling, devices, and quick actions.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/plasma-devices.png" alt="OpenLinkHub Plasma connected devices">
+      <br><sub><b>Devices</b> — capability-aware cards for each connected peripheral.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/images/plasma-cooling-profiles.png" alt="OpenLinkHub Plasma cooling profile editor">
+      <br><sub><b>Cooling</b> — reusable, sensor-driven fan and pump curves.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/images/plasma-lighting-scene.png" alt="OpenLinkHub Plasma lighting scene editor">
+      <br><sub><b>Lighting</b> — coordinated scenes, palettes, targets, and brightness.</sub>
+    </td>
+  </tr>
+</table>
+
+### Web dashboard
+
+The current browser interface remains available at `http://localhost:27003`.
+
+![OpenLinkHub web dashboard](static/img/ui.png)
+
 ## Features
 
 - Web-based UI accessible at `http://localhost:27003`
@@ -22,8 +61,6 @@ Manage RGB lighting, fan speeds, system metrics, as well as keyboards, mice, and
 - [Motherboard PWM](docs/motherboard-pwm.md)
 - [OpenRGB Integration](openrgb/README.md)
 - [XENEON EDGE KDE](docs/xeneon-edge-kde.md)
-
-![Web UI](https://github.com/jurkovic-nikola/OpenLinkHub/blob/main/static/img/ui.png?raw=true)
 
 ## Info
 - This project was created out of necessity to control fans and pumps on workstations after switching everything to Linux.

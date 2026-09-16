@@ -1,0 +1,86 @@
+{
+  "proposalVersion": "draft-1",
+  "capability": {
+    "id": "lighting",
+    "access": "read-write",
+    "operations": ["read", "assign-lighting", "identify-lighting"]
+  },
+  "target": {
+    "id": "channel:13",
+    "scope": "channel",
+    "channelId": 13,
+    "name": "Top radiator fan",
+    "description": "RX RGB · channel 13",
+    "activeProfile": "static",
+    "supportedProfileIds": ["static", "liquid-temperature"],
+    "operations": ["read", "assign-profile", "identify"],
+    "identifiable": true
+  },
+  "assignment": {
+    "route": "PUT /api/v1/lighting/assignment",
+    "request": {
+      "expectedRevision": 41,
+      "deviceId": "hub-1",
+      "targetId": "channel:13",
+      "profileId": "liquid-temperature"
+    },
+    "response": {
+      "apiVersion": "1.0",
+      "kind": "command-result",
+      "revision": 42,
+      "data": {
+        "operation": "assign-lighting",
+        "status": "succeeded",
+        "changed": true,
+        "deviceId": "hub-1",
+        "targetId": "channel:13",
+        "previousProfile": "static",
+        "requestedProfile": "liquid-temperature",
+        "observedProfile": "liquid-temperature",
+        "recovery": "not-needed"
+      }
+    }
+  },
+  "identification": {
+    "startRoute": "PUT /api/v1/lighting/identify",
+    "cancelRoute": "DELETE /api/v1/lighting/identify",
+    "startRequest": {
+      "expectedRevision": 42,
+      "deviceId": "hub-1",
+      "targetId": "channel:13",
+      "durationMs": 3000
+    },
+    "startResponse": {
+      "apiVersion": "1.0",
+      "kind": "lease-result",
+      "revision": 42,
+      "data": {
+        "operation": "identify-lighting",
+        "status": "active",
+        "deviceId": "hub-1",
+        "targetId": "channel:13",
+        "leaseId": "01JLIGHTINGLEASE0001",
+        "expiresInMs": 3000,
+        "restoration": "pending"
+      }
+    },
+    "cancelRequest": {
+      "deviceId": "hub-1",
+      "leaseId": "01JLIGHTINGLEASE0001"
+    },
+    "cancelResponse": {
+      "apiVersion": "1.0",
+      "kind": "lease-result",
+      "revision": 42,
+      "data": {
+        "operation": "identify-lighting",
+        "status": "cancelled",
+        "deviceId": "hub-1",
+        "targetId": "channel:13",
+        "leaseId": "01JLIGHTINGLEASE0001",
+        "expiresInMs": 0,
+        "restoration": "verified"
+      }
+    }
+  }
+}

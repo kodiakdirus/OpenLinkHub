@@ -12,11 +12,13 @@ import (
 	"OpenLinkHub/src/inputmanager"
 	"OpenLinkHub/src/logger"
 	"OpenLinkHub/src/openrgb"
+	"OpenLinkHub/src/server"
 	"github.com/godbus/dbus/v5"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -55,7 +57,7 @@ type USBInfo struct {
 	Serial    string
 }
 
-var sleep bool
+var sleep atomic.Bool
 
 func Init() {
 	go func() {
@@ -82,38 +84,20 @@ func Init() {
 		if err != nil {
 			logger.Log(logger.Fields{"error": err}).Error("Failed to add D-Bus match")
 		}
-		for signal := range ch {
-			if len(signal.Body) > 0 {
-				if isSleeping, ok := signal.Body[0].(bool); ok {
-					sleep = isSleeping
-					if isSleeping {
-						logger.Log(logger.Fields{}).Info("Suspend detected. Sending Stop() to all devices")
-
-						// Cleanup
-						if config.GetConfig().EnableOpenRGBTargetServer {
-							openrgb.Close()
-							openrgb.ClearDeviceControllers()
-						}
-
-						// Stop
-						devices.Stop()
-						inputmanager.Stop()
-					} else {
-						time.Sleep(time.Duration(config.GetConfig().ResumeDelay) * time.Millisecond)
-						logger.Log(logger.Fields{}).Info("Resume detected. Process is shutting down...")
-
-						// Due to the issues encountered when sleeping and resuming, this is the best way to handle
-						// the resume, as systemd will pick up non-zero exit codes and restart on failure.
-						// If you're reading this and thinking a resume should work, good luck.
-						// Enough time was spent on tweaking this and trying to do something that makes no sense;
-						// just terminate the process and let systemd do the magic.
-						os.Exit(1)
-					}
-				} else {
-					sleep = false
-				}
+		runSleepSignals(ch, time.Duration(config.GetConfig().ResumeDelay)*time.Millisecond, func() {
+			logger.Log(logger.Fields{}).Info("Suspend detected. Sending Stop() to all devices")
+			if config.GetConfig().EnableOpenRGBTargetServer {
+				openrgb.Close()
+				openrgb.ClearDeviceControllers()
 			}
-		}
+			server.StopLightingRuntime()
+			devices.Stop()
+			inputmanager.Stop()
+		}, func() {
+			logger.Log(logger.Fields{}).Info("Resume detected. Process is shutting down...")
+			// Recovery must not wait for a driver stuck in suspend cleanup.
+			os.Exit(1)
+		})
 	}()
 
 	go func() {
@@ -180,7 +164,7 @@ func Init() {
 			switch action {
 			case "add":
 				{
-					if sleep {
+					if sleep.Load() {
 						break
 					}
 					basePath := sysRoot + devPath
@@ -212,7 +196,7 @@ func Init() {
 				break
 			case "remove":
 				{
-					if !sleep {
+					if !sleep.Load() {
 						time.Sleep(100 * time.Millisecond)
 						info, ok := cache[devPath]
 						if !ok {
@@ -289,4 +273,46 @@ func routeAudioSinkByFragment(fragment string) {
 		}
 	}
 	logger.Log(logger.Fields{"fragment": fragment}).Warn("No matching PipeWire sink found for headset auto-switch")
+}
+
+// runSleepSignals keeps resume recovery independent of potentially blocked HID
+// cleanup. Once cleanup starts, hotplug stays disabled until process replacement.
+func runSleepSignals(signals <-chan *dbus.Signal, delay time.Duration, stop, restart func()) {
+	var stopping bool
+	var timer *time.Timer
+	var resumed <-chan time.Time
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
+	for {
+		select {
+		case <-resumed:
+			restart()
+			return
+		case signal, ok := <-signals:
+			if !ok {
+				return
+			}
+			if signal == nil || signal.Name != "org.freedesktop.login1.Manager.PrepareForSleep" || len(signal.Body) != 1 {
+				continue
+			}
+			isSleeping, ok := signal.Body[0].(bool)
+			if !ok {
+				continue
+			}
+			if isSleeping {
+				sleep.Store(true)
+				if !stopping {
+					stopping = true
+					go stop()
+				}
+			} else if timer == nil {
+				sleep.Store(true)
+				timer = time.NewTimer(delay)
+				resumed = timer.C
+			}
+		}
+	}
 }

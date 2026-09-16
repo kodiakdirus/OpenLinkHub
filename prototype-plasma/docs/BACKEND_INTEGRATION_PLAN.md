@@ -1,0 +1,569 @@
+# OpenLinkHub Plasma Backend Integration Plan
+
+Status: Phase 2 additive read contract and Phase 2.5 hardening implemented;
+Phase 3 has a guarded label mutation. The next bounded slice adds existing
+lighting-profile assignment only for capability-authorized LINK Hub channels.
+
+The source-level organization review is recorded in
+`BACKEND_ORGANIZATION_AUDIT.md`. Its decision is incremental: add one typed
+application-service and legacy-adapter seam before guarded lighting writes;
+keep broader backend cleanup on the Horizon rather than rewriting the service.
+
+The structural lighting checkpoint introduced a locked device-registry
+snapshot, a transport-neutral lighting service with narrow
+inventory/assignment ports, fake verification and recovery tests, and a
+fail-closed legacy adapter. The current slice connects that seam through one
+typed route. Only LINK Hub channel targets whose registered driver implements
+the exact assignment method advertise `assign-profile`; all others stay read.
+
+Source baseline: `src/server/server.go`, `src/server/requests/requests.go`,
+`src/config/config.go`, `src/devices/`, and the service-owned profile modules
+on the current implementation branch.
+
+## Implementation checkpoint
+
+Phase 2 is implemented as an additive contract:
+
+- `GET /api/v1/service`, `/api/v1/capabilities`, and `/api/v1/snapshot`
+  publish strict `apiVersion`, `kind`, `revision`, and `data` documents.
+- The snapshot normalizes service/build/listener flags, CPU/GPU telemetry,
+  device identity and semantic capabilities, channels, cooling profile
+  summaries, RGB effect libraries and targets, scheduler state, safe dashboard
+  preferences, display geometry, and LCD inventories.
+- Raw product structures are converted inside the service. The versioned
+  response deliberately excludes filesystem paths, logs, HID instances,
+  secrets, and the catch-all mutation payload.
+- Independent process-local state and telemetry revisions remain stable for
+  identical normalized projections. Live measurements cannot invalidate the
+  state revision reserved for future optimistic write commands.
+- Strong ETags and `If-None-Match` return `304 Not Modified` for unchanged
+  snapshots. The native client retains its current model on 304 instead of
+  rebuilding QML-facing collections.
+- The expensive device-filtered RGB library is cached for 30 seconds. A future
+  RGB mutation must invalidate that cache before its verification read.
+- The native client requests only `/api/v1/snapshot` when contract 1.0 is
+  present. Strict version/kind validation recognizes older services whose
+  catch-all `/api/` handler returns a legacy payload for that path, then falls
+  back to the Phase 1 GET set.
+- Existing legacy routes and the Web UI remain unchanged.
+- Phase 3 adds `PUT /api/v1/devices/label` for backend-published device/channel
+  targets. It requires the current state revision, uses a narrow command type,
+  rejects stale or invalid input before dispatch, and verifies refreshed
+  normalized state before claiming success.
+- The guarded lighting slice adds `PUT /api/v1/lighting/assignment` for an
+  existing profile on an exact authorized target. It shares the mutation lock,
+  rejects stale/unpublished input before dispatch, verifies refreshed state,
+  and attempts verified restoration after a mismatch.
+- The structural schema and sanitized golden snapshot cover hub/cooling,
+  keyboard, mouse, and receiver presentation families without exposing raw
+  configuration paths or HID internals.
+
+Phase 1 is implemented as an opt-in read-only client:
+
+- Demo mode remains the default and opens no connection.
+- Live mode is fixed to `http://127.0.0.1:27003`.
+- The asynchronous Qt transport implements only GET requests for inventory,
+  per-device detail, battery, CPU temperature, GPU temperature, and the
+  device-filtered RGB library at `/api/color/`.
+- Product-specific legacy payloads are normalized into device cards,
+  capability-relevant read-only tabs, telemetry, and cooling summaries.
+- Per-device Lighting tabs expose physical targets, the complete supported
+  effect library, and local-only editable drafts without implying that a
+  profile was saved or applied.
+- Device and tab selection use stable backend identifiers and survive periodic
+  telemetry model replacement.
+- Presentation state is separated from telemetry payload ownership across the
+  shell: identity-keyed models retain tab indicators, expanded cooling
+  channels, open choice popups, global search, device-tab cells, Overview
+  cells, filters, and scroll containers while value bindings update in place.
+- Hidden transport/cluster records are excluded from ordinary device cards.
+- Sanitized hub, keyboard, and mouse fixtures cover the device families
+  currently connected on SparkleDog.
+- Tests prove loopback enforcement, zero Demo-mode requests, GET-only legacy
+  mode, one capability-gated versioned label command,
+  capability relevance, stale-data preservation, reconnect recovery, RGB
+  library normalization, and GUI-wide state persistence across refresh. A
+  static QML guard also rejects direct live-array models on audited stateful
+  controls.
+- QML still treats every control except published device/channel labels as a
+  local preview. It has no POST, DELETE, generic PUT, HID, direct file, cooling,
+  lighting, input, display, or global-profile mutation path.
+
+Capability inference remains only in the legacy compatibility path. Contract
+1.0 device tabs are generated from backend-published semantic capabilities.
+
+The legacy Lighting write surface is deliberately not flattened into one
+generic Apply call. The current Web UI assigns an effect with
+`POST /api/color`, has separate adapter/global/zone paths, saves peripheral zone
+colors through device-family endpoints such as `/api/mouse/zoneColors`, and
+edits an existing effect definition with `PUT /api/color/change`. A future
+guarded lighting slice must
+model target scope and operation type explicitly, validate the response
+envelope's `status` field even on HTTP 200, and refresh the affected target
+before claiming success.
+
+## Outcome
+
+Keep one hardware authority and offer two first-class clients:
+
+```text
+Corsair hardware
+       │
+OpenLinkHub Go service
+       ├── existing Web client
+       ├── native Plasma client
+       └── read-only monitoring integrations
+```
+
+The Go service remains responsible for USB access, device discovery, capability
+truth, validation, safety limits, persistence, automation, and recovery. The
+Plasma application presents that state through Qt models and submits typed
+commands. It never opens HID devices or edits files in `database/` directly.
+
+“Expose every capability” means that every registered route and every
+service-owned feature has one documented disposition:
+
+1. a clear user-facing control;
+2. background state used by another control;
+3. an advanced/diagnostic control;
+4. an intentionally unavailable control with a reason; or
+5. a backend contract gap that must be filled before the UI can expose it.
+
+It does not mean making 160 raw API operations into 160 buttons.
+
+## Source-derived API facts
+
+- The service currently registers 160 `/api` routes: 45 `GET`, 100 `POST`,
+  9 `PUT`, and 6 `DELETE`. `/api/metrics` is one of those routes but is
+  conditional on `config.metrics`; 156 routes are unconditional.
+- The default listener is `127.0.0.1:27003`. The current API has no
+  authentication boundary, so the desktop client must default to loopback and
+  must not silently expose the listener on another interface.
+- JSON responses use a loose envelope containing `code`, `status`, `message`,
+  and one of `data`, `device`, `devices`, or `dashboard`.
+- Many validation failures still return HTTP 200 with `status: 0`. The client
+  must normalize both HTTP failures and envelope failures.
+- Most writes decode one very large catch-all `requests.Payload`. The native
+  client must use narrow command types rather than reproduce that object in QML.
+- `/api/devices/` returns a partial wrapper whose per-device `GetDevice` value
+  is a product-specific Go structure. The partial wrapper deliberately removes
+  stable product/device type data, so UI capability inference from it is not a
+  durable contract.
+- Some state is injected only into server-rendered HTML: scheduler state,
+  build/system information, and LCD profile collections are examples. Those
+  need JSON endpoints before a native client can consume them reliably.
+- Existing “user profiles” are device-local snapshots. They are not the
+  cross-device global profiles represented by the prototype.
+- Prometheus telemetry already covers product information, temperatures, RPM,
+  storage temperature, CPU temperature, and GPU temperature when metrics are
+  enabled.
+
+## Native client boundary
+
+The production client should keep QML presentation-only:
+
+```text
+QML pages and dialogs
+        │ properties, signals, Qt roles
+Application store / view models
+        │ typed domain operations
+Repositories and legacy adapters
+        │ normalized models and errors
+Qt network transport
+        │ HTTP/JSON or file transfer
+OpenLinkHub loopback API
+```
+
+Recommended initial implementation:
+
+- PyQt6/QML remains acceptable for the first production-capable client.
+- Use Qt's asynchronous network stack so requests share the Qt event loop.
+- QML must not construct URLs, decode arbitrary JSON, or decide whether a
+  device supports a feature.
+- One transport handles timeouts, cancellation, content types, response
+  envelopes, and connection state.
+- Narrow repositories expose inventory, telemetry, cooling profiles, lighting
+  profiles, device profiles, global profiles, and service administration.
+- Legacy adapters translate the current product-specific payloads into domain
+  models until an additive versioned API is available.
+- Mutations return a command result containing status, user-safe message,
+  validation details, changed revision, and whether a refresh is required.
+
+## Required additive backend contracts
+
+The existing Web UI must continue to work. Add versioned endpoints rather than
+breaking legacy routes.
+
+### Service descriptor and health
+
+Provide a machine-readable descriptor containing:
+
+- API and service version;
+- build information;
+- listener mode and whether the connection is local;
+- service/manual/frontend/metrics state;
+- device discovery state;
+- persistence health;
+- feature flags;
+- restart-required settings;
+- warnings such as unavailable sensor sources or permissions.
+
+The health response must not leak secrets, arbitrary paths, or log contents.
+
+### Capability manifest
+
+Add one normalized capability document. At minimum it should identify:
+
+- stable device ID, product ID/type, semantic device type, firmware, online
+  state, transport, battery support, and paired/dongle relationships;
+- channels and their stable IDs, labels, temperature/RPM values, pump/fan/probe
+  role, PWM mode, RGB zones/LED count, LCD attachment, and topology;
+- supported operations and valid ranges/options for each device or channel;
+- available profile types and whether hardware/offline profiles are supported;
+- environment-dependent features such as PipeWire audio, virtual gamepad,
+  motherboard PWM, memory control, OpenRGB, metrics, and display geometry.
+
+The UI generates device tabs from these semantic features. Product names may
+choose presentation details, but they must not be the authorization predicate.
+
+### Complete read contracts
+
+Add JSON reads for state that is currently HTML-only or write-only:
+
+- scheduler and lights-out state;
+- build, version, system, and service configuration summaries;
+- custom LCD profile/mode inventory;
+- active and saved device profile inventory in normalized form;
+- safe configuration values and restart requirements;
+- long-running backup, restore, upload, or reinitialization job status.
+
+### State revisions and events
+
+Add a monotonically increasing state revision and an event stream or equivalent
+change feed for device add/remove, telemetry, active-profile, job, and service
+state changes. Polling remains a fallback. Commands should accept an expected
+revision where stale writes could overwrite newer state.
+
+### Validation and dry run
+
+Safety-sensitive and compound changes need a backend validation operation that
+returns:
+
+- resolved targets and references;
+- unsupported or offline devices;
+- range and dependency errors;
+- warnings;
+- restart requirement;
+- the state revision against which validation occurred.
+
+The backend remains the final validator even when the UI has already constrained
+inputs.
+
+## Capability-to-interface map
+
+| User workspace | Backend capabilities presented there |
+|---|---|
+| Overview | Connection/health, active global profile, device health, CPU/GPU/storage telemetry, liquid/probe temperatures, fan/pump RPM, battery state, warnings, and user-selected dashboard cells |
+| Profiles | Global compositions, purpose-specific cooling/lighting/LCD/audio/input/device profiles, app/game launch rules, missing-device policy, validation, import/export, and activation history |
+| Devices | Discovery, topology, firmware/build identity, labels, positions, channel roles, per-device snapshots, hardware/offline behavior, pairing/dongle relationships, and only the tabs supported by the manifest |
+| Cooling | Temperature sources, probes, fixed and graph curves, fan/pump assignment, zero-RPM policy, PWM operating mode, PSU fan mode, live RPM/temperature, and protected manual tests |
+| Lighting | RGB profile editor, static/global/per-zone color, gradients, temperature reactions, clusters, adapters/strips, LED layout, hardware lighting, brightness, OpenRGB ownership, and lights-out behavior |
+| Input | Keyboard profiles/layout/dial/polling/sleep/brightness/debounce, assignments, macros, actuation, performance locks, FlashTap, mouse DPI/gestures/polling/sensor options, controller maps/curves/emulation/vibration/sleep |
+| Audio | Headset assignments, sleep, mute indicator, ANC, sidetone, wheel behavior, equalizers, output device, virtual audio, controller audio, and media state/control |
+| Displays | LCD attachment, modes/custom layouts, sensor selection, rotation, brightness, images/animation uploads, panel placement, and Xeneon/display geometry |
+| Automations | Existing time-based RGB/LCD schedule, display-idle lights out, global-profile process rules, priority/conflict policy, restore-on-exit, and automation history |
+| Integrations | OpenRGB ownership, Prometheus, future Plasma System Monitor sensor publication, system tray, media/PipeWire, and environment capability checks |
+| Service | Health/version, safe configuration, supported-device exclusions, backup/restore, language, diagnostics, permissions, logs, and restart-required changes |
+
+Purpose-specific profiles remain independently editable. A global profile
+references their stable IDs and versions; it does not flatten them into an
+opaque duplicate.
+
+## Registered route-family disposition
+
+The detailed 160-route snapshot is in `BACKEND_ROUTE_INVENTORY.md`. The
+user-facing disposition is:
+
+| Route family | Count | Disposition |
+|---|---:|---|
+| Versioned contract, root, CPU/GPU/storage, battery | 14 | Contract-first service/capability/snapshot reads and guarded commands plus compatibility/background telemetry; formatted and clean temperature duplicates collapse into one typed value |
+| `devices`, `label`, `position`, `operatingMode` | 8 | Device inventory/topology and capability-gated device or cooling controls |
+| `temperatures`, `speed`, `psu` | 10 | Cooling workspace; manual speed is a protected diagnostic session |
+| `color`, `brightness`, `argb`, `hub`, `led`, `misc`, `scheduler` | 32 | Lighting editor, topology, hardware lighting, brightness, and Automations; helper reads stay internal |
+| `keyboard`, `mouse`, `controller`, `input`, `macro` | 56 | Input workspace and reusable macro library; key lookup routes remain background helpers |
+| `headset`, `audio`, `media` | 14 | Audio workspace; media reads/commands appear only when the environment supports them |
+| `lcd`, `display` | 9 | Displays workspace with capability-gated file upload |
+| `dashboard` | 6 | Migrate useful presentation preferences into client-local settings; backend-owned device selection remains a compatibility feature |
+| `userProfile` | 3 | Per-device snapshot library, surfaced under the relevant device and available to global composition |
+| `metrics` | 1 | Read-only Integrations feature; conditional and advanced |
+| `systray` | 1 | Background compatibility data for tray integration |
+| `backup`, `restore`, supported devices, language | 5 | Service workspace; restore is destructive and requires preview/confirmation |
+
+No raw helper endpoint gets its own navigation destination merely to satisfy
+coverage. Coverage is proven by mapping routes to a domain operation and testing
+that every registered route has a disposition.
+
+## Global profile contract
+
+A global profile is backend-owned and contains stable references such as:
+
+- cooling profile and per-channel exceptions;
+- lighting scene plus hardware-lighting behavior;
+- keyboard, mouse, controller, headset/audio, and LCD profile assignments;
+- optional per-device snapshot references;
+- automation rules, priority, restore-on-exit behavior, and fallback profile;
+- missing/offline device policy;
+- schema version and revision.
+
+Names are presentation; references use immutable IDs. Renaming a component must
+not break a global profile.
+
+Suggested additive operations:
+
+- list/read/create/update/delete global profiles;
+- validate a draft against a specified state revision;
+- preview the resolved change set;
+- apply with an idempotency key and expected revision;
+- read the active profile and last apply report;
+- list automation rules and recent activation decisions.
+
+Apply sequence:
+
+1. snapshot relevant current service state;
+2. resolve every referenced component;
+3. validate every target, range, safety invariant, and missing-device rule;
+4. produce the complete plan before touching hardware;
+5. apply safety-critical cooling state and then the remaining components;
+6. persist the active global profile only after success;
+7. on failure, perform backend-owned best-effort rollback and return an explicit
+   per-component report.
+
+The UI must never approximate atomic apply with an untracked chain of legacy
+requests.
+
+## Cooling and destructive-operation safety
+
+- Pump minimums, valid PWM modes, temperature-source validity, and emergency
+  behavior are service policy, not client policy.
+- A lost desktop connection must not stop the service's monitoring or fan
+  control.
+- Manual fan/pump output is an explicitly timed test with visible target,
+  remaining duration, and automatic reversion.
+- Cooling changes use edit, validate, apply, verify. The UI shows observed
+  profile/RPM state after apply rather than assuming success.
+- The client must not toggle the service's `manual` configuration merely because
+  it is a custom UI; that mode disables normal temperature monitoring and
+  automatic speed adjustment.
+- Restore, supported-device removal, device reinitialization, and any future
+  firmware operation require target-specific confirmation and a backout or
+  recovery description.
+- Backup and restore are file-transfer jobs, not ordinary JSON toggles.
+- Remote/non-loopback service connections are out of initial scope. Supporting
+  them later requires an authentication and transport-security design.
+
+## Plasma System Monitor sensors
+
+The existing optional Prometheus endpoint is useful but does not by itself make
+Corsair telemetry native Plasma sensors.
+
+Plan a read-only bridge with two layers:
+
+1. the service publishes a normalized sensor catalog and current values, with
+   stable sensor IDs, units, labels, availability, device/channel identity, and
+   timestamps;
+2. an optional KDE integration publishes those values through the Plasma system
+   monitoring framework.
+
+The bridge receives no hardware-control authority. The Plasma client exposes an
+Integrations page where users can enable publication and choose sensors such as
+coolant temperature, probe temperatures, pump/fan RPM, battery, and PSU values.
+Prometheus remains available independently for non-Plasma monitoring.
+
+The exact KDE plugin boundary should be confirmed against the installed Plasma
+development API before implementation; the service-side sensor schema should
+not depend on that choice.
+
+## Phased implementation
+
+### Phase 0 — contract fixtures and route coverage
+
+- Freeze sanitized response fixtures for each connected product family and major
+  profile type.
+- Add a route inventory check that fails when a registered route has no
+  disposition.
+- Define normalized models and error taxonomy.
+- Keep the prototype offline.
+
+Exit: all 160 current routes are classified and representative payloads parse
+without QML involvement.
+
+### Phase 1 — read-only legacy client
+
+- Add asynchronous Qt transport, connection state, timeouts, cancellation, and
+  legacy response normalization.
+- Connect health probing, `/api/devices/`, per-device detail, telemetry,
+  temperature profiles, RGB data, battery, and dashboard-compatible reads.
+- Replace mock values only in Overview, Devices, and read-only Cooling sensor
+  cells.
+- Preserve an explicit demo-data mode for UI development.
+
+Exit: unplug/replug, service restart, malformed payload, timeout, and unsupported
+device states are visible and cannot trigger a write.
+
+### Phase 2 — additive service contract
+
+- Add versioned service descriptor, capability manifest, normalized snapshot,
+  missing JSON reads, revisions, and change events.
+- Keep legacy routes and the Web UI working.
+- Switch the native adapters to prefer the versioned contract and fall back only
+  where explicitly supported.
+
+Exit: device tabs and valid controls are derived entirely from semantic
+capabilities.
+
+Checkpoint: implemented for read-only device tabs and snapshot state. Polling
+uses separate state/telemetry revisions and conditional GETs; event-driven
+change delivery remains a later optimization and legacy fallback remains
+supported.
+
+### Phase 3 — low-risk mutations and profile editors
+
+- Labels, positions, presentation selections, lighting preview/brightness, and
+  non-destructive profile CRUD.
+- Consistent dirty/validate/apply/revert interaction.
+- Verify every mutation with refreshed backend state.
+
+Exit: failures are actionable, stale writes are rejected, and controls never
+  imply success from HTTP 200 alone.
+
+Checkpoint: the first end-to-end slice is implemented for device/channel
+labels. The snapshot publishes stable label targets and `update-label`
+capability authorization. The Qt editor submits a typed command with the
+current state revision; the service validates, dispatches through the existing
+device driver, rebuilds state, and reports success only after label read-back.
+HTTP 400/404/409/422/500 rejection paths remain explicit. The bounded lighting
+slice adds existing-profile assignment for exact capability-authorized LINK Hub
+channels with the same optimistic concurrency plus verified recovery. Cooling,
+profile CRUD, and every other hardware-affecting operation remain outside this
+slice.
+
+The lighting boundary is documented in `LIGHTING_COMMAND_DESIGN.md`.
+Target-specific persistent assignment with verified recovery is implemented;
+the separate non-persistent, server-expiring identification lease remains a
+future checkpoint. Profile editing, bulk/global assignment, hardware lighting,
+per-key/per-LED data, adapters, clusters, schedules, and peripheral-specific
+zones remain explicitly deferred.
+
+### Phase 4 — cooling and hardware/offline behavior
+
+- Cooling profile assignment/editing, graph curves, PWM mode, protected manual
+  tests, PSU control, hardware lighting, and LCD behavior.
+- Add safety validation, verification, and rollback reporting first.
+
+Exit: service-enforced invariants and live-hardware tests pass on explicitly
+approved hardware without weakening service safeguards.
+
+### Phase 5 — peripheral depth
+
+- Keyboard, mouse, controller, macros, headset/audio, LCD/media, hub/adapter,
+  OpenRGB, and display controls.
+- Capability fixtures and tests for each supported operation shape.
+
+Exit: every current route family has a tested domain operation or documented
+background-only disposition.
+
+### Phase 6 — global profiles and automations
+
+- Backend persistence, validation, preview, atomic apply/recovery, process rules,
+  priorities, fallback, and activation history.
+- Top-bar selector reads only the backend's active global profile.
+
+Exit: a failed component cannot silently leave the UI claiming that the global
+profile is active.
+
+### Phase 7 — monitoring and administration
+
+- Plasma sensor bridge, Prometheus controls, safe service settings, backup and
+  restore jobs, diagnostics, permissions guidance, and supported-device
+  exclusions.
+
+Exit: administration is recoverable, privileged boundaries are explicit, and
+monitoring remains read-only.
+
+## Verification strategy
+
+- Unit tests for the envelope parser, error normalization, domain adapters,
+  capability predicates, profile references, and stale revision handling.
+- Golden fixture tests for every supported product family represented in
+  `src/devices/`.
+- A mock HTTP service for success, validation failure, malformed data, delay,
+  disconnect, reconnect, device hotplug, and partial global-profile failure.
+- Backend contract tests for additive endpoints and legacy-Web-UI compatibility.
+- Route coverage test generated from `setRoutes()`.
+- No-hardware smoke tests that instantiate every workspace and capability shell.
+- Opt-in live-hardware tests with an inventory snapshot, explicit target list,
+  observed-state verification, and a safe restoration step.
+- Accessibility checks for keyboard navigation, focus, labels, contrast, reduced
+  motion, and non-color status cues.
+
+## First implementation slice
+
+The first coding slice should be intentionally read-only:
+
+1. introduce the Qt transport and connection-state model;
+2. add typed legacy envelope and error handling;
+3. read `/api/devices/` and selected per-device details;
+4. normalize connected devices, channels, temperature, RPM, and battery;
+5. bind Overview and Devices to real read models behind a demo/live switch;
+6. add fixtures and disconnect/reconnect tests;
+7. make no `POST`, `PUT`, or `DELETE` calls.
+
+This slice proves the process boundary and the hardest compatibility problem
+without risking cooling behavior. The additive capability manifest is the first
+backend change after that read-only client demonstrates what data the current
+API cannot express safely.
+
+### Phase 1 implementation checkpoint
+
+The read-only client now treats periodic telemetry replacement as data
+freshness, not navigation or a connection transition. Stable device IDs and tab
+names preserve semantic selection, while a presentation-stable tab-button model
+also preserves the control-owned visible indicator. Routine background polls
+retain the last known connection state; only initial entry, Demo-to-Live, and
+offline recovery present a Connecting state.
+
+Header identity/capability data and device-lighting target/effect collections
+are replaced only when their normalized signatures change. This allows live
+measurements to refresh without rebuilding unchanged application chrome,
+comboboxes, or effect-library delegates. Regressions cover both semantic tab
+selection and the actual `TabBar.currentIndex`, plus the absence of a transient
+Connecting state during an established background refresh.
+
+The Devices workspace likewise keeps its search control and card model mounted
+through telemetry-only replacement. Card order is normalized because the
+legacy inventory originates in a Go map and therefore has no stable iteration
+order. Hidden records are not treated uniformly: internal cluster/helper
+records remain excluded, while recognizable receiver/dongle transports are
+shown as user-relevant devices with an explicit warning when the legacy API
+does not expose their paired-device inventory.
+
+Live hardware inspection identified a separate service-support gap for the
+connected CORSAIR VOID ELITE Wireless revision. Linux enumerates its headset and
+dongle as USB product IDs `0a54` and `0a55`, but the current OpenLinkHub device
+register includes only the earlier VOID ELITE dongle product ID `0a51`.
+Consequently no headset object reaches `/api/devices/` or `/api/batteryStats`.
+The client must not synthesize a controllable headset from raw USB presence;
+support requires a separately reviewed backend driver/USB-ID change and
+hardware validation before the normal capability adapter can expose it.
+
+## Planning acceptance checklist
+
+- Every registered route is represented in the inventory.
+- Every family has a user-facing, background, advanced, unavailable, or contract
+  gap disposition.
+- Device controls are capability-driven.
+- Global profiles compose stable purpose-specific references.
+- Cooling and destructive operations have backend-owned validation and recovery.
+- Existing Web UI routes remain compatible.
+- Plasma sensor publication is read-only and separate from hardware control.
+- Initial implementation is loopback-only and read-only.

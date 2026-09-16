@@ -184,6 +184,10 @@ const (
 	ProductTypeSabreV2Pro           = 246
 	ProductTypeIronClawSEW          = 247
 	ProductTypeIronClawSEWU         = 248
+	ProductTypeNightswordV2W        = 249
+	ProductTypeNightswordV2WU       = 250
+	ProductTypeHarpoonV2W           = 251
+	ProductTypeHarpoonV2WU          = 252
 	ProductTypeVirtuosoXTW          = 300
 	ProductTypeVirtuosoXTWU         = 301
 	ProductTypeVirtuosoMAXW         = 302
@@ -1037,4 +1041,8 @@ func MaxHIDInputReport(rd []byte) int {
 		return maxSize + 1
 	}
 	return maxSize
+}
+
+func ValidRGB(v float64) bool {
+	return v >= 0 && v <= 255 && math.Trunc(v) == v
 }

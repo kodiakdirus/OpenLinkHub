@@ -888,6 +888,11 @@ func (d *Device) ProcessSetRgbCluster(enabled bool) uint8 {
 	return 1
 }
 
+// GetRgbCluster returns whether RGB Cluster currently owns device lighting.
+func (d *Device) GetRgbCluster() bool {
+	return d.DeviceProfile != nil && d.DeviceProfile.RGBCluster
+}
+
 // ChangeDeviceBrightness will change device brightness
 func (d *Device) ChangeDeviceBrightness(mode uint8) uint8 {
 	d.DeviceProfile.Brightness = mode
@@ -2531,6 +2536,7 @@ func (d *Device) startQueueWorker() {
 			}
 
 			if dpiColor == nil {
+				d.deviceLock.Unlock()
 				return
 			}
 
@@ -2721,6 +2727,9 @@ func (d *Device) transfer(endpoint byte, command, buffer []byte) ([]byte, error)
 // getListenerData will listen for keyboard events and return data on success or nil on failure.
 // ReadWithTimeout is mandatory due to the nature of listening for events
 func (d *Device) getListenerData() []byte {
+	if d.listener == nil {
+		return nil
+	}
 	data := make([]byte, bufferSize)
 	n, err := d.listener.ReadWithTimeout(data, 100*time.Millisecond)
 	if err != nil || n == 0 {
@@ -2748,6 +2757,11 @@ func (d *Device) backendListener() {
 			logger.Log(logger.Fields{"error": err, "vendorId": d.VendorId}).Error("Unable to enumerate devices")
 		}
 
+		if d.listener == nil {
+			logger.Log(logger.Fields{"serial": d.Serial}).Error("Unable to open device listener")
+			return
+		}
+
 		for {
 			select {
 			default:
@@ -2762,6 +2776,7 @@ func (d *Device) backendListener() {
 
 				data := d.getListenerData()
 				if len(data) == 0 || data == nil {
+					time.Sleep(5 * time.Millisecond)
 					continue
 				}
 

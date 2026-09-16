@@ -1,0 +1,7 @@
+include LICENSE README.md run.sh pyproject.toml
+recursive-include qml *.qml
+recursive-include packaging *.json *.svg *.desktop *.xml
+recursive-include docs *.md *.json
+recursive-include tests *.py *.json
+recursive-include scripts *.py *.sh
+global-exclude __pycache__ *.py[cod]

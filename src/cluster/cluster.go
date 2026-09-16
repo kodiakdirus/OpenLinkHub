@@ -5,16 +5,18 @@ package cluster
 // License: GPL-3.0 or later
 
 import (
+	"OpenLinkHub/src/application/lighting"
 	"OpenLinkHub/src/common"
 	"OpenLinkHub/src/config"
 	"OpenLinkHub/src/logger"
 	"OpenLinkHub/src/rgb"
 	"OpenLinkHub/src/temperatures"
+	"context"
 	"encoding/json"
-	"math/rand"
 	"os"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,11 +34,19 @@ type DeviceProfile struct {
 }
 
 type Device struct {
+	stopping        atomic.Bool
 	Product         string `json:"product"`
 	Serial          string `json:"serial"`
 	DeviceProfile   *DeviceProfile
 	Rgb             *rgb.RGB
-	activeRgb       *rgb.ActiveRGB
+	runtimeMu       sync.Mutex
+	runtime         lighting.RuntimeState
+	renderer        lighting.Renderer
+	lifecycle       sync.Mutex
+	stopOnce        sync.Once
+	overlayMu       sync.Mutex
+	overlayDevice   string
+	overlayExpiry   time.Time
 	Controllers     []*common.ClusterController
 	mutex           sync.RWMutex
 	Exit            bool
@@ -96,26 +106,21 @@ func (d *Device) Stop() {
 		return
 	}
 
-	d.Exit = true
-	logger.Log(logger.Fields{"serial": d.Serial, "product": d.Product}).Info("Stopping device...")
-
-	var once sync.Once
-	go func() {
-		once.Do(func() {
-			if d.activeRgb != nil {
-				d.activeRgb.Exit <- true
-				d.activeRgb = nil
-			}
+	d.stopOnce.Do(func() {
+		d.stopping.Store(true)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		_ = d.renderer.Stop(ctx)
+		d.overlayMu.Lock()
+		d.overlayDevice = ""
+		d.overlayMu.Unlock()
+		if d.timer != nil {
 			d.timer.Stop()
-
-			if d.autoRefreshChan != nil {
-				close(d.autoRefreshChan)
-				d.autoRefreshChan = nil
-			}
-		})
-	}()
-	d.Controllers = make([]*common.ClusterController, 0)
-	logger.Log(logger.Fields{"serial": d.Serial, "product": d.Product}).Info("Device stopped")
+		}
+		if d.autoRefreshChan != nil {
+			close(d.autoRefreshChan)
+		}
+	})
 }
 
 func Get() *Device {
@@ -124,31 +129,42 @@ func Get() *Device {
 
 // AddDeviceController will add a new Cluster Controller
 func (d *Device) AddDeviceController(controller *common.ClusterController) {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if d.stopping.Load() {
+		return
+	}
+
 	d.mutex.Lock()
 	d.Controllers = append(d.Controllers, controller)
 	d.mutex.Unlock()
 
-	if len(d.Controllers) == 1 {
+	d.updateRuntimeState()
+	if len(d.runtimeState().Members) == 1 {
 		d.setDeviceColor()
 	}
 }
 
 // RemoveDeviceControllerBySerial removes a controller by its serial
 func (d *Device) RemoveDeviceControllerBySerial(serial string) {
-	d.mutex.Lock()
-	defer d.mutex.Unlock()
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if d.stopping.Load() {
+		return
+	}
 
+	d.mutex.Lock()
 	for i, c := range d.Controllers {
 		if c.Serial == serial {
 			d.Controllers = append(d.Controllers[:i], d.Controllers[i+1:]...)
-			if len(d.Controllers) == 0 {
-				if d.activeRgb != nil {
-					d.activeRgb.Exit <- true
-					d.activeRgb = nil
-				}
-			}
-			return
+			break
 		}
+	}
+	empty := len(d.Controllers) == 0
+	d.mutex.Unlock()
+	d.updateRuntimeState()
+	if empty {
+		_ = d.stopRenderer()
 	}
 }
 
@@ -171,6 +187,13 @@ func (d *Device) GetRgbProfile(profile string) *rgb.Profile {
 
 // ProcessNewGradientColor will create new gradient color
 func (d *Device) ProcessNewGradientColor(profileName string) (uint8, uint) {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if err := d.stopRenderer(); err != nil {
+		return 0, 0
+	}
+	defer d.setDeviceColor()
+
 	if d.GetRgbProfile(profileName) == nil {
 		logger.Log(logger.Fields{"serial": d.Serial, "profile": profileName}).Warn("Non-existing RGB profile")
 		return 0, 0
@@ -196,16 +219,18 @@ func (d *Device) ProcessNewGradientColor(profileName string) (uint8, uint) {
 
 	d.Rgb.Profiles[profileName] = *pf
 	d.saveRgbProfile()
-	if d.activeRgb != nil {
-		d.activeRgb.Exit <- true // Exit current RGB mode
-		d.activeRgb = nil
-	}
-	d.setDeviceColor() // Restart RGB
 	return 1, uint(nextID)
 }
 
 // ProcessDeleteGradientColor will delete gradient color
 func (d *Device) ProcessDeleteGradientColor(profileName string) (uint8, uint) {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if err := d.stopRenderer(); err != nil {
+		return 0, 0
+	}
+	defer d.setDeviceColor()
+
 	if d.GetRgbProfile(profileName) == nil {
 		logger.Log(logger.Fields{"serial": d.Serial, "profile": profileName}).Warn("Non-existing RGB profile")
 		return 0, 0
@@ -230,16 +255,18 @@ func (d *Device) ProcessDeleteGradientColor(profileName string) (uint8, uint) {
 
 	d.Rgb.Profiles[profileName] = *pf
 	d.saveRgbProfile()
-	if d.activeRgb != nil {
-		d.activeRgb.Exit <- true // Exit current RGB mode
-		d.activeRgb = nil
-	}
-	d.setDeviceColor() // Restart RGB
 	return 1, uint(maxKey)
 }
 
 // UpdateRgbProfileData will update RGB profile data
 func (d *Device) UpdateRgbProfileData(profileName string, profile rgb.Profile) uint8 {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if err := d.stopRenderer(); err != nil {
+		return 0
+	}
+	defer d.setDeviceColor()
+
 	if d.GetRgbProfile(profileName) == nil {
 		logger.Log(logger.Fields{"serial": d.Serial, "profile": profile}).Warn("Non-existing RGB profile")
 		return 0
@@ -258,16 +285,18 @@ func (d *Device) UpdateRgbProfileData(profileName string, profile rgb.Profile) u
 
 	d.Rgb.Profiles[profileName] = *pf
 	d.saveRgbProfile()
-	if d.activeRgb != nil {
-		d.activeRgb.Exit <- true // Exit current RGB mode
-		d.activeRgb = nil
-	}
-	d.setDeviceColor() // Restart RGB
 	return 1
 }
 
 // UpdateRgbProfile will update device RGB profile
 func (d *Device) UpdateRgbProfile(_ int, profile string) uint8 {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if err := d.stopRenderer(); err != nil {
+		return 0
+	}
+	defer d.setDeviceColor()
+
 	if d.DeviceProfile == nil {
 		return 0
 	}
@@ -279,16 +308,18 @@ func (d *Device) UpdateRgbProfile(_ int, profile string) uint8 {
 	d.DeviceProfile.RGBProfile = profile
 	d.saveDeviceProfile()
 
-	if d.activeRgb != nil {
-		d.activeRgb.Exit <- true // Exit current RGB mode
-		d.activeRgb = nil
-	}
-	d.setDeviceColor() // Restart RGB
 	return 1
 }
 
 // ChangeDeviceBrightnessValue will change device brightness via slider
 func (d *Device) ChangeDeviceBrightnessValue(value uint8) uint8 {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if err := d.stopRenderer(); err != nil {
+		return 0
+	}
+	defer d.setDeviceColor()
+
 	if value < 0 || value > 100 {
 		return 0
 	}
@@ -300,6 +331,13 @@ func (d *Device) ChangeDeviceBrightnessValue(value uint8) uint8 {
 
 // SchedulerBrightness will change device brightness via scheduler
 func (d *Device) SchedulerBrightness(value uint8) uint8 {
+	d.lifecycle.Lock()
+	defer d.lifecycle.Unlock()
+	if err := d.stopRenderer(); err != nil {
+		return 0
+	}
+	defer d.setDeviceColor()
+
 	if value == 0 {
 		d.DeviceProfile.OriginalBrightness = *d.DeviceProfile.BrightnessSlider
 		d.DeviceProfile.BrightnessSlider = &value
@@ -411,7 +449,8 @@ func (d *Device) distributeColors(buff []byte) {
 			break
 		}
 
-		slice := buff[offset : offset+length]
+		slice := append([]byte(nil), buff[offset:offset+length]...)
+		d.applyIdentification(c.Serial, slice)
 
 		if c.WriteColorEx != nil {
 			wg.Add(1)
@@ -429,6 +468,10 @@ func (d *Device) distributeColors(buff []byte) {
 
 // setDeviceColor will set cluster rgb effect
 func (d *Device) setDeviceColor() {
+	if d.stopping.Load() {
+		return
+	}
+	d.updateRuntimeState()
 	if d.DeviceProfile == nil {
 		return
 	}
@@ -438,36 +481,37 @@ func (d *Device) setDeviceColor() {
 		return
 	}
 
-	go func() {
+	d.renderer.Start(func(ctx context.Context) {
 		startTime := time.Now()
-		d.activeRgb = rgb.Exit()
-		d.activeRgb.RGBStartColor = rgb.GenerateRandomColor(1)
-		d.activeRgb.RGBEndColor = rgb.GenerateRandomColor(1)
-		rand.New(rand.NewSource(time.Now().UnixNano()))
-
+		active := rgb.Exit()
+		active.RGBStartColor = rgb.GenerateRandomColor(1)
+		active.RGBEndColor = rgb.GenerateRandomColor(1)
 		for {
-			lightChannels := 0
-			for k := range d.Controllers {
-				lightChannels += int(d.Controllers[k].LedChannels)
-			}
-
 			select {
-			case <-d.activeRgb.Exit:
+			case <-ctx.Done():
 				return
 			default:
-				if d.Exit {
-					return
-				}
-				buff := d.generateRgbEffect(lightChannels, &startTime, d.DeviceProfile.RGBProfile)
-				d.distributeColors(buff)
-				time.Sleep(20 * time.Millisecond)
+			}
+			d.mutex.RLock()
+			lightChannels := 0
+			for _, c := range d.Controllers {
+				lightChannels += int(c.LedChannels)
+			}
+			d.mutex.RUnlock()
+			buff := d.generateRgbEffect(lightChannels, &startTime, d.DeviceProfile.RGBProfile, active)
+			d.distributeColors(buff)
+			d.renderer.Frame()
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(20 * time.Millisecond):
 			}
 		}
-	}()
+	})
 }
 
 // generateRgbEffect will generate RGB effect for given device index
-func (d *Device) generateRgbEffect(channels int, startTime *time.Time, rgbProfile string) []byte {
+func (d *Device) generateRgbEffect(channels int, startTime *time.Time, rgbProfile string, active *rgb.ActiveRGB) []byte {
 	buff := make([]byte, 0)
 	rgbCustomColor := true
 
@@ -498,8 +542,8 @@ func (d *Device) generateRgbEffect(channels int, startTime *time.Time, rgbProfil
 		r.RGBStartColor = &profile.StartColor
 		r.RGBEndColor = &profile.EndColor
 	} else {
-		r.RGBStartColor = d.activeRgb.RGBStartColor
-		r.RGBEndColor = d.activeRgb.RGBEndColor
+		r.RGBStartColor = active.RGBStartColor
+		r.RGBEndColor = active.RGBEndColor
 	}
 
 	// Brightness
@@ -594,7 +638,7 @@ func (d *Device) generateRgbEffect(channels int, startTime *time.Time, rgbProfil
 		}
 	case "colorshift":
 		{
-			r.Colorshift(startTime, d.activeRgb)
+			r.Colorshift(startTime, active)
 			buff = r.Output
 		}
 	case "circleshift":
@@ -614,7 +658,7 @@ func (d *Device) generateRgbEffect(channels int, startTime *time.Time, rgbProfil
 		}
 	case "colorwarp":
 		{
-			r.Colorwarp(startTime, d.activeRgb)
+			r.Colorwarp(startTime, active)
 			buff = r.Output
 		}
 	case "nebula":

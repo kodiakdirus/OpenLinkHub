@@ -2769,6 +2769,44 @@ func (d *Device) triggerKeyAssignment(value []byte, functionKey bool, modifierKe
 	if modifierKey > 0 {
 		raw[13] = 0x00
 	}
+	if raw[16] == 0x02 {
+		switch d.DeviceProfile.ControlDial {
+		case 1:
+			{
+				inputmanager.InputControlKeyboard(inputmanager.VolumeMute, false)
+			}
+		case 2:
+			{
+				if d.DeviceProfile.BrightnessLevel > 0 {
+					d.DeviceProfile.BrightnessLevel = 0
+				} else {
+					d.DeviceProfile.BrightnessLevel = 1000
+				}
+				d.saveDeviceProfile()
+				d.setBrightnessLevel()
+			}
+		case 3:
+			{
+				inputmanager.InputControlCtrlEnd()
+			}
+		case 4:
+			{
+				inputmanager.InputControlZoomReset()
+			}
+		case 5:
+			{
+
+			}
+		case 6:
+			{
+				inputmanager.InputControlKeyboard(inputmanager.MediaPlayPause, false)
+			}
+		case 7:
+			{
+				inputmanager.InputControlScrollHorizontalReset()
+			}
+		}
+	}
 
 	// Hash it
 	for i, j := 0, len(raw)-1; i < j; i, j = i+1, j-1 {
@@ -3076,6 +3114,9 @@ func (d *Device) writeKeyActuation(endpoint, data []byte) {
 // getListenerData will listen for keyboard events and return data on success or nil on failure.
 // ReadWithTimeout is mandatory due to the nature of listening for events
 func (d *Device) getListenerData() []byte {
+	if d.listener == nil {
+		return nil
+	}
 	data := make([]byte, bufferListenerSize)
 	n, err := d.listener.ReadWithTimeout(data, 100*time.Millisecond)
 	if err != nil || n == 0 {
@@ -3103,6 +3144,11 @@ func (d *Device) backendListener() {
 			logger.Log(logger.Fields{"error": err, "vendorId": d.VendorId}).Error("Unable to enumerate devices")
 		}
 
+		if d.listener == nil {
+			logger.Log(logger.Fields{"serial": d.Serial}).Error("Unable to open device listener")
+			return
+		}
+
 		for {
 			select {
 			default:
@@ -3117,6 +3163,7 @@ func (d *Device) backendListener() {
 
 				data := d.getListenerData()
 				if len(data) == 0 || data == nil {
+					time.Sleep(5 * time.Millisecond)
 					continue
 				}
 

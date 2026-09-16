@@ -112,7 +112,7 @@ func (d *Device) createDevice() {
 // addDevices adda a mew device
 func (d *Device) addDevices() {
 	switch d.Devices.ProductId {
-	case 10761:
+	case 10759, 10761, 10768:
 		{
 			dev := voidV2W.Init(
 				d.Devices.VendorId,
@@ -124,7 +124,7 @@ func (d *Device) addDevices() {
 			)
 			object := &common.Device{
 				ProductType: common.ProductTypeVoidV2W,
-				Product:     "VOID WIRELESS V2",
+				Product:     dev.Product,
 				Serial:      dev.Serial,
 				Firmware:    dev.Firmware,
 				Image:       "icon-headphone.svg",
@@ -224,6 +224,13 @@ func (d *Device) getDevice() {
 		Serial:    d.Serial + "W",
 		VendorId:  d.VendorId,
 		ProductId: 10761,
+	}
+
+	switch d.ProductId {
+	case 10757:
+		d.Devices.ProductId = 10759
+	case 10770:
+		d.Devices.ProductId = 10768
 	}
 }
 
@@ -371,6 +378,9 @@ func (d *Device) monitorDevice() {
 // getListenerData will listen for keyboard events and return data on success or nil on failure.
 // ReadWithTimeout is mandatory due to the nature of listening for events
 func (d *Device) getListenerData() []byte {
+	if d.listener == nil {
+		return nil
+	}
 	data := make([]byte, bufferSize)
 	n, err := d.listener.ReadWithTimeout(data, 100*time.Millisecond)
 	if err != nil || n == 0 {
@@ -382,8 +392,15 @@ func (d *Device) getListenerData() []byte {
 // backendListener will listen for events from the device
 func (d *Device) backendListener() {
 	go func() {
+		interfaceId := 4
+		switch d.ProductId {
+		case 10757, 10770:
+			interfaceId = 3
+		default:
+			interfaceId = 4
+		}
 		enum := hid.EnumFunc(func(info *hid.DeviceInfo) error {
-			if info.InterfaceNbr == 4 {
+			if info.InterfaceNbr == interfaceId {
 				listener, err := hid.OpenPath(info.Path)
 				if err != nil {
 					return err
@@ -396,6 +413,11 @@ func (d *Device) backendListener() {
 		err := hid.Enumerate(d.VendorId, d.ProductId, enum)
 		if err != nil {
 			logger.Log(logger.Fields{"error": err, "vendorId": d.VendorId}).Error("Unable to enumerate devices")
+		}
+
+		if d.listener == nil {
+			logger.Log(logger.Fields{"serial": d.Serial}).Error("Unable to open device listener")
+			return
 		}
 
 		// Listen loop
@@ -413,6 +435,7 @@ func (d *Device) backendListener() {
 
 				data := d.getListenerData()
 				if len(data) == 0 || data == nil {
+					time.Sleep(5 * time.Millisecond)
 					continue
 				}
 

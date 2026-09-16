@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Response contains data what is sent back to a client
@@ -1201,9 +1202,42 @@ func getRgbOverride(w http.ResponseWriter, r *http.Request) {
 	resp.Send(w)
 }
 
-// getRgbOverride return RGB override for given device
+// setRgbOverride sets RGB override for given device
 func setRgbOverride(w http.ResponseWriter, r *http.Request) {
 	request := requests.ProcessSetRgbOverride(r)
+	resp := &Response{
+		Code:    request.Code,
+		Status:  request.Status,
+		Message: request.Message,
+	}
+	resp.Send(w)
+}
+
+// getTimewarp return RGB timewarp for given device
+func getRgbTimewarp(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessGetRgbTimewarp(r)
+	resp := &Response{
+		Code:   request.Code,
+		Status: request.Status,
+		Data:   request.Data,
+	}
+	resp.Send(w)
+}
+
+// getXeneonWidget return xeneon widget
+func getXeneonWidget(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessGetXeneonWidget(r)
+	resp := &Response{
+		Code:   request.Code,
+		Status: request.Status,
+		Data:   request.Data,
+	}
+	resp.Send(w)
+}
+
+// setRgbTimewarp sets RGB timewarp for given device
+func setRgbTimewarp(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessSetRgbTimewarp(r)
 	resp := &Response{
 		Code:    request.Code,
 		Status:  request.Status,
@@ -1565,6 +1599,17 @@ func changeLeftHandMode(w http.ResponseWriter, r *http.Request) {
 // changeLiftHeight handles device lift height change
 func changeLiftHeight(w http.ResponseWriter, r *http.Request) {
 	request := requests.ProcessChangeLiftHeight(r)
+	resp := &Response{
+		Code:    request.Code,
+		Status:  request.Status,
+		Message: request.Message,
+	}
+	resp.Send(w)
+}
+
+// changeSurfaceSelection handles device surface selection change
+func changeSurfaceSelection(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessChangeSurfaceSelection(r)
 	resp := &Response{
 		Code:    request.Code,
 		Status:  request.Status,
@@ -2018,6 +2063,39 @@ func getChannelData(w http.ResponseWriter, r *http.Request) {
 // updateDisplayData handles update of display values
 func updateDisplayData(w http.ResponseWriter, r *http.Request) {
 	request := requests.ProcessUpdateDisplayData(r)
+	resp := &Response{
+		Code:    request.Code,
+		Status:  request.Status,
+		Message: request.Message,
+	}
+	resp.Send(w)
+}
+
+// getHardwareLights return supported device hardware lights
+func getHardwareLights(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessGetHardwareLights(r)
+	resp := &Response{
+		Code:   request.Code,
+		Status: request.Status,
+		Data:   request.Data,
+	}
+	resp.Send(w)
+}
+
+// setHardwareLights will set supported device hardware lights
+func setHardwareLights(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessSetHardwareLights(r)
+	resp := &Response{
+		Code:    request.Code,
+		Status:  request.Status,
+		Message: request.Message,
+	}
+	resp.Send(w)
+}
+
+// setHardwareLights will set supported device hardware light profile
+func setHardwareLight(w http.ResponseWriter, r *http.Request) {
+	request := requests.ProcessSetHardwareLight(r)
 	resp := &Response{
 		Code:    request.Code,
 		Status:  request.Status,
@@ -2513,6 +2591,29 @@ func getDeviceID(uri string, r *http.Request) (string, bool) {
 }
 
 func handleFunc(mux *http.ServeMux, path, method string, handler func(w http.ResponseWriter, r *http.Request)) {
+	lightingWrite := method != http.MethodGet && (strings.HasPrefix(path, "/api/color") || strings.HasPrefix(path, "/api/brightness"))
+	guardedLighting := lightingWrite || path == "/api/v1/lighting/assignment" || path == "/api/v1/lighting/ownership"
+	if guardedLighting {
+		next := handler
+		handler = func(w http.ResponseWriter, r *http.Request) {
+			if apiV1Runtime.State().Lease != nil {
+				http.Error(w, "End identification before changing lighting.", http.StatusConflict)
+				return
+			}
+			next(w, r)
+		}
+	}
+	if lightingWrite {
+		handler = boundedHandler(handler, lightingMutationGate, 3*time.Second)
+	}
+
+	switch path {
+	case "/api/v1/service", "/api/v1/capabilities", "/api/v1/snapshot":
+		handler = boundedHandler(handler, snapshotGate, 3*time.Second)
+	case "/api/v1/devices/label", "/api/v1/lighting/assignment", "/api/v1/lighting/ownership":
+		handler = boundedHandler(handler, lightingMutationGate, 3*time.Second)
+	}
+
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == method {
 			handler(w, r)
@@ -2528,7 +2629,18 @@ func setRoutes() http.Handler {
 	fs := http.FileServer(http.Dir("./static"))
 	r.Handle("/static/", http.StripPrefix("/static/", fs))
 
+	handleFunc(r, "/api/v1/lighting/runtime", http.MethodGet, getLightingRuntime)
+	handleFunc(r, "/api/v1/lighting/recover", http.MethodPut, recoverLighting)
+	r.HandleFunc("PUT /api/v1/lighting/identify", identifyLighting)
+	r.HandleFunc("DELETE /api/v1/lighting/identify", cancelIdentification)
+
 	// GET
+	handleFunc(r, "/api/v1/service", http.MethodGet, getServiceV1)
+	handleFunc(r, "/api/v1/capabilities", http.MethodGet, getCapabilitiesV1)
+	handleFunc(r, "/api/v1/snapshot", http.MethodGet, getSnapshotV1)
+	handleFunc(r, "/api/v1/devices/label", http.MethodPut, putDeviceLabelV1)
+	handleFunc(r, "/api/v1/lighting/assignment", http.MethodPut, putLightingAssignmentV1)
+	handleFunc(r, "/api/v1/lighting/ownership", http.MethodPut, putLightingOwnershipV1)
 	handleFunc(r, "/api/", http.MethodGet, homePage)
 	handleFunc(r, "/api/cpuTemp", http.MethodGet, getCpuTemperature)
 	handleFunc(r, "/api/cpuTemp/clean", http.MethodGet, getCpuTemperatureClean)
@@ -2584,6 +2696,8 @@ func setRoutes() http.Handler {
 	handleFunc(r, "/api/color/linkAdapter/bulk", http.MethodPost, setLinkAdapterBulkColor)
 	handleFunc(r, "/api/color/getOverride", http.MethodPost, getRgbOverride)
 	handleFunc(r, "/api/color/setOverride", http.MethodPost, setRgbOverride)
+	handleFunc(r, "/api/color/getTimewarp", http.MethodPost, getRgbTimewarp)
+	handleFunc(r, "/api/color/setTimewarp", http.MethodPost, setRgbTimewarp)
 	handleFunc(r, "/api/color/setTemperatureProbe", http.MethodPost, setTemperatureProbe)
 	handleFunc(r, "/api/color/getLedData", http.MethodPost, getLedData)
 	handleFunc(r, "/api/color/setLedData", http.MethodPost, setLedData)
@@ -2637,6 +2751,7 @@ func setRoutes() http.Handler {
 	handleFunc(r, "/api/mouse/buttonOptimization", http.MethodPost, changeButtonOptimization)
 	handleFunc(r, "/api/mouse/leftHandMode", http.MethodPost, changeLeftHandMode)
 	handleFunc(r, "/api/mouse/liftHeight", http.MethodPost, changeLiftHeight)
+	handleFunc(r, "/api/mouse/surfaceSelection", http.MethodPost, changeSurfaceSelection)
 	handleFunc(r, "/api/mouse/updateKeyAssignment", http.MethodPost, changeKeyAssignment)
 	handleFunc(r, "/api/headset/updateKeyAssignment", http.MethodPost, changeKeyAssignment)
 	handleFunc(r, "/api/headset/zoneColors", http.MethodPost, saveHeadsetZoneColors)
@@ -2672,6 +2787,10 @@ func setRoutes() http.Handler {
 	handleFunc(r, "/api/audio/outputDevice", http.MethodPost, setAudioOutputDeviceSettings)
 	handleFunc(r, "/api/devices/channel", http.MethodPost, getChannelData)
 	handleFunc(r, "/api/display/update", http.MethodPost, updateDisplayData)
+	handleFunc(r, "/api/xeneon/getWidget", http.MethodPost, getXeneonWidget)
+	handleFunc(r, "/api/devices/getHardwareLights", http.MethodPost, getHardwareLights)
+	handleFunc(r, "/api/devices/setHardwareLights", http.MethodPost, setHardwareLights)
+	handleFunc(r, "/api/devices/setHardwareLight", http.MethodPost, setHardwareLight)
 
 	// PUT
 	handleFunc(r, "/api/temperatures/update", http.MethodPut, updateTemperatureProfile)

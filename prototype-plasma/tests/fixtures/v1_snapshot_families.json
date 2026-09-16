@@ -1,0 +1,186 @@
+{
+  "apiVersion": "1.0",
+  "kind": "snapshot",
+  "revision": 7,
+  "telemetryRevision": 11,
+  "data": {
+    "service": {
+      "service": "OpenLinkHub",
+      "contract": "1.0",
+      "build": {"version": "0.8.9", "modified": false},
+      "listener": {"scope": "loopback", "loopback": true, "port": 27003},
+      "frontend": true,
+      "metrics": false,
+      "manualMode": false,
+      "systemService": true,
+      "deviceCount": 4,
+      "persistence": "unknown",
+      "mutationAccess": "legacy-only",
+      "features": [],
+      "warnings": []
+    },
+    "system": {
+      "cpu": {"value": 50.5, "unit": "celsius"},
+      "gpu": {"value": 45.0, "unit": "celsius"}
+    },
+    "devices": [
+      {
+        "id": "hub-1",
+        "product": "iCUE LINK System Hub",
+        "productId": 1,
+        "productType": 0,
+        "deviceType": "cooler",
+        "firmware": "3.10.636",
+        "online": true,
+        "hidden": false,
+        "transport": "usb",
+        "profile": {"active": "Balanced", "savedCount": 2},
+        "capabilities": [
+          {"id": "overview", "label": "Overview", "available": true, "access": "read-write", "operations": ["read", "update-label"], "options": {"labelTargetCount": 2}},
+          {"id": "cooling", "label": "Cooling", "available": true, "access": "read", "operations": ["read"], "options": {"channelCount": 2}},
+          {"id": "sensors", "label": "Sensors", "available": true, "access": "read", "operations": ["read"], "options": {"channelCount": 1}},
+          {"id": "lighting", "label": "Lighting", "available": true, "access": "read", "operations": ["read"], "options": {"effectCount": 2, "targetCount": 2}},
+          {"id": "topology", "label": "Topology", "available": true, "access": "read", "operations": ["read"], "options": {"channelCount": 2}}
+        ],
+        "channels": [
+          {
+            "id": "1",
+            "name": "Radiator",
+            "label": "Top radiator",
+            "description": "Fan channel",
+            "role": "fan",
+            "port": 1,
+            "hasSpeed": true,
+            "hasTemperature": false,
+            "speed": {"value": 600, "unit": "rpm"},
+            "coolingProfile": {"id": "Radiator20", "name": "Radiator20"},
+            "lightingEffect": {"id": "static", "name": "static"}
+          },
+          {
+            "id": "2",
+            "name": "Pump",
+            "description": "AIO pump",
+            "role": "pump",
+            "port": 2,
+            "hasSpeed": true,
+            "hasTemperature": true,
+            "speed": {"value": 1500, "unit": "rpm"},
+            "temperature": {"value": 38.5, "unit": "celsius"},
+            "coolingProfile": {"id": "TitanQuiet", "name": "TitanQuiet"},
+            "lightingEffect": {"id": "liquid-temperature", "name": "liquid-temperature"}
+          }
+        ],
+        "labelTargets": [
+          {"id": "channel:1", "scope": "channel", "channelId": 1, "name": "Radiator", "label": "Top radiator"},
+          {"id": "channel:2", "scope": "channel", "channelId": 2, "name": "Pump", "label": "Pump"}
+        ],
+        "lighting": {
+          "source": "OpenLinkHub versioned capability contract",
+          "device": "iCUE LINK System Hub",
+          "defaultColor": "#0078d4",
+          "ownership": {"controller": "rgb-cluster", "mode": "synchronized", "label": "RGB Cluster", "description": "One synchronized controller owns this device's lighting targets.", "operations": ["read", "change-controller"], "affectedTargetCount": 2, "savedIndividualSummary": "2 saved individual effects"},
+          "targets": [
+            {"id": "channel:1", "scope": "channel", "channelId": 1, "name": "Radiator · Ch 1", "description": "Channel 1 · Fan channel · Managed by RGB Cluster", "activeProfile": "static", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false},
+            {"id": "channel:2", "scope": "channel", "channelId": 2, "name": "Pump · Ch 2", "description": "Channel 2 · AIO pump · Managed by RGB Cluster", "activeProfile": "liquid-temperature", "supportedProfileIds": ["static", "liquid-temperature"], "operations": ["read"], "identifiable": false}
+          ],
+          "profiles": [
+            {"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false},
+            {"id": "liquid-temperature", "name": "Liquid Temperature", "speed": 1, "brightness": 100, "smoothness": 2, "startColor": "#40c8ff", "middleColor": "#e8bd57", "endColor": "#ee876f", "gradientColors": [], "minTemperature": 25, "maxTemperature": 60, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": true}
+          ],
+          "profileCount": 2
+        }
+      },
+      {
+        "id": "keyboard-1",
+        "product": "K100 AIR",
+        "productId": 2,
+        "productType": 109,
+        "deviceType": "keyboard",
+        "firmware": "5.13.81",
+        "online": true,
+        "hidden": false,
+        "transport": "usb",
+        "profile": {"active": "Desktop", "savedCount": 3},
+        "capabilities": [
+          {"id": "overview", "label": "Overview", "available": true, "access": "read-write", "operations": ["read", "update-label"], "options": {"labelTargetCount": 1}},
+          {"id": "lighting", "label": "Lighting", "available": true, "access": "read", "operations": ["read"], "options": {"effectCount": 1, "targetCount": 1}},
+          {"id": "keys", "label": "Keys", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "performance", "label": "Performance", "available": true, "access": "read", "operations": ["read"], "options": {"pollingRates": ["1000"]}},
+          {"id": "profiles", "label": "Profiles", "available": true, "access": "read", "operations": ["read"], "options": {"savedCount": 3}}
+        ],
+        "channels": [],
+        "labelTargets": [{"id": "device", "scope": "device", "name": "Whole device", "label": "Keyboard"}],
+        "lighting": {
+          "source": "OpenLinkHub versioned capability contract",
+          "device": "K100 AIR",
+          "defaultColor": "#0078d4",
+          "ownership": {"controller": "individual", "mode": "individual", "label": "Individual devices", "description": "Each published target uses its own saved lighting effect.", "operations": ["read", "change-controller"], "affectedTargetCount": 1, "savedIndividualSummary": "Static on 1 target"},
+          "targets": [{"id": "device", "scope": "device", "name": "Whole device", "description": "K100 AIR lighting surface", "activeProfile": "static", "supportedProfileIds": ["static"], "operations": ["read"], "identifiable": false}],
+          "profiles": [{"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false}],
+          "profileCount": 1
+        }
+      },
+      {
+        "id": "mouse-1",
+        "product": "SCIMITAR ELITE",
+        "productId": 3,
+        "productType": 203,
+        "deviceType": "mouse",
+        "firmware": "5.6.28",
+        "online": true,
+        "hidden": false,
+        "transport": "usb",
+        "profile": {"active": "Desktop", "savedCount": 1},
+        "capabilities": [
+          {"id": "overview", "label": "Overview", "available": true, "access": "read-write", "operations": ["read", "update-label"], "options": {"labelTargetCount": 1}},
+          {"id": "lighting", "label": "Lighting", "available": true, "access": "read", "operations": ["read"], "options": {"effectCount": 1, "targetCount": 1}},
+          {"id": "buttons", "label": "Buttons", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "dpi", "label": "DPI", "available": true, "access": "read", "operations": ["read"], "options": {"stageCount": 5, "minimum": 100, "maximum": 26000}},
+          {"id": "performance", "label": "Performance", "available": true, "access": "read", "operations": ["read"], "options": {"pollingRates": ["1000"]}},
+          {"id": "profiles", "label": "Profiles", "available": true, "access": "read", "operations": ["read"], "options": {"savedCount": 1}}
+        ],
+        "channels": [],
+        "labelTargets": [{"id": "device", "scope": "device", "name": "Whole device", "label": "Mouse"}],
+        "lighting": {
+          "source": "OpenLinkHub versioned capability contract",
+          "device": "SCIMITAR ELITE",
+          "defaultColor": "#0078d4",
+          "ownership": {"controller": "individual", "mode": "individual", "label": "Individual devices", "description": "Each published target uses its own saved lighting effect.", "operations": ["read", "change-controller"], "affectedTargetCount": 1, "savedIndividualSummary": "Static on 1 target"},
+          "targets": [{"id": "device", "scope": "device", "name": "Whole device", "description": "SCIMITAR ELITE lighting surface", "activeProfile": "static", "supportedProfileIds": ["static"], "operations": ["read"], "identifiable": false}],
+          "profiles": [{"id": "static", "name": "Static", "speed": 0, "brightness": 70, "smoothness": 0, "startColor": "#0078d4", "middleColor": "#000000", "endColor": "#000000", "gradientColors": [], "minTemperature": 0, "maxTemperature": 0, "direction": 0, "alternateColors": false, "perLed": false, "temperatureReactive": false}],
+          "profileCount": 1
+        }
+      },
+      {
+        "id": "receiver-1",
+        "product": "SLIPSTREAM",
+        "productId": 4,
+        "productType": 998,
+        "deviceType": "receiver",
+        "online": true,
+        "hidden": true,
+        "transport": "receiver",
+        "profile": {"active": "service-managed", "savedCount": 0},
+        "capabilities": [
+          {"id": "overview", "label": "Overview", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "wireless", "label": "Wireless", "available": true, "access": "read", "operations": ["read"]},
+          {"id": "pairing", "label": "Pairing", "available": false, "access": "unavailable", "reason": "The current service does not publish paired-device inventory for this receiver.", "operations": []}
+        ],
+        "channels": [],
+        "labelTargets": []
+      }
+    ],
+    "coolingProfiles": [
+      {"id": "Radiator20", "sensorType": 2, "sensor": "Liquid temperature", "zeroRpm": false, "linear": true, "hidden": false, "pointCount": 6, "stepCount": 0}
+    ],
+    "scheduler": {"lightingEnabled": false, "lcdEnabled": false, "lightsOut": false},
+    "displays": [{"id": 0, "name": "Primary", "width": 2560, "height": 1440, "position": "primary"}],
+    "dashboard": {"celsius": true, "showCpu": true, "showGpu": true, "showDisk": false, "showDevices": true, "showBattery": true, "lightingOff": false},
+    "lcdAssets": [],
+    "lcdProfiles": [
+      {"id": "100", "name": "Arc"},
+      {"id": "101", "name": "Double Arc"},
+      {"id": "102", "name": "Animation"}
+    ]
+  }
+}

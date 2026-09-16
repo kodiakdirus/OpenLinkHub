@@ -49,21 +49,28 @@ type Device struct {
 }
 
 type Widget struct {
-	Id          int     `json:"id"`
-	Name        string  `json:"name"`
-	Template    string  `json:"template"`
-	Columns     []int   `json:"columns"`
-	City        string  `json:"city"`
-	Country     string  `json:"country"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
-	Source      string  `json:"source"`
-	AutoWeather bool    `json:"autoWeather"`
-	DataColor   string  `json:"dataColor"`
-	Max         int     `json:"max"`
-	HeaderText  string  `json:"headerText"`
-	Unit        string  `json:"unit"`
-	TextColor   string  `json:"textColor"`
+	Id           int     `json:"id"`
+	Name         string  `json:"name"`
+	Template     string  `json:"template"`
+	Columns      []int   `json:"columns"`
+	City         string  `json:"city"`
+	Country      string  `json:"country"`
+	Latitude     float64 `json:"latitude"`
+	Longitude    float64 `json:"longitude"`
+	Source       string  `json:"source"`
+	AutoWeather  bool    `json:"autoWeather"`
+	DataColor    string  `json:"dataColor"`
+	Max          int     `json:"max"`
+	HeaderText   string  `json:"headerText"`
+	Unit         string  `json:"unit"`
+	TextColor    string  `json:"textColor"`
+	FontSize     int     `json:"fontSize"`
+	SubTextColor string  `json:"subTextColor"`
+	SubFontSize  int     `json:"subFontSize"`
+	Left         int     `json:"left"`
+	Top          int     `json:"top"`
+	SubLeft      int     `json:"subLeft"`
+	SubTop       int     `json:"subTop"`
 }
 
 var (
@@ -245,6 +252,25 @@ func (d *Device) getWidget(widgetId int) *Widget {
 			return &widget
 		}
 	}
+	return nil
+}
+
+// ProcessGetWidget will return widget data
+func (d *Device) ProcessGetWidget(widgetId int) interface{} {
+	if d.DeviceProfile == nil {
+		return nil
+	}
+
+	for _, widget := range d.DeviceProfile.WidgetAreas {
+		if widget.Widget == nil {
+			continue
+		}
+		
+		if widget.Widget.Id == widgetId {
+			return widget.Widget
+		}
+	}
+
 	return nil
 }
 

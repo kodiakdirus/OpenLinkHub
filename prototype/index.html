@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-density="comfortable">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark light">
+    <title>OpenLinkHub UI Concept</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+        <div class="brand">
+            <span class="brand-mark">OL</span>
+            <span class="brand-name">OPENLINK<span>HUB</span></span>
+        </div>
+
+        <nav class="primary-nav" aria-label="Primary navigation">
+            <button class="nav-item active" data-route="overview">
+                <img src="../static/img/icons/icon-dashboard.svg" alt="">
+                <span>Overview</span>
+            </button>
+            <button class="nav-item" data-route="cooling">
+                <img src="../static/img/icons/icon-radiator.svg" alt="">
+                <span>Cooling</span>
+            </button>
+            <button class="nav-item" data-route="lighting">
+                <img src="../static/img/icons/icon-rgb.svg" alt="">
+                <span>Lighting</span>
+            </button>
+            <button class="nav-item" data-route="devices">
+                <img src="../static/img/icons/icon-device.svg" alt="">
+                <span>Devices</span>
+            </button>
+            <button class="nav-item" data-route="automations">
+                <img src="../static/img/icons/icon-fast.svg" alt="">
+                <span>Automations</span>
+            </button>
+            <button class="nav-item" data-route="system">
+                <img src="../static/img/icons/icon-settings.svg" alt="">
+                <span>System</span>
+            </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+
+        <button class="service-health" data-route="system">
+            <span class="status-dot"></span>
+            <span class="service-copy">
+                <strong>Service healthy</strong>
+                <small>Prototype mode</small>
+            </span>
+            <span class="chevron">›</span>
+        </button>
+
+        <div class="prototype-label">
+            <span>Interactive concept</span>
+            <small>No backend connected</small>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div>
+                <p class="eyebrow" id="pageEyebrow">SYSTEM OVERVIEW</p>
+                <h1 id="pageTitle">Good morning, Kodi</h1>
+                <p class="page-subtitle" id="pageSubtitle">Everything is running normally</p>
+            </div>
+            <div class="topbar-actions">
+                <button class="button ghost overview-only" id="customizeLayout">
+                    <span>⋮⋮</span> Customize layout
+                </button>
+                <label class="mode-select">
+                    <span class="mode-icon">◒</span>
+                    <span class="select-copy">
+                        <small>System mode</small>
+                        <select id="systemMode" aria-label="System mode">
+                            <option value="quiet">Quiet</option>
+                            <option value="balanced" selected>Balanced</option>
+                            <option value="performance">Performance</option>
+                            <option value="custom">Custom</option>
+                        </select>
+                    </span>
+                </label>
+            </div>
+        </header>
+
+        <section class="view active" id="view-overview" data-view="overview">
+            <div class="summary-grid dashboard-widget" data-widget="summary">
+                <article class="summary-card">
+                    <div class="metric-icon cpu">▣</div>
+                    <div>
+                        <span>CPU</span>
+                        <strong><span id="cpuMetric">47</span>°C</strong>
+                        <small>Ryzen 9 9950X</small>
+                    </div>
+                    <span class="metric-state good">Normal</span>
+                </article>
+                <article class="summary-card">
+                    <div class="metric-icon gpu">▰</div>
+                    <div>
+                        <span>GPU</span>
+                        <strong><span id="gpuMetric">51</span>°C</strong>
+                        <small>Radeon RX 6900 XT</small>
+                    </div>
+                    <span class="metric-state good">Normal</span>
+                </article>
+                <article class="summary-card">
+                    <div class="metric-icon liquid">◉</div>
+                    <div>
+                        <span>Coolant</span>
+                        <strong><span id="coolantMetric">38</span>°C</strong>
+                        <small>TITAN 360 LCD</small>
+                    </div>
+                    <span class="metric-state good">Stable</span>
+                </article>
+                <article class="summary-card">
+                    <div class="metric-icon noise">◖</div>
+                    <div>
+                        <span>Acoustics</span>
+                        <strong class="accent-text" id="noiseMetric">Quiet</strong>
+                        <small>Estimated from active curves</small>
+                    </div>
+                    <span class="metric-state good">✓</span>
+                </article>
+            </div>
+
+            <div class="overview-grid">
+                <article class="panel dashboard-widget cooling-glance" data-widget="cooling">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">LIVE CONTROL</p>
+                            <h2>Cooling at a glance</h2>
+                        </div>
+                        <button class="text-button" data-route="cooling">Open cooling <span>→</span></button>
+                    </div>
+                    <div class="cooling-rows">
+                        <button class="cooling-row" data-route="cooling" data-zone-target="radiator">
+                            <span class="zone-icon"><img src="../static/img/icons/icon-radiator.svg" alt=""></span>
+                            <span class="zone-copy">
+                                <strong>Radiator</strong>
+                                <small><b id="radiatorRpm">720 RPM</b> · Coolant</small>
+                            </span>
+                            <svg class="sparkline" viewBox="0 0 220 50" role="img" aria-label="Radiator curve">
+                                <path class="gridline" d="M0 38H220 M0 20H220"></path>
+                                <path class="curve" d="M0 38 C55 38 75 37 105 32 S155 13 220 7"></path>
+                            </svg>
+                            <span class="chevron">›</span>
+                        </button>
+                        <button class="cooling-row" data-route="cooling" data-zone-target="case">
+                            <span class="zone-icon"><img src="../static/img/icons/icon-radiator.svg" alt=""></span>
+                            <span class="zone-copy">
+                                <strong>Case airflow</strong>
+                                <small><b id="caseRpm">0 RPM</b> · GPU</small>
+                            </span>
+                            <svg class="sparkline" viewBox="0 0 220 50" role="img" aria-label="Case airflow curve">
+                                <path class="gridline" d="M0 38H220 M0 20H220"></path>
+                                <path class="curve" d="M0 39 L93 39 L110 30 L145 22 L220 8"></path>
+                            </svg>
+                            <span class="chevron">›</span>
+                        </button>
+                        <button class="cooling-row" data-route="cooling" data-zone-target="pump">
+                            <span class="zone-icon"><img src="../static/img/icons/icon-device.svg" alt=""></span>
+                            <span class="zone-copy">
+                                <strong>Pump</strong>
+                                <small><b id="pumpRpm">1,460 RPM</b> · Coolant</small>
+                            </span>
+                            <svg class="sparkline" viewBox="0 0 220 50" role="img" aria-label="Pump curve">
+                                <path class="gridline" d="M0 38H220 M0 20H220"></path>
+                                <path class="curve" d="M0 35 L80 35 L130 25 L175 10 L220 8"></path>
+                            </svg>
+                            <span class="chevron">›</span>
+                        </button>
+                    </div>
+                </article>
+
+                <article class="panel dashboard-widget" data-widget="devices">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow">HARDWARE</p>
+                            <h2>Devices</h2>
+                        </div>
+                        <button class="text-button" data-route="devices">View all <span>→</span></button>
+                    </div>
+                    <div class="device-mini-grid">
+                        <button class="device-mini" data-device="hub">
+                            <img src="../static/img/icons/icon-controller.svg" alt="">
+                            <span><strong>iCUE LINK Hub</strong><small><i></i> Connected · 7 channels</small></span>
+                        </button>
+                        <button class="device-mini" data-device="keyboard">
+                            <img src="../static/img/icons/icon-keyboard.svg" alt="">
+                            <span><strong>K100 AIR</strong><small><i></i> Connected · Wireless</small></span>
+                        </button>
+                        <button class="device-mini" data-device="mouse">
+                            <img src="../static/img/icons/icon-mouse.svg" alt="">
+                            <span><strong>Scimitar</strong><small><i></i> Connected · USB</small></span>
+                        </button>
+                        <button class="device-mini" data-device="lcd">
+                            <img src="../static/img/icons/icon-lcd.svg" alt="">
+                            <span><strong>TITAN LCD</strong><small><i></i> Connected · 28°C</small></span>
+                        </button>
+                    </div>
+                </article>
+            </div>
+
+            <article class="panel dashboard-widget" data-widget="actions">
+                <div class="panel-heading compact-heading">
+                    <div>
+                        <p class="eyebrow">SHORTCUTS</p>
+                        <h2>Quick actions</h2>
+                    </div>
+                </div>
+                <div class="quick-actions">
+                    <button data-action="quiet"><span>☾</span><strong>Quiet mode</strong><small>Lower noise now</small></button>
+                    <button data-action="lights"><span>◌</span><strong>Lights out</strong><small>Toggle all lighting</small></button>
+                    <button data-route="lighting"><span>◉</span><strong>Open lighting scene</strong><small>Choose a visual mood</small></button>
+                    <button data-action="alerts"><span>♧</span><strong>View alerts</strong><small>Nothing needs attention</small></button>
+                </div>
+            </article>
+
+            <button class="all-clear dashboard-widget" data-widget="health" data-action="alerts">
+                <span class="shield">✓</span>
+                <span><strong>No issues need your attention</strong><small>All monitored devices are within their expected range.</small></span>
+                <span class="chevron">›</span>
+            </button>
+        </section>
+
+        <section class="view" id="view-cooling" data-view="cooling">
+            <div class="page-toolbar">
+                <div class="segmented" id="coolingTabs">
+                    <button class="active" data-cooling-tab="zones">Zones</button>
+                    <button data-cooling-tab="profiles">Profiles</button>
+                    <button data-cooling-tab="sensors">Sensors</button>
+                </div>
+                <div class="toolbar-actions">
+                    <button class="button ghost" id="compareProfiles">Compare profiles</button>
+                    <button class="button primary" id="newCoolingProfile">New profile</button>
+                </div>
+            </div>
+
+            <div class="cooling-layout">
+                <article class="panel zone-list">
+                    <div class="panel-heading">
+                        <div><p class="eyebrow">CONTROL GROUPS</p><h2>Cooling zones</h2></div>
+                    </div>
+                    <button class="zone-list-item active" data-zone="radiator">
+                        <img src="../static/img/icons/icon-radiator.svg" alt="">
+                        <span><strong>Radiator</strong><small>3 × RX RGB fans</small></span>
+                        <b>720 RPM</b>
+                    </button>
+                    <button class="zone-list-item" data-zone="case">
+                        <img src="../static/img/icons/icon-radiator.svg" alt="">
+                        <span><strong>Case airflow</strong><small>3 × LX RGB fans</small></span>
+                        <b>0 RPM</b>
+                    </button>
+                    <button class="zone-list-item" data-zone="pump">
+                        <img src="../static/img/icons/icon-device.svg" alt="">
+                        <span><strong>Pump</strong><small>TITAN pump channel</small></span>
+                        <b>1,460 RPM</b>
+                    </button>
+                    <button class="zone-list-item add-zone" id="addZone">
+                        <span>＋</span><strong>Create a zone</strong>
+                    </button>
+                </article>
+
+                <article class="panel curve-editor">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="eyebrow" id="zoneEyebrow">RADIATOR · 3 FANS</p>
+                            <h2 id="zoneTitle">Radiator cooling</h2>
+                        </div>
+                        <span class="live-pill"><i></i> Live preview</span>
+                    </div>
+
+                    <div class="editor-settings">
+                        <label>
+                            <span>Profile</span>
+                            <select id="zoneProfile">
+                                <option value="radiator20">Radiator 20</option>
+                                <option value="quiet">Quiet</option>
+                                <option value="balanced">Balanced</option>
+                                <option value="performance">Performance</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </label>
+                        <label>
+                            <span>Temperature source</span>
+                            <select id="zoneSensor">
+                                <option value="coolant">Coolant</option>
+                                <option value="gpu">GPU</option>
+                                <option value="cpu">CPU</option>
+                                <option value="cpu-gpu">CPU + GPU</option>
+                                <option value="probe">Temperature probe</option>
+                                <option value="external">External sensor</option>
+                            </select>
+                        </label>
+                        <label class="toggle-label">
+                            <span>Zero RPM</span>
+                            <input type="checkbox" id="zeroRpm">
+                            <span class="toggle"></span>
+                        </label>
+                    </div>
+
+                    <div class="curve-stage">
+                        <div class="axis-label y">SPEED</div>
+                        <svg id="coolingCurve" viewBox="0 0 640 260" role="img" aria-label="Editable cooling curve">
+                            <defs>
+                                <linearGradient id="curveFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0" stop-color="var(--accent)" stop-opacity=".32"></stop>
+                                    <stop offset="1" stop-color="var(--accent)" stop-opacity="0"></stop>
+                                </linearGradient>
+                            </defs>
+                            <g class="chart-grid">
+                                <path d="M60 20V220 M170 20V220 M280 20V220 M390 20V220 M500 20V220 M610 20V220"></path>
+                                <path d="M60 20H610 M60 70H610 M60 120H610 M60 170H610 M60 220H610"></path>
+                            </g>
+                            <path id="curveArea" class="curve-area" d=""></path>
+                            <path id="curveLine" class="curve-line" d=""></path>
+                            <g id="curvePoints"></g>
+                            <g class="chart-labels">
+                                <text x="50" y="238">30°</text><text x="160" y="238">35°</text>
+                                <text x="270" y="238">40°</text><text x="380" y="238">45°</text>
+                                <text x="490" y="238">50°</text><text x="600" y="238">55°</text>
+                                <text x="24" y="224">0</text><text x="14" y="174">25</text>
+                                <text x="14" y="124">50</text><text x="14" y="74">75</text>
+                                <text x="7" y="24">100</text>
+                            </g>
+                            <line id="currentTempLine" class="current-temp-line" x1="236" y1="20" x2="236" y2="220"></line>
+                            <text id="currentTempLabel" class="current-temp-label" x="242" y="38">38°C now</text>
+                        </svg>
+                        <div class="axis-label x">TEMPERATURE</div>
+                    </div>
+
+                    <div class="curve-controls">
+                        <label>Low temperature speed <output id="lowSpeedOutput">20%</output>
+                            <input type="range" id="lowSpeed" min="0" max="60" value="20">
+                        </label>
+                        <label>High temperature speed <output id="highSpeedOutput">100%</output>
+                            <input type="range" id="highSpeed" min="40" max="100" value="100">
+                        </label>
+                        <label>Ramp begins <output id="rampTempOutput">40°C</output>
+                            <input type="range" id="rampTemp" min="32" max="50" value="40">
+                        </label>
+                    </div>
+
+                    <div class="editor-footer">
+                        <p><span class="status-dot"></span> Changes are simulated locally and do not control hardware.</p>
+                        <div><button class="button ghost" id="resetCurve">Reset</button><button class="button primary" id="applyCurve">Apply to zone</button></div>
+                    </div>
+                </article>
+            </div>
+
+            <article class="panel channel-panel">
+                <div class="panel-heading">
+                    <div><p class="eyebrow">DETAIL</p><h2>Channels in this zone</h2></div>
+                    <button class="text-button" id="selectAllChannels">Select all</button>
+                </div>
+                <div class="channel-table">
+                    <div class="table-head"><span></span><span>Channel</span><span>Device</span><span>Temperature</span><span>Speed</span><span>Status</span></div>
+                    <label><input type="checkbox"><span>13</span><strong>RX RGB · Top</strong><span>37.8°C</span><span>716 RPM</span><em>Healthy</em></label>
+                    <label><input type="checkbox"><span>14</span><strong>RX RGB · Middle</strong><span>38.0°C</span><span>724 RPM</span><em>Healthy</em></label>
+                    <label><input type="checkbox"><span>17</span><strong>RX RGB · Bottom</strong><span>37.9°C</span><span>720 RPM</span><em>Healthy</em></label>
+                </div>
+            </article>
+        </section>
+
+        <section class="view" id="view-lighting" data-view="lighting">
+            <div class="page-toolbar">
+                <div class="lighting-master">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="lightingEnabled" checked>
+                        <span class="toggle"></span>
+                        <span><strong>Lighting enabled</strong><small>All compatible devices</small></span>
+                    </label>
+                    <label class="brightness-control">Brightness <input type="range" id="lightingBrightness" min="0" max="100" value="70"><output id="brightnessOutput">70%</output></label>
+                </div>
+                <button class="button primary" id="newScene">New scene</button>
+            </div>
+
+            <div class="lighting-layout">
+                <article class="panel scene-browser">
+                    <div class="panel-heading"><div><p class="eyebrow">SCENES</p><h2>Choose a look</h2></div></div>
+                    <button class="scene-card active" data-scene="aurora" data-color="#66d7c5">
+                        <span class="scene-preview aurora"><i></i><i></i><i></i></span>
+                        <span><strong>Arctic aurora</strong><small>Teal · slow wave</small></span>
+                        <b>Active</b>
+                    </button>
+                    <button class="scene-card" data-scene="ember" data-color="#ff9166">
+                        <span class="scene-preview ember"><i></i><i></i><i></i></span>
+                        <span><strong>Warm ember</strong><small>Amber · color shift</small></span>
+                    </button>
+                    <button class="scene-card" data-scene="static" data-color="#a88cff">
+                        <span class="scene-preview static"><i></i><i></i><i></i></span>
+                        <span><strong>Soft violet</strong><small>Violet · static</small></span>
+                    </button>
+                    <button class="scene-card" data-scene="temperature" data-color="#69a8ff">
+                        <span class="scene-preview temperature"><i></i><i></i><i></i></span>
+                        <span><strong>Thermal status</strong><small>Blue → amber · GPU</small></span>
+                    </button>
+                </article>
+
+                <article class="panel lighting-preview-panel">
+                    <div class="panel-heading">
+                        <div><p class="eyebrow">LIVE PREVIEW</p><h2 id="sceneTitle">Arctic aurora</h2></div>
+                        <button class="button ghost" id="applyScene">Apply scene</button>
+                    </div>
+                    <div class="desk-preview" id="deskPreview">
+                        <div class="ambient-glow"></div>
+                        <div class="monitor"></div>
+                        <div class="tower">
+                            <span class="fan-light f1"></span><span class="fan-light f2"></span><span class="fan-light f3"></span>
+                        </div>
+                        <div class="keyboard-preview"></div>
+                        <div class="mouse-preview"></div>
+                        <div class="desk-line"></div>
+                    </div>
+                    <div class="lighting-targets">
+                        <button class="active"><img src="../static/img/icons/icon-controller.svg" alt=""><span><strong>Cooling hardware</strong><small>7 lighting zones</small></span><i></i></button>
+                        <button class="active"><img src="../static/img/icons/icon-keyboard.svg" alt=""><span><strong>K100 AIR</strong><small>Per-key lighting</small></span><i></i></button>
+                        <button class="active"><img src="../static/img/icons/icon-mouse.svg" alt=""><span><strong>Scimitar</strong><small>4 lighting zones</small></span><i></i></button>
+                        <button><img src="../static/img/icons/icon-lcd.svg" alt=""><span><strong>LCD ring</strong><small>Excluded from scene</small></span><i></i></button>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <section class="view" id="view-devices" data-view="devices">
+            <div class="page-toolbar">
+                <div class="filter-group">
+                    <button class="filter active" data-filter="all">All <b>6</b></button>
+                    <button class="filter" data-filter="cooling">Cooling <b>2</b></button>
+                    <button class="filter" data-filter="input">Input <b>3</b></button>
+                    <button class="filter" data-filter="display">Displays <b>1</b></button>
+                </div>
+                <label class="search"><span>⌕</span><input id="deviceSearch" type="search" placeholder="Search devices"></label>
+            </div>
+
+            <div class="device-grid">
+                <button class="device-card" data-category="cooling" data-device="hub">
+                    <span class="device-hero"><img src="../static/img/icons/icon-controller.svg" alt=""></span>
+                    <span class="device-status"><i></i> Connected</span>
+                    <span class="device-card-copy"><strong>iCUE LINK System Hub</strong><small>Firmware 3.10.636</small></span>
+                    <span class="capabilities"><b>Cooling</b><b>Lighting</b><b>Telemetry</b></span>
+                </button>
+                <button class="device-card" data-category="cooling" data-device="titan">
+                    <span class="device-hero"><img src="../static/img/icons/icon-device.svg" alt=""></span>
+                    <span class="device-status"><i></i> Connected</span>
+                    <span class="device-card-copy"><strong>TITAN 360 LCD</strong><small>Coolant 38°C · Pump 1,460 RPM</small></span>
+                    <span class="capabilities"><b>Cooling</b><b>LCD</b><b>Lighting</b></span>
+                </button>
+                <button class="device-card" data-category="input" data-device="keyboard">
+                    <span class="device-hero"><img src="../static/img/icons/icon-keyboard.svg" alt=""></span>
+                    <span class="device-status"><i></i> Connected</span>
+                    <span class="device-card-copy"><strong>K100 AIR RGB</strong><small>Wireless · Battery 82%</small></span>
+                    <span class="capabilities"><b>Keys</b><b>Macros</b><b>Lighting</b></span>
+                </button>
+                <button class="device-card" data-category="input" data-device="mouse">
+                    <span class="device-hero"><img src="../static/img/icons/icon-mouse.svg" alt=""></span>
+                    <span class="device-status"><i></i> Connected</span>
+                    <span class="device-card-copy"><strong>Scimitar RGB Elite</strong><small>USB · 1,000 Hz</small></span>
+                    <span class="capabilities"><b>DPI</b><b>Mappings</b><b>Lighting</b></span>
+                </button>
+                <button class="device-card" data-category="input" data-device="slipstream">
+                    <span class="device-hero"><img src="../static/img/icons/icon-dongle.svg" alt=""></span>
+                    <span class="device-status"><i></i> Connected</span>
+                    <span class="device-card-copy"><strong>Slipstream receiver</strong><small>2 paired devices</small></span>
+                    <span class="capabilities"><b>Wireless</b><b>Battery</b></span>
+                </button>
+                <button class="device-card" data-category="display" data-device="lcd">
+                    <span class="device-hero"><img src="../static/img/icons/icon-lcd.svg" alt=""></span>
+                    <span class="device-status"><i></i> Connected</span>
+                    <span class="device-card-copy"><strong>LCD Pump Cover</strong><small>480 × 480 · Sensor layout</small></span>
+                    <span class="capabilities"><b>Images</b><b>Sensors</b><b>Animation</b></span>
+                </button>
+            </div>
+
+            <article class="panel capability-explorer">
+                <div class="panel-heading">
+                    <div><p class="eyebrow">DISCOVERABILITY</p><h2>Capability explorer</h2></div>
+                    <span class="experimental-pill">Prototype concept</span>
+                </div>
+                <p>See features by what they accomplish, including controls the current UI may not surface clearly.</p>
+                <div class="capability-grid">
+                    <button data-capability="External sensors"><span>◫</span><strong>External sensors</strong><small>hwmon and executable sources</small></button>
+                    <button data-capability="OpenRGB"><span>◉</span><strong>OpenRGB bridge</strong><small>Hand lighting control to OpenRGB</small></button>
+                    <button data-capability="Input actions"><span>⌨</span><strong>Advanced input actions</strong><small>Release, hold, toggle, and profile switch</small></button>
+                    <button data-capability="Metrics"><span>⌁</span><strong>Metrics endpoint</strong><small>Prometheus-compatible telemetry</small></button>
+                </div>
+            </article>
+        </section>
+
+        <section class="view" id="view-automations" data-view="automations">
+            <div class="page-toolbar">
+                <div class="automation-summary"><span class="status-dot"></span><strong>3 automations active</strong><small>All schedules use local system time</small></div>
+                <button class="button primary" id="addAutomation">New automation</button>
+            </div>
+
+            <div class="automation-grid" id="automationGrid">
+                <article class="automation-card">
+                    <div class="automation-icon">☾</div>
+                    <div class="automation-copy">
+                        <div><p class="eyebrow">EVERY DAY · 11:00 PM</p><h2>Night mode</h2></div>
+                        <p>Turn lighting off and dim compatible LCDs until 7:00 AM.</p>
+                        <span class="automation-flow"><b>11:00 PM</b><i>→</i><b>Lights out</b><i>+</i><b>LCD off</b></span>
+                    </div>
+                    <label class="toggle-label"><input type="checkbox" checked><span class="toggle"></span></label>
+                </article>
+                <article class="automation-card">
+                    <div class="automation-icon">♨</div>
+                    <div class="automation-copy">
+                        <div><p class="eyebrow">WHEN GPU EXCEEDS 80°C</p><h2>Thermal safety</h2></div>
+                        <p>Switch case airflow to Performance and show an alert.</p>
+                        <span class="automation-flow"><b>GPU &gt; 80°C</b><i>→</i><b>Performance</b><i>+</i><b>Alert</b></span>
+                    </div>
+                    <label class="toggle-label"><input type="checkbox" checked><span class="toggle"></span></label>
+                </article>
+                <article class="automation-card">
+                    <div class="automation-icon">◉</div>
+                    <div class="automation-copy">
+                        <div><p class="eyebrow">AT SERVICE START</p><h2>Restore preferred state</h2></div>
+                        <p>Activate Balanced mode and the Arctic aurora lighting scene.</p>
+                        <span class="automation-flow"><b>Service starts</b><i>→</i><b>Balanced</b><i>+</i><b>Aurora</b></span>
+                    </div>
+                    <label class="toggle-label"><input type="checkbox" checked><span class="toggle"></span></label>
+                </article>
+            </div>
+
+            <article class="panel automation-note">
+                <span>⌁</span>
+                <div><strong>Future-facing concept</strong><p>OpenLinkHub currently provides scheduled lighting/LCD control. Sensor-triggered and startup actions shown here illustrate a coherent extension, not a claim that the backend already supports every rule.</p></div>
+            </article>
+        </section>
+
+        <section class="view" id="view-system" data-view="system">
+            <div class="system-layout">
+                <nav class="settings-nav" aria-label="System settings">
+                    <button class="active" data-settings-panel="appearance">Appearance</button>
+                    <button data-settings-panel="layout">Layout</button>
+                    <button data-settings-panel="integrations">Integrations</button>
+                    <button data-settings-panel="service">Service & data</button>
+                </nav>
+
+                <div class="settings-content">
+                    <section class="settings-panel active" data-settings-content="appearance">
+                        <article class="panel">
+                            <div class="panel-heading"><div><p class="eyebrow">PERSONALIZATION</p><h2>Appearance</h2></div><span class="save-state" id="saveState">Saved locally</span></div>
+                            <div class="setting-row">
+                                <div><strong>Theme</strong><small>Choose the overall surface treatment.</small></div>
+                                <div class="theme-options">
+                                    <button class="theme-choice active" data-theme-choice="dark"><span class="dark-preview"></span>Dark</button>
+                                    <button class="theme-choice" data-theme-choice="dim"><span class="dim-preview"></span>Dim</button>
+                                    <button class="theme-choice" data-theme-choice="light"><span class="light-preview"></span>Light</button>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div><strong>Accent color</strong><small>Used for selections, curves, and focus.</small></div>
+                                <div class="accent-options">
+                                    <button class="accent active" data-accent="#66d7c5" style="--swatch:#66d7c5" aria-label="Teal"></button>
+                                    <button class="accent" data-accent="#73a7ff" style="--swatch:#73a7ff" aria-label="Blue"></button>
+                                    <button class="accent" data-accent="#a88cff" style="--swatch:#a88cff" aria-label="Violet"></button>
+                                    <button class="accent" data-accent="#ff9a69" style="--swatch:#ff9a69" aria-label="Amber"></button>
+                                    <label class="custom-accent">＋<input type="color" id="customAccent" value="#66d7c5" aria-label="Custom accent"></label>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div><strong>Interface density</strong><small>Changes spacing without changing structure.</small></div>
+                                <div class="segmented" id="densityOptions">
+                                    <button data-density-choice="compact">Compact</button>
+                                    <button class="active" data-density-choice="comfortable">Comfortable</button>
+                                    <button data-density-choice="roomy">Roomy</button>
+                                </div>
+                            </div>
+                            <div class="setting-row">
+                                <div><strong>Corner style</strong><small>Keep cards structured or soften the presentation.</small></div>
+                                <label class="range-setting"><input type="range" id="cornerRadius" min="4" max="22" value="12"><output id="cornerOutput">12 px</output></label>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section class="settings-panel" data-settings-content="layout">
+                        <article class="panel">
+                            <div class="panel-heading"><div><p class="eyebrow">STRUCTURE</p><h2>Layout</h2></div></div>
+                            <div class="setting-row">
+                                <div><strong>Sidebar labels</strong><small>Collapse navigation to icons when disabled.</small></div>
+                                <label class="toggle-label"><input type="checkbox" id="sidebarLabels" checked><span class="toggle"></span></label>
+                            </div>
+                            <div class="setting-row">
+                                <div><strong>Dashboard composition</strong><small>Reorder or hide approved overview modules.</small></div>
+                                <button class="button primary" id="openLayoutFromSettings">Customize dashboard</button>
+                            </div>
+                            <div class="setting-row">
+                                <div><strong>Temperature format</strong><small>Display temperatures throughout the interface.</small></div>
+                                <div class="segmented"><button class="active">Celsius</button><button>Fahrenheit</button></div>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section class="settings-panel" data-settings-content="integrations">
+                        <article class="panel">
+                            <div class="panel-heading"><div><p class="eyebrow">BACKEND CAPABILITIES</p><h2>Integrations</h2></div><span class="experimental-pill">Mock state</span></div>
+                            <div class="integration-list">
+                                <div><span class="integration-icon">◉</span><span><strong>OpenRGB target server</strong><small>Expose compatible lighting zones to OpenRGB.</small></span><label class="toggle-label"><input type="checkbox"><span class="toggle"></span></label></div>
+                                <div><span class="integration-icon">⌁</span><span><strong>Prometheus metrics</strong><small>Publish device telemetry for monitoring systems.</small></span><label class="toggle-label"><input type="checkbox" checked><span class="toggle"></span></label></div>
+                                <div><span class="integration-icon">◫</span><span><strong>External temperature sources</strong><small>Use hwmon inputs or a trusted executable as curve sources.</small></span><button class="button ghost capability-demo">Configure</button></div>
+                                <div><span class="integration-icon">⌨</span><span><strong>Virtual input devices</strong><small>Enable mappings, macros, and gamepad emulation.</small></span><label class="toggle-label"><input type="checkbox" checked><span class="toggle"></span></label></div>
+                            </div>
+                        </article>
+                    </section>
+
+                    <section class="settings-panel" data-settings-content="service">
+                        <article class="panel">
+                            <div class="panel-heading"><div><p class="eyebrow">LOCAL SERVICE</p><h2>Service & data</h2></div><span class="live-pill"><i></i> Healthy</span></div>
+                            <div class="service-grid">
+                                <div><span>Listen address</span><strong>127.0.0.1:27003</strong><small>Loopback only</small></div>
+                                <div><span>Frontend mode</span><strong>Enabled</strong><small>API also available</small></div>
+                                <div><span>Resume delay</span><strong>15 seconds</strong><small>Device reinitialization</small></div>
+                                <div><span>Build</span><strong>Prototype</strong><small>No service connection</small></div>
+                            </div>
+                            <div class="desktop-client-callout">
+                                <span class="integration-icon">K</span>
+                                <span><strong>Plasma desktop client concept</strong><small>A Qt 6 + Kirigami shell would use the same local OpenLinkHub service API as the web interface. The service remains the source of truth; only the presentation layer changes.</small></span>
+                                <span class="experimental-pill">Future client</span>
+                            </div>
+                            <div class="data-actions">
+                                <button class="button ghost" id="backupDemo">Download configuration backup</button>
+                                <button class="button ghost" id="restoreDemo">Restore from backup</button>
+                                <button class="button danger" id="restartDemo">Restart service</button>
+                            </div>
+                        </article>
+                    </section>
+                </div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<aside class="device-drawer" id="deviceDrawer" aria-hidden="true">
+    <div class="drawer-header">
+        <div><p class="eyebrow">DEVICE DETAILS</p><h2 id="drawerTitle">iCUE LINK Hub</h2></div>
+        <button id="closeDrawer" aria-label="Close device details">×</button>
+    </div>
+    <div class="drawer-status"><span class="status-dot"></span><span><strong>Connected</strong><small id="drawerSubtitle">USB · Firmware 3.10.636</small></span></div>
+    <div class="drawer-section">
+        <h3>Available capabilities</h3>
+        <div class="drawer-capabilities" id="drawerCapabilities"></div>
+    </div>
+    <div class="drawer-section">
+        <h3>Device settings</h3>
+        <div class="drawer-tabs" id="drawerTabs" role="tablist" aria-label="Device settings"></div>
+        <div class="drawer-tab-panel" id="drawerTabPanel" role="tabpanel"></div>
+    </div>
+    <div class="drawer-note">The settings tabs are generated from this device's capability model. Cooling controls, for example, never appear on the mouse.</div>
+</aside>
+<div class="scrim" id="scrim"></div>
+
+<dialog id="layoutDialog">
+    <form method="dialog">
+        <div class="dialog-heading">
+            <div><p class="eyebrow">OVERVIEW</p><h2>Customize dashboard</h2><p>Reorder or hide modules without breaking the page hierarchy.</p></div>
+            <button value="cancel" aria-label="Close">×</button>
+        </div>
+        <div class="layout-list" id="layoutList"></div>
+        <div class="dialog-footer">
+            <button class="button ghost" type="button" id="resetLayout">Reset layout</button>
+            <button class="button primary" value="default">Done</button>
+        </div>
+    </form>
+</dialog>
+
+<div class="toast-stack" id="toastStack" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
