@@ -22,6 +22,9 @@ from PyQt6.QtNetwork import (
 )
 
 from .cooling import backup_profile, catalog, fan_points
+from .preferences import Preferences
+from .application import APP_ID, APP_NAME, VERSION, PROJECT_URL, ISSUES_URL
+from .diagnostics import report
 
 from .models import (
     ApiEnvelope,
@@ -47,15 +50,19 @@ class BackendController(QObject):
     lightingRuntimeChanged = pyqtSignal()
     coolingChanged = pyqtSignal()
     fanCurveSaved = pyqtSignal(str)
+    diagnosticsChanged = pyqtSignal()
 
     def __init__(
         self,
         *,
         endpoint: str = "http://127.0.0.1:27003",
         refresh_interval_ms: int = 3000,
+        preferences_path: str | None = None,
         parent: QObject | None = None,
     ) -> None:
         super().__init__(parent)
+        self._preferences = Preferences(preferences_path, parent=self)
+        self._diagnostics_message = ""
         self._validate_endpoint(endpoint)
         self._endpoint = endpoint.rstrip("/")
         self._manager = QNetworkAccessManager(self)
@@ -74,6 +81,7 @@ class BackendController(QObject):
         self._runtime_lease_id = ""
         self._mode = "demo"
         self._connection_state = "demo"
+        self._setup_observed_connection = ""
         self._status_text = "Demo data"
         self._error_message = ""
         self._last_updated = ""
@@ -91,11 +99,91 @@ class BackendController(QObject):
         self._generation = 0
         self._refresh_cycle = 0
         self._devices: list[dict[str, Any]] = []
+        self._service_info: dict[str, Any] = {}
         self._lighting_profiles: dict[str, Any] = {}
         self._telemetry: dict[str, Any] = {}
         self._overview_metrics: list[dict[str, Any]] = []
         self._cooling_zones: list[dict[str, Any]] = []
         self._zone_values: dict[str, str] = {}
+
+    @pyqtProperty(QObject, constant=True)
+    def preferences(self):
+        return self._preferences
+
+    @pyqtProperty("QVariantMap", constant=True)
+    def applicationInfo(self):
+        return {"id": APP_ID, "name": APP_NAME, "version": VERSION, "channel": "Community alpha",
+                "projectUrl": PROJECT_URL, "issuesUrl": ISSUES_URL,
+                "serviceInstallUrl": "https://github.com/jurkovic-nikola/OpenLinkHub#installation-recommended"}
+
+    @pyqtProperty("QVariantMap", notify=connectionChanged)
+    def backendSetup(self):
+        # Keep the last completed assessment during polling; a brief reconnect
+        # must not flash setup reminders or imply that an installed service vanished.
+        state = self._connection_state
+        if state == "connecting" and self._setup_observed_connection:
+            state = self._setup_observed_connection
+        if self._mode == "demo":
+            key, badge = "demo", "Not checked"
+            title = "Connect your hardware when you're ready"
+            summary = "You can keep exploring Demo. Backend setup is always available under Service."
+        elif state in {"demo", "connecting"}:
+            key, badge = "checking", "Checking connection"
+            title = "Checking the local service"
+            summary = "Waiting for OpenLinkHub on this computer. No installation is started by this check."
+        elif state != "connected":
+            key, badge = "unavailable", "Connection needs attention"
+            title = "Check your service connection"
+            summary = "The service may be stopped, unreachable, or returning incomplete data. Check the existing installation before installing another copy."
+        elif self._contract_version != "1.0":
+            key, badge = "legacy", "Compatibility mode"
+            title = "More controls need a compatible backend"
+            summary = "Your current service remains usable. Review backend setup whenever you want supported lighting and label controls."
+        else:
+            key, badge = "ready", "Versioned service connected"
+            title = "Your service is connected"
+            summary = "Controls follow the capabilities reported by each device. Read-only devices and unfinished GUI features do not mean the service needs replacing."
+        return {"key": key, "badge": badge, "title": title, "summary": summary,
+                "showReminder": key in {"demo", "legacy"},
+                "installationAvailable": False}
+
+    @pyqtProperty(str, notify=connectionChanged)
+    def compatibilityText(self):
+        if self._mode != "live":
+            return "Demo uses simulated devices. Select Live to connect to an OpenLinkHub service on this computer."
+        if not self.connected:
+            return "No service connection. Install or start OpenLinkHub separately, then retry. You can explore Demo without a service."
+        if self._contract_version != "1.0":
+            return "Legacy compatibility: telemetry is available where reported. Versioned lighting and label controls require a compatible service; existing fan-curve editing uses the legacy API."
+        return "Versioned API connected. Controls depend on each device's advertised capabilities. This alpha does not yet implement every service feature."
+
+    @pyqtProperty(str, notify=diagnosticsChanged)
+    def diagnosticsMessage(self):
+        return self._diagnostics_message
+
+    @pyqtSlot(QUrl, result=bool)
+    def exportDiagnostics(self, destination):
+        from PyQt6.QtCore import QIODevice, QSaveFile
+
+        if not destination.isLocalFile():
+            self._diagnostics_message = "Choose a local file for diagnostics."
+            self.diagnosticsChanged.emit()
+            return False
+        output = QSaveFile(destination.toLocalFile())
+        data = (json.dumps(report(self), indent=2, sort_keys=True) + "\n").encode("utf-8")
+        success = (output.open(QIODevice.OpenModeFlag.WriteOnly)
+                   and output.write(data) == len(data) and output.commit())
+        self._diagnostics_message = "Diagnostics saved. You can review the JSON before attaching it to an issue." if success else "Could not save diagnostics. Choose a writable location."
+        self.diagnosticsChanged.emit()
+        return bool(success)
+
+    @pyqtSlot(str, result=str)
+    def validateFanCurve(self, points_json):
+        try:
+            fan_points(json.loads(points_json))
+        except (ValueError, TypeError) as exc:
+            return str(exc)
+        return ""
 
     @pyqtProperty("QVariantMap", notify=coolingChanged)
     def coolingProfiles(self):
@@ -214,6 +302,8 @@ class BackendController(QObject):
         if state.get("mode") not in {"unknown", "software-live", "hardware-memory", "transitioning"}:
             return False
         if state.get("renderer") not in {"running", "stalled", "stopped", "unavailable"}:
+            return False
+        if "profile" in state and not isinstance(state["profile"], str):
             return False
         members, operations = state.get("members"), state.get("operations")
         if not isinstance(members, list) or not all(isinstance(item, str) and item for item in members):
@@ -386,6 +476,10 @@ class BackendController(QObject):
     def devices(self) -> list[dict[str, Any]]:
         return self._devices
 
+    @pyqtProperty("QVariantMap", notify=dataChanged)
+    def serviceInfo(self) -> dict[str, Any]:
+        return self._service_info
+
     @pyqtProperty(bool, notify=dataChanged)
     def lightingAssignmentAvailable(self) -> bool:
         for device in self._devices:
@@ -428,11 +522,13 @@ class BackendController(QObject):
         self._cooling_busy = False
         self._cooling_profiles = {}
         self._cooling_message = ""
+        self._service_info = {}
         self.coolingChanged.emit()
         self._lighting_runtime = {}
         self._runtime_lease_id = ""
         self.lightingRuntimeChanged.emit()
         self._mode = normalized
+        self._setup_observed_connection = ""
         self.modeChanged.emit()
 
         if normalized == "demo":
@@ -958,6 +1054,24 @@ class BackendController(QObject):
         document: VersionedDocument,
     ) -> None:
         self._devices = list(snapshot["devices"])
+        service = document.data.get("service", {})
+        service = service if isinstance(service, Mapping) else {}
+        build = service.get("build", {})
+        build = build if isinstance(build, Mapping) else {}
+        features = service.get("features", [])
+        self._service_info = {
+            "version": build.get("version") if isinstance(build.get("version"), str) else "Not reported",
+            "features": [
+                {"id": item["id"], "available": item["available"],
+                 "reason": item.get("reason") if isinstance(item.get("reason"), str) else ""}
+                for item in (features if isinstance(features, list) else [])
+                if isinstance(item, Mapping) and isinstance(item.get("id"), str)
+                and type(item.get("available")) is bool
+            ],
+        }
+        for key in ("manualMode", "metrics", "frontend", "systemService"):
+            if type(service.get(key)) is bool:
+                self._service_info[key] = service[key]
         self._telemetry = dict(snapshot["telemetry"])
         self._overview_metrics = list(snapshot["overviewMetrics"])
         self._cooling_zones = list(snapshot["coolingZones"])
@@ -1004,6 +1118,7 @@ class BackendController(QObject):
             self._set_refreshing(False)
             return
 
+        self._service_info = {}
         self._devices = snapshot["devices"]
         self._telemetry = snapshot["telemetry"]
         self._overview_metrics = snapshot["overviewMetrics"]
@@ -1035,6 +1150,8 @@ class BackendController(QObject):
             or error != self._error_message
         )
         self._connection_state = state
+        if state in {"connected", "degraded", "offline"}:
+            self._setup_observed_connection = state
         self._status_text = status
         self._error_message = error
         if changed:

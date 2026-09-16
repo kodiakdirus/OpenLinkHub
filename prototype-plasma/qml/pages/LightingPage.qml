@@ -13,6 +13,19 @@ Item {
     property bool layoutEditing: false
     property bool targetsFirst: false
     property bool stackControlCells: false
+    function restoreLayout() {
+        const saved = shell.savedLayout("lighting-demo")
+        targetsFirst = Boolean(saved.targetsFirst)
+        stackControlCells = Boolean(saved.stackControlCells)
+    }
+    function saveLayout() {
+        shell.saveLayout("lighting-demo", {targetsFirst: targetsFirst, stackControlCells: stackControlCells})
+    }
+    Component.onCompleted: restoreLayout()
+    Connections {
+        target: page.shell
+        function onPresentationReset() { page.restoreLayout() }
+    }
     property var scenes: [
         { name: "Aurora", colors: ["#36d6c7", "#766bf0", "#274d9a"], detail: "Slow gradient" },
         { name: "Static cyan", colors: ["#66d7c5", "#66d7c5", "#66d7c5"], detail: "Single color" },
@@ -225,7 +238,7 @@ Item {
                             text: "Swap"
                             onClicked: {
                                 page.targetsFirst = !page.targetsFirst
-                                page.shell.markDirty("Lighting cell order")
+                                page.saveLayout()
                             }
                             ToolTip.visible: hovered
                             ToolTip.text: "Swap configuration cells"
@@ -235,7 +248,7 @@ Item {
                             text: page.stackControlCells ? "Columns" : "Stack"
                             onClicked: {
                                 page.stackControlCells = !page.stackControlCells
-                                page.shell.markDirty("Lighting cell size")
+                                page.saveLayout()
                             }
                             ToolTip.visible: hovered
                             ToolTip.text: page.stackControlCells
@@ -305,7 +318,7 @@ Item {
                             text: "Swap"
                             onClicked: {
                                 page.targetsFirst = !page.targetsFirst
-                                page.shell.markDirty("Lighting cell order")
+                                page.saveLayout()
                             }
                             ToolTip.visible: hovered
                             ToolTip.text: "Swap configuration cells"
@@ -315,7 +328,7 @@ Item {
                             text: page.stackControlCells ? "Columns" : "Stack"
                             onClicked: {
                                 page.stackControlCells = !page.stackControlCells
-                                page.shell.markDirty("Lighting cell size")
+                                page.saveLayout()
                             }
                             ToolTip.visible: hovered
                             ToolTip.text: page.stackControlCells

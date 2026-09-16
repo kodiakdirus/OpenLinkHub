@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import "../components"
 
@@ -12,6 +13,34 @@ Item {
     property bool appearanceFirst: true
     property bool connectionFirst: true
     property bool stackCells: false
+
+    function openPrimaryDialog() {
+        shell.openBackendSetup()
+    }
+
+    FileDialog {
+        id: diagnosticsFile
+        title: "Save diagnostic report"
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: ["JSON reports (*.json)"]
+        onAccepted: page.shell.backendClient.exportDiagnostics(selectedFile)
+    }
+
+    function restoreLayout() {
+        const saved = shell.savedLayout("service")
+        appearanceFirst = saved.appearanceFirst === undefined ? true : saved.appearanceFirst
+        connectionFirst = saved.connectionFirst === undefined ? true : saved.connectionFirst
+        stackCells = Boolean(saved.stackCells)
+    }
+    function saveLayout() {
+        shell.saveLayout("service", {appearanceFirst: appearanceFirst, connectionFirst: connectionFirst, stackCells: stackCells})
+    }
+    Component.onCompleted: restoreLayout()
+    Connections {
+        target: page.shell
+        function onPresentationReset() { page.restoreLayout() }
+    }
 
     function cellIndex(name) {
         const order = appearanceFirst
@@ -51,6 +80,78 @@ Item {
             Panel {
                 shell: page.shell
                 Layout.fillWidth: true
+                PanelHeader {
+                    shell: page.shell
+                    iconName: "help-about"
+                    title: "OpenLinkHub Plasma · " + page.shell.backendClient.applicationInfo.version
+                    subtitle: "Community alpha · GPL-3.0 · Qt / Kirigami"
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "An independently packaged community client. OpenLinkHub runs as a separate service and keeps managing your hardware when this window closes."
+                    color: page.shell.secondaryText
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    objectName: "serviceCompatibilityText"
+                    Layout.fillWidth: true
+                    text: page.shell.backendClient.compatibilityText
+                    color: page.shell.secondaryText
+                    wrapMode: Text.WordWrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: "Backend setup"
+                            color: page.shell.primaryText
+                            font.weight: Font.DemiBold
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: page.shell.backendClient.backendSetup.badge + " · Review connection and installation options at any time."
+                            color: page.shell.mutedText
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                    Button {
+                        objectName: "serviceBackendSetupAction"
+                        text: "Review setup…"
+                        icon.name: "configure"
+                        onClicked: page.shell.openBackendSetup()
+                    }
+                }
+                RowLayout {
+                    Button {
+                        text: "Save diagnostics…"
+                        icon.name: "document-save"
+                        onClicked: diagnosticsFile.open()
+                    }
+                    Button {
+                        text: "Report an issue"
+                        icon.name: "tools-report-bug"
+                        onClicked: Qt.openUrlExternally(page.shell.backendClient.applicationInfo.issuesUrl)
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: "Diagnostics include software versions and capability counts. Device identifiers, labels, profile names, paths and raw logs are excluded. Nothing is uploaded automatically."
+                    color: page.shell.mutedText
+                    wrapMode: Text.WordWrap
+                }
+                Label {
+                    Layout.fillWidth: true
+                    visible: text.length > 0
+                    text: page.shell.backendClient.diagnosticsMessage
+                    color: page.shell.secondaryText
+                    wrapMode: Text.WordWrap
+                }
+            }
+
+            Panel {
+                shell: page.shell
+                Layout.fillWidth: true
                 color: Qt.rgba(page.shell.warningColor.r, page.shell.warningColor.g, page.shell.warningColor.b, 0.08)
                 border.color: Qt.rgba(page.shell.warningColor.r, page.shell.warningColor.g, page.shell.warningColor.b, 0.45)
 
@@ -69,15 +170,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 2
                         Label {
-                            text: page.shell.liveMode
-                                ? page.shell.backendClient.lightingOwnershipAvailable
-                                    ? "Phase 5 — guarded lighting ownership checkpoint"
-                                    : page.shell.backendClient.lightingAssignmentAvailable
-                                    ? "Phase 4 — guarded lighting assignment checkpoint"
-                                    : page.shell.backendClient.contractVersion === "1.0"
-                                        ? "Phase 3 — guarded label write checkpoint"
-                                        : "Phase 2 — legacy read-only compatibility"
-                                : "Demo mode — no backend connection"
+                            text: page.shell.liveMode ? "Service connection & client preferences" : "Demo mode & client preferences"
                             color: page.shell.primaryText
                             font.pixelSize: 18
                             font.weight: Font.DemiBold
@@ -85,14 +178,8 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: page.shell.liveMode
-                                ? page.shell.backendClient.lightingOwnershipAvailable
-                                    ? "The versioned client can update labels, assign existing effects, and change whole-device RGB Cluster membership one device at a time; every mutation uses stale-state rejection and refreshed-state verification."
-                                    : page.shell.backendClient.lightingAssignmentAvailable
-                                    ? "The versioned client can update published labels and assign existing effects to authorized lighting targets; both use stale-state rejection and read-back verification."
-                                    : page.shell.backendClient.contractVersion === "1.0"
-                                        ? "The versioned client can update published labels with stale-state rejection and read-back verification; lighting and other mutations remain unavailable."
-                                        : "The installed service uses the legacy GET adapter, so every control mutation remains a local preview."
-                                : "Controls use local demo state and reset when the window closes."
+                                ? "Live editors verify hardware changes against service state. Existing fan curves use a recovery copy and full-profile read-back; label and lighting controls appear where the service supports them."
+                                : "Demo hardware controls reset when the window closes. Appearance, layout, and data-source preferences save automatically on this computer."
                             color: page.shell.secondaryText
                             wrapMode: Text.WordWrap
                         }
@@ -139,7 +226,7 @@ Item {
                         icon.name: "object-flip-horizontal"
                         onClicked: {
                             page.appearanceFirst = !page.appearanceFirst
-                            page.shell.markDirty("Service cell order")
+                            page.saveLayout()
                         }
                     }
                     Button {
@@ -147,7 +234,7 @@ Item {
                         icon.name: "object-flip-horizontal"
                         onClicked: {
                             page.connectionFirst = !page.connectionFirst
-                            page.shell.markDirty("Service cell order")
+                            page.saveLayout()
                         }
                     }
                     Button {
@@ -155,7 +242,7 @@ Item {
                         icon.name: page.stackCells ? "view-restore" : "view-fullscreen"
                         onClicked: {
                             page.stackCells = !page.stackCells
-                            page.shell.markDirty("Service cell size")
+                            page.saveLayout()
                         }
                     }
                 }
@@ -179,7 +266,7 @@ Item {
                         shell: page.shell
                         iconName: "preferences-desktop-theme"
                         title: "Appearance"
-                        subtitle: "Constrained customization preserves navigation"
+                        subtitle: "Saved automatically on this computer"
                     }
 
                     Rectangle {
@@ -219,6 +306,7 @@ Item {
                                 implicitWidth: 32
                                 implicitHeight: 32
                                 onClicked: page.shell.accentColor = modelData
+                                Accessible.name: "Accent color " + modelData
                                 background: Rectangle {
                                     radius: width / 2
                                     color: modelData
@@ -306,47 +394,23 @@ Item {
                         color: page.shell.outline
                     }
 
-                    ControlRow {
-                        shell: page.shell
-                        feature: ({
-                            title: "Overview density",
-                            description: "Number of dashboard columns",
-                            kind: "choice",
-                            value: "Adaptive",
-                            choices: ["Adaptive", "Two columns", "Single column"]
-                        })
+                    Label {
+                        Layout.fillWidth: true
+                        text: "Use Arrange cells in a workspace or device tab to change cell order and width. Layouts are remembered between visits and restarts. Temperatures are displayed in Celsius."
+                        color: page.shell.secondaryText
+                        wrapMode: Text.WordWrap
                     }
-                    ControlRow {
-                        shell: page.shell
-                        feature: ({
-                            title: "Temperature units",
-                            description: "Applied throughout the client",
-                            kind: "choice",
-                            value: "Celsius",
-                            choices: ["Celsius", "Fahrenheit"]
-                        })
+                    Button {
+                        text: "Reset appearance and layouts"
+                        icon.name: "edit-undo"
+                        onClicked: page.shell.resetPresentation()
                     }
-                    ControlRow {
-                        shell: page.shell
-                        feature: ({
-                            title: "Dashboard widgets",
-                            description: "Reorder approved overview regions",
-                            kind: "action",
-                            value: "Customize",
-                            icon: "configure"
-                        })
-                    }
-                    ControlRow {
-                        shell: page.shell
-                        showDivider: false
-                        feature: ({
-                            title: "Reset presentation",
-                            description: "Restore the prototype defaults",
-                            kind: "action",
-                            value: "Reset",
-                            icon: "edit-undo",
-                            actionText: "Close and reopen the prototype to restore all defaults."
-                        })
+                    Label {
+                        Layout.fillWidth: true
+                        visible: text.length > 0
+                        text: page.shell.backendClient.preferences.error
+                        color: page.shell.warningColor
+                        wrapMode: Text.WordWrap
                     }
                 }
 
@@ -362,14 +426,19 @@ Item {
                         iconName: "network-connect"
                         title: "Client connection"
                         subtitle: page.shell.liveMode
-                            ? page.shell.backendClient.lightingOwnershipAvailable
-                                ? "The client prefers one versioned snapshot request, exposes guarded label, lighting-assignment, and ownership commands, and retains an explicit legacy read-only fallback."
-                                : page.shell.backendClient.lightingAssignmentAvailable
-                                ? "The client prefers one versioned snapshot request, exposes guarded label and lighting-assignment commands, and retains an explicit legacy read-only fallback."
-                                : "The client prefers one versioned snapshot request, exposes guarded labels when published, and retains an explicit legacy read-only fallback."
+                            ? "The client reads local service state. Available editors show the scope and result of each change."
                             : "Choose Live in the top bar to use the loopback transport. Demo mode opens no socket."
                     }
 
+                    ControlRow {
+                        shell: page.shell
+                        feature: ({
+                            title: "Service version",
+                            description: "Reported by the connected backend",
+                            kind: "stat",
+                            value: page.shell.liveMode ? page.shell.backendClient.serviceInfo.version || "Not reported" : "Demo"
+                        })
+                    }
                     ControlRow {
                         shell: page.shell
                         feature: ({
@@ -418,7 +487,7 @@ Item {
                             title: "Write path",
                             description: page.shell.backendClient.contractVersion.length > 0
                                 ? "Typed command with expected state revision and verification"
-                                : "Unavailable on the installed legacy service",
+                                : "Existing saved fan curves use the graph-profile API with verified read-back",
                             kind: "stat",
                             value: page.shell.backendClient.contractVersion.length > 0
                                 ? page.shell.backendClient.lightingOwnershipAvailable
@@ -426,7 +495,7 @@ Item {
                                     : page.shell.backendClient.lightingAssignmentAvailable
                                     ? "2 capability-gated PUT routes"
                                     : "PUT /api/v1/devices/label"
-                                : "Unavailable"
+                                : "Saved fan curves"
                         })
                     }
                     ControlRow {
@@ -460,7 +529,7 @@ Item {
                             title: "API operations",
                             description: "Lifetime of this process",
                             kind: "stat",
-                            value: page.shell.backendClient.apiCallCount + " GET"
+                            value: page.shell.backendClient.apiCallCount + " requests"
                         })
                     }
                 }

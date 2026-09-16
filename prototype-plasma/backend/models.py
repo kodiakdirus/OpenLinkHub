@@ -1376,4 +1376,12 @@ class ContractSnapshot:
                     item["value"] = "Unavailable"
                     item["description"] = _text(capability.get("reason"))
 
+            availability = {
+                _text(capability.get("label"), _text(capability.get("id")).title()):
+                    bool(capability.get("available", True))
+                for capability in capabilities
+            }
+            for tab in device["tabs"]:
+                tab["available"] = availability.get(tab["name"], True)
+
         return snapshot

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.kodiakdirus.OpenLinkHubPlasma</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <name>OpenLinkHub Plasma</name>
+  <summary>Monitor hardware and manage supported cooling and lighting controls</summary>
+  <developer id="io.github.kodiakdirus">
+    <name>OpenLinkHub Plasma contributors</name>
+  </developer>
+  <description>
+    <p>A community alpha desktop client for the separately installed OpenLinkHub service, built with Qt and Kirigami.</p>
+    <p>View live telemetry, edit existing fan curves, and manage lighting where the service supports it. Demo mode lets you explore without hardware. Some planned controls are previews and are unavailable in Live mode.</p>
+    <p>This package installs the desktop client only. It does not install or replace the OpenLinkHub service. Available controls depend on the connected service and device capabilities.</p>
+  </description>
+  <launchable type="desktop-id">io.github.kodiakdirus.OpenLinkHubPlasma.desktop</launchable>
+  <url type="homepage">https://github.com/kodiakdirus/OpenLinkHub</url>
+  <url type="bugtracker">https://github.com/kodiakdirus/OpenLinkHub/issues</url>
+  <url type="help">https://github.com/kodiakdirus/OpenLinkHub/blob/main/prototype-plasma/docs/PUBLIC_TESTING.md</url>
+  <content_rating type="oars-1.1"/>
+  <supports><control>pointing</control><control>keyboard</control></supports>
+  <releases>
+    <release version="0.1.0a2" date="2026-09-16" type="development">
+      <description><p>Optional backend setup with a dismissible startup reminder and persistent access under Service.</p></description>
+    </release>
+    <release version="0.1.0a1" date="2026-09-16" type="development">
+      <description><p>First independently packaged community testing alpha.</p></description>
+    </release>
+  </releases>
+</component>

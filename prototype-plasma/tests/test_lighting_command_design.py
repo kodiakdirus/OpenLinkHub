@@ -22,6 +22,7 @@ class LightingCommandDesignTests(unittest.TestCase):
         cls.schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         cls.design = DESIGN.read_text(encoding="utf-8")
 
+    @unittest.skipUnless(SERVER_DIR.is_dir(), "Service-source audit requires the full OpenLinkHub repository")
     def test_assignment_and_leased_identification_have_separate_boundaries(self) -> None:
         self.assertIn("Assignment checkpoint implemented", self.design)
         current_contract = CURRENT_CONTRACT.read_text(encoding="utf-8")
@@ -35,6 +36,7 @@ class LightingCommandDesignTests(unittest.TestCase):
         self.assertNotIn("/api/v1/lighting/identify", current_contract)
         self.assertIn("/api/v1/lighting/identify", server)
 
+    @unittest.skipUnless(SERVER_DIR.is_dir(), "Service-source audit requires the full OpenLinkHub repository")
     def test_legacy_adapter_is_connected_only_through_the_typed_service(self) -> None:
         adapter = LEGACY_ADAPTER.read_text(encoding="utf-8")
         self.assertIn("legacyLightingAssignerAdapter", adapter)

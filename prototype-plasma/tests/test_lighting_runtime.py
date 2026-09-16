@@ -84,3 +84,29 @@ class LightingRuntimeTests(unittest.TestCase):
         _, callback = self.calls.pop()
         callback({"apiVersion": "1.0", "kind": "lighting-runtime", "data": {"revision": 7, "mode": "unknown", "renderer": "running", "members": ["hub"], "operations": None}}, None)
         self.assertEqual(self.client.lightingRuntime["operations"], [])
+
+    def test_runtime_scene_updates_and_failure_clears_previous_scene(self):
+        self.client._mode = "live"
+        for profile in ("nebula", "color-pulse"):
+            self.client.refreshLightingRuntime()
+            _, callback = self.calls.pop()
+            callback({"apiVersion": "1.0", "kind": "lighting-runtime", "data": {
+                "revision": 7, "mode": "unknown", "renderer": "running",
+                "profile": profile, "members": ["hub"], "operations": []}}, None)
+            self.assertEqual(self.client.lightingRuntime["profile"], profile)
+        self.client.refreshLightingRuntime()
+        _, callback = self.calls.pop()
+        callback(None, "Connection lost")
+        self.assertNotIn("profile", self.client.lightingRuntime)
+        self.assertEqual(self.client.lightingRuntime["renderer"], "unavailable")
+
+    def test_non_string_runtime_scene_is_rejected(self):
+        self.client._mode = "live"
+        for profile in (None, [], {}, 7):
+            self.client.refreshLightingRuntime()
+            _, callback = self.calls.pop()
+            callback({"apiVersion": "1.0", "kind": "lighting-runtime", "data": {
+                "revision": 7, "mode": "unknown", "renderer": "running",
+                "profile": profile, "members": ["hub"], "operations": ["recover"]}}, None)
+            self.assertEqual(self.client.lightingRuntime["operations"], [])
+            self.assertNotIn("profile", self.client.lightingRuntime)

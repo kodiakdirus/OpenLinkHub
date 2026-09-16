@@ -4,6 +4,8 @@ import QtQuick.Layouts
 
 Panel {
     id: card
+    objectName: "lightingRuntimeCard"
+    Layout.fillWidth: true
     required property string deviceId
     readonly property var runtime: shell.backendClient.lightingRuntime || ({})
     readonly property var operations: runtime.operations || []
@@ -29,8 +31,9 @@ Panel {
             + " · Cluster renderer: " + (card.runtime.renderer || "unavailable")
             + ". Saved ownership does not confirm visible output."
     }
-    RowLayout {
+    Flow {
         Layout.fillWidth: true
+        spacing: 8
         Button {
             text: "Refresh status"
             enabled: shell.liveMode
@@ -70,8 +73,10 @@ Panel {
     }
     Dialog {
         id: recoveryReview
+        parent: Overlay.overlay
+        anchors.centerIn: parent
         title: "Restart the saved Cluster scene?"
-        width: 480
+        width: Math.min(480, parent.width - 48)
         modal: true
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: card.shell.backendClient.recoverLighting()

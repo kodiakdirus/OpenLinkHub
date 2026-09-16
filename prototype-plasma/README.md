@@ -1,7 +1,12 @@
-# OpenLinkHub Plasma Prototype
+# OpenLinkHub Plasma — community alpha
 
-This is a native Qt 6/Kirigami prototype for an OpenLinkHub desktop client.
-It starts in self-contained Demo mode. The versioned contract includes guarded
+The desktop client can be packaged independently of the OpenLinkHub service.
+See [public testing and installation](docs/PUBLIC_TESTING.md) and
+[packaging, release workflow and upstream boundaries](docs/PACKAGING.md).
+
+This is a native Qt 6/Kirigami desktop client in development.
+The first launch uses self-contained Demo mode; later launches remember the
+data source selected in the top bar. The versioned contract includes guarded
 label editing and one deliberately narrow lighting assignment command. Both use
 typed commands, expected state revisions, and read-back verification. Lighting
 assignment is limited to existing profiles on explicitly authorized LINK Hub
@@ -15,9 +20,8 @@ From the OpenLinkHub repository root:
 ./prototype-plasma/run.sh
 ```
 
-The launcher checks for Python 3, PyQt6, and the system Kirigami QML module
-before starting. SparkleDog already has those dependencies through its Plasma
-installation.
+Source runs require Python 3, PyQt6, and the system Kirigami and Qt Quick QML
+modules. The Flatpak package supplies a matching runtime for these dependencies.
 
 To start directly in Live mode:
 
@@ -26,7 +30,39 @@ To start directly in Live mode:
 ```
 
 Live mode is fixed to `http://127.0.0.1:27003`. The top-bar data-source selector
-can switch between Demo and Live at runtime.
+can switch between Demo and Live at runtime. `--demo` and `--live` override the
+saved startup choice for that launch. Switching modes never applies a profile.
+
+Appearance and cell layouts save automatically under
+`$XDG_CONFIG_HOME/openlinkhub-plasma/preferences.json` (normally
+`~/.config/openlinkhub-plasma/preferences.json`). Service → Reset appearance and
+layouts restores presentation defaults while keeping the saved data source.
+Demo hardware controls and unsaved hardware drafts are not persisted there.
+Screenshot and smoke-test runs use isolated temporary preferences.
+
+See [daily-use behavior and remaining scope](docs/DAILY_USE.md).
+
+### Desktop portal warning when launching from a Snap editor
+
+If startup prints `Can't manually register a io.snapcraft application`, the
+desktop portal has identified the GUI process as belonging to a Snap application.
+This can happen when launching the source client from Snap-installed VS Code:
+the child inherits its Snap process group, even if the terminal has cleared the
+`SNAP` environment variable. Qt then attempts native desktop registration while
+the portal still identifies the process as a Snap.
+
+Launch the source client from a separate desktop terminal such as Konsole to
+avoid inheriting the editor's process group. Clearing `SNAP` alone does not fix
+the mismatch. For normal testing, use the installed Flatpak's **OpenLinkHub
+Plasma** application-menu entry; the package supplies its own desktop identity.
+
+A source checkout without an installed desktop entry can instead report
+`App info not found for 'io.github.kodiakdirus.OpenLinkHubPlasma'`. That is a
+separate desktop-registration issue. The GUI can start despite these warnings,
+but portal integration may be affected. Neither message reports an OpenLinkHub
+service connection failure or requires a backend restart. Do not globally
+disable desktop portals to suppress the output; file dialogs and other desktop
+integration use them.
 
 For a deterministic offscreen render:
 
@@ -46,8 +82,8 @@ For a deterministic offscreen render:
   --screenshot /tmp/openlinkhub-device-lighting.png
 ```
 
-To instantiate every workspace and device shell without opening a visible
-window:
+To instantiate every workspace, device shell, and device tab without opening a
+visible window (QML warnings fail the check; Live requires a connected service):
 
 ```bash
 ./prototype-plasma/run.sh --smoke-test
@@ -60,9 +96,17 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 - Native Breeze/Plasma controls and icon theme
 - Searchable global workspaces and device commands
 - Dedicated global profile library with game/application launch-rule concepts
-- Persistent global-profile selector and a composition editor that references
+- Demo global-profile selector and a composition editor that references
   saved cooling, lighting, keyboard, mouse, controller, audio, and LCD profiles
 - Capability-aware device tabs
+- Live Lighting, Input, Audio, and Displays workspaces that select devices by
+  available capabilities, show only their own domain's controls, and retain
+  selection through telemetry refresh; the full device tab set stays in Devices
+- Live integration status from the service, with explicit availability screens
+  for global profiles and automation editing
+- Persistent appearance, data-source preference, and per-workspace/device-tab
+  cell layouts, with a working presentation reset
+- Window-close protection during commands and unsaved fan-curve drafts
 - Asynchronous loopback transport with explicit connection, degraded,
   stale-data, refresh, and Demo/Live states
 - Additive `GET /api/v1/service`, `/api/v1/capabilities`, and
@@ -117,11 +161,12 @@ python3 -m unittest discover -s prototype-plasma/tests -v
   sizing and equal-height neighbors to prevent masonry-style gaps
 - Local notifications and explicit Demo, legacy-read-only, and guarded-Live state
 
-Demo values and local control previews reset when the application exits. In a
-contract-capable Live session, only published device/channel labels can be
-written. The client exposes no generic mutation method; cooling, lighting,
-input, audio, display, global-profile, and administrative changes remain local
-previews.
+Demo hardware values and local control previews reset when the application exits.
+Live writes include published labels, capability-authorized lighting assignment,
+ownership and runtime operations, and existing saved fan curves. The client
+exposes no generic mutation method. Input/audio/display configuration,
+global profiles, automations, integration setup and administration remain
+unimplemented; Live mode shows reported state or an availability explanation.
 
 ## Source-only runtime checkpoint
 
@@ -130,7 +175,8 @@ Cluster renderer restart, and a three-second whole-member locator lease.
 Physical mode stays `unknown` where the driver has no reviewed read-back.
 The checkpoint also bounds stalled API callers and suspend/shutdown recovery.
 See [runtime details and remaining hardware acceptance](docs/LIGHTING_RUNTIME.md).
-These changes are not deployed by running source tests.
+Running source tests does not deploy backend changes. The client detects which
+runtime operations the installed service publishes.
 
 ## Architecture boundary
 

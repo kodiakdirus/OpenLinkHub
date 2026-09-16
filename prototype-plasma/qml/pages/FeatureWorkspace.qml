@@ -14,9 +14,11 @@ Item {
     property var groups: []
     property var arrangedGroups: []
     property bool layoutEditing: false
+    readonly property string layoutKey: "workspace:" + workspaceTitle
 
     function resetLayout() {
-        arrangedGroups = (groups || []).map(group => ({
+        arrangedGroups = shell.arrangeSavedGroups(layoutKey, (groups || []).map(group => ({
+            key: group.title,
             title: group.title,
             icon: group.icon,
             description: group.description,
@@ -24,7 +26,7 @@ Item {
             experimental: group.experimental,
             items: group.items,
             wide: Boolean(group.wide)
-        }))
+        })))
     }
 
     function openLayoutEditor() {
@@ -39,13 +41,14 @@ Item {
         updated[index] = updated[destination]
         updated[destination] = moved
         arrangedGroups = updated
-        shell.markDirty(workspaceTitle + " cell order")
+        shell.saveGroupLayout(layoutKey, arrangedGroups)
     }
 
     function toggleGroupWidth(index) {
         const updated = arrangedGroups.slice()
         const current = updated[index]
         updated[index] = {
+            key: current.key,
             title: current.title,
             icon: current.icon,
             description: current.description,
@@ -55,11 +58,15 @@ Item {
             wide: !current.wide
         }
         arrangedGroups = updated
-        shell.markDirty(workspaceTitle + " cell size")
+        shell.saveGroupLayout(layoutKey, arrangedGroups)
     }
 
     onGroupsChanged: resetLayout()
     Component.onCompleted: resetLayout()
+    Connections {
+        target: page.shell
+        function onPresentationReset() { page.resetLayout() }
+    }
 
     ScrollView {
         id: scroll
@@ -151,7 +158,10 @@ Item {
                     Button {
                         text: "Reset layout"
                         icon.name: "edit-undo"
-                        onClicked: page.resetLayout()
+                        onClicked: {
+                            page.shell.saveLayout(page.layoutKey, {})
+                            page.resetLayout()
+                        }
                     }
                 }
             }

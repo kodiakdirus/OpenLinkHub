@@ -36,6 +36,18 @@ ColumnLayout {
     })
     property string ownershipSignature: ""
     property bool clusterEditorOpen: false
+    property bool showIndividualSettings: false
+    readonly property bool individualSettingsInactive: ownership.controller === "rgb-cluster"
+        || ownership.controller === "openrgb"
+    readonly property var clusterRuntime: shell.backendClient.lightingRuntime || ({})
+    readonly property bool reportedClusterMember: ownership.controller === "rgb-cluster"
+        && (clusterRuntime.members || []).indexOf(device.id || "") >= 0
+    readonly property string clusterProfile: reportedClusterMember && typeof clusterRuntime.profile === "string"
+        ? clusterRuntime.profile.trim() : ""
+    readonly property string clusterScene: clusterProfile
+        ? clusterProfile.replace(/[-_]+/g, " ").replace(/\b\w/g, letter => letter.toUpperCase())
+        : "Not reported"
+    readonly property string clusterRenderer: reportedClusterMember ? clusterRuntime.renderer || "unavailable" : "unavailable"
     property string targetModelSignature: ""
     property string profileModelSignature: ""
     property string profileSource: ""
@@ -146,6 +158,7 @@ ColumnLayout {
         const nextDeviceId = device.id || ""
         if (loadedDeviceId !== nextDeviceId) {
             loadedDeviceId = nextDeviceId
+            showIndividualSettings = false
             selectedTargetKey = ""
             selectedProfileKey = ""
             loadedProfileKey = ""
@@ -193,6 +206,8 @@ ColumnLayout {
         shell: editor.shell
         ownership: editor.ownership
         targets: editor.targets
+        clusterScene: editor.clusterScene
+        clusterRenderer: editor.clusterRenderer
         onReviewRequested: ownershipDialog.open()
         onClusterEditorRequested: editor.clusterEditorOpen = true
     }
@@ -203,6 +218,8 @@ ColumnLayout {
         ownership: editor.ownership
         targets: editor.targets
         availableDevices: editor.shell.devices
+        clusterScene: editor.clusterScene
+        clusterRenderer: editor.clusterRenderer
         onEditMembersRequested: clusterMembersDialog.openEditor()
         onCloseRequested: editor.clusterEditorOpen = false
     }
@@ -221,7 +238,16 @@ ColumnLayout {
         availableDevices: editor.shell.devices
     }
 
+    Button {
+        visible: editor.individualSettingsInactive
+        text: editor.showIndividualSettings ? "Hide saved individual effects" : "Show saved individual effects (inactive)"
+        icon.name: editor.showIndividualSettings ? "arrow-up" : "arrow-down"
+        onClicked: editor.showIndividualSettings = !editor.showIndividualSettings
+    }
+
     GridLayout {
+        objectName: "individualLightingSettings"
+        visible: !editor.individualSettingsInactive || editor.showIndividualSettings
         Layout.fillWidth: true
         columns: width > 960 ? 2 : 1
         columnSpacing: editor.shell.cardSpacing
@@ -244,13 +270,15 @@ ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 1
                     Label {
-                        text: "Lighting assignment"
+                        text: editor.individualSettingsInactive ? "Saved individual lighting" : "Lighting assignment"
                         color: editor.shell.primaryText
                         font.pixelSize: 18
                         font.weight: Font.DemiBold
                     }
                     Label {
-                        text: "Choose a physical target and one effect supported by this device."
+                        text: editor.individualSettingsInactive
+                            ? "These effects are inactive while " + (editor.ownership.label || "another controller") + " controls this device."
+                            : "Choose a physical target and one effect supported by this device."
                         color: editor.shell.mutedText
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
@@ -292,7 +320,7 @@ ColumnLayout {
             }
 
             Label {
-                text: "Effect"
+                text: editor.individualSettingsInactive ? "Individual effect (inactive)" : "Effect"
                 color: editor.shell.secondaryText
                 font.weight: Font.DemiBold
             }

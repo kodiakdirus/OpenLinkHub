@@ -130,7 +130,7 @@ Item {
                         font.weight: Font.DemiBold
                     }
                     Label {
-                        text: "iCUE LINK System Hub · values are simulated"
+                        text: page.shell.liveMode ? "Live channel telemetry from OpenLinkHub" : "iCUE LINK System Hub · values are simulated"
                         color: page.shell.mutedText
                     }
                 }
@@ -145,6 +145,7 @@ Item {
                 }
 
                 ComboBox {
+                    visible: !page.shell.liveMode
                     model: ["iCUE LINK System Hub", "TITAN 360 LCD"]
                     Layout.preferredWidth: 245
                     onActivated: page.shell.showToast(
@@ -221,13 +222,16 @@ Item {
                             font.weight: Font.DemiBold
                         }
                         Label {
-                            text: "Create reusable fan and pump curves, then assign them to channels below."
+                            text: page.shell.liveMode
+                                ? "Edit saved fan curves. Profile assignments and pump curves remain service managed."
+                                : "Create reusable fan and pump curves, then assign them to channels below."
                             color: page.shell.mutedText
                             font.pixelSize: 12
                         }
                     }
 
                     Flow {
+                        visible: !page.shell.liveMode
                         spacing: 6
                         StatusBadge {
                             shell: page.shell
@@ -341,11 +345,11 @@ Item {
                                             page.firstProfileControl = this
                                     }
                                     ToolTip.visible: hovered && page.shell.liveMode
-                                    ToolTip.text: "Read-only in Phase 1"
+                                    ToolTip.text: "Current assignment reported by the service. Use the curve editor to edit an existing fan profile."
                                 }
 
                                 CoolingCurve {
-                                    visible: channelCard.width > 690
+                                    visible: !page.shell.liveMode && channelCard.width > 690
                                     Layout.fillWidth: true
                                     Layout.minimumWidth: 150
                                     Layout.maximumWidth: 250
@@ -381,7 +385,7 @@ Item {
                             }
 
                             GridLayout {
-                                visible: channelCard.expanded
+                                visible: channelCard.expanded && !page.shell.liveMode
                                 Layout.fillWidth: true
                                 columns: width > 620 ? 3 : 1
                                 columnSpacing: 20
@@ -429,12 +433,23 @@ Item {
                                     }
                                 }
                             }
+
+                            Label {
+                                visible: channelCard.expanded && page.shell.liveMode
+                                Layout.fillWidth: true
+                                text: "Profile: " + channelCard.zone.profile + " · Sensor: " + channelCard.zone.source
+                                    + (channelCard.zone.channelSummary ? "\n" + channelCard.zone.channelSummary : "")
+                                    + "\nAssignments, sensor selection and minimum output are managed by the service."
+                                color: page.shell.secondaryText
+                                wrapMode: Text.WordWrap
+                            }
                         }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.topMargin: 4
+                        visible: !page.shell.liveMode
                         Item { Layout.fillWidth: true }
                         Button {
                             text: "Revert"
@@ -452,7 +467,7 @@ Item {
                 }
 
                 ColumnLayout {
-                    visible: page.width > 970
+                    visible: !page.shell.liveMode && page.width > 970
                     Layout.preferredWidth: 315
                     Layout.alignment: Qt.AlignTop
                     spacing: page.shell.cardSpacing

@@ -414,7 +414,7 @@ Item {
                 Layout.fillWidth: true
 
                 Label {
-                    text: page.shell.liveMode ? "Local previews" : "Quick actions"
+                    text: "Quick actions"
                     color: page.shell.primaryText
                     font.pixelSize: 20
                     font.weight: Font.DemiBold
@@ -427,7 +427,12 @@ Item {
                     rowSpacing: page.shell.cardSpacing
 
                     Repeater {
-                        model: [
+                        model: page.shell.liveMode ? [
+                            { label: "Fan curves", detail: "Open saved fan curves and live channel telemetry", icon: "temperature-normal", action: "cooling" },
+                            { label: "Lighting", detail: "Open device lighting and Cluster controls", icon: "preferences-desktop-color", action: "lighting" },
+                            { label: "Devices", detail: "Inspect connected hardware", icon: "drive-multidisk", action: "devices" },
+                            { label: "Connection", detail: "Review service status and client preferences", icon: "network-connect", action: "service" }
+                        ] : [
                             { label: "Quiet Focus", detail: "Activate the complete quiet global profile", icon: "weather-clear-night", action: "quiet" },
                             { label: "Lights out", detail: "Toggle the mock lighting state", icon: "brightness-low", action: "lights" },
                             { label: "Manage profiles", detail: "Coordinate settings and launch rules", icon: "document-multiple", action: "profiles" },
@@ -441,6 +446,10 @@ Item {
                             text: modelData.label
                             icon.name: modelData.icon
                             onClicked: {
+                                if (page.shell.liveMode) {
+                                    page.shell.navigate(modelData.action)
+                                    return
+                                }
                                 if (modelData.action === "quiet") page.shell.previewGlobalProfile("quiet")
                                 else if (modelData.action === "devices") page.shell.navigate("devices")
                                 else if (modelData.action === "profiles") page.shell.navigate("profiles")

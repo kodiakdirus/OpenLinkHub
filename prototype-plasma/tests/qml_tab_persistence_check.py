@@ -7,6 +7,7 @@ from copy import deepcopy
 import os
 from pathlib import Path
 import sys
+import tempfile
 
 
 PROTOTYPE_ROOT = Path(__file__).resolve().parents[1]
@@ -51,7 +52,8 @@ def invoke(target: QObject, method: str) -> None:
 def main() -> int:
     app = QGuiApplication([])
     engine = QQmlApplicationEngine()
-    backend = BackendController(parent=engine)
+    preferences_directory = tempfile.TemporaryDirectory(prefix="openlinkhub-qml-test-")
+    backend = BackendController(parent=engine, preferences_path=str(Path(preferences_directory.name) / "preferences.json"))
     engine.rootContext().setContextProperty("backend", backend)
     engine.load(QUrl.fromLocalFile(str(PROTOTYPE_ROOT / "qml" / "Main.qml")))
     if not engine.rootObjects():

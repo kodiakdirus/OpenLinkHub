@@ -60,6 +60,12 @@ hardware output is observed. Failed cleanup retains an explicit
 
 The device Lighting page has a live-health card that refreshes independently of
 the potentially stalled normal snapshot. Older backends disable its operations.
+The ownership card and Cluster editor show the runtime catalog's configured
+scene (for example, Nebula) and renderer status for the selected Cluster member.
+Saved individual effects remain separate, explicitly inactive, and collapsed
+while Cluster or OpenRGB controls the device. They do not describe the Cluster
+scene. Missing runtime data shows “Not reported” rather than an individual effect;
+scene and renderer updates do not replace local effect drafts.
 Recovery has a review dialog naming its whole-Cluster effect. Identification is
 an explicit three-second action for the selected whole member; switching device
 or closing the editor requests cancellation, and server expiry is the final

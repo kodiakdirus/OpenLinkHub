@@ -253,6 +253,7 @@ class ContractSnapshotTests(unittest.TestCase):
             capability_rows[1]["description"],
         )
         self.assertEqual(pairing["name"], "Pairing")
+        self.assertFalse(pairing["available"])
         self.assertEqual(snapshot["telemetry"]["cpu"], "51.2°C")
 
 

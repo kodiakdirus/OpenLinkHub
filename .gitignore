@@ -34,3 +34,5 @@ update.json.sig
 .devcontainer/devcontainer-lock.json
 __pycache__/
 *.py[cod]
+prototype-plasma/dist/
+prototype-plasma/*.egg-info/

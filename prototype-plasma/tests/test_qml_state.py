@@ -12,6 +12,36 @@ QML_ROOT = Path(__file__).resolve().parents[1] / "qml"
 
 
 class QmlStateTests(unittest.TestCase):
+    def test_backend_setup_is_nonintrusive_and_always_accessible(self) -> None:
+        for style in ("Basic", "org.kde.breeze"):
+            with self.subTest(style=style):
+                result = subprocess.run(
+                    [sys.executable, str(CHECK.with_name("qml_backend_setup_check.py"))],
+                    capture_output=True, text=True, timeout=20,
+                    env=dict(os.environ, QT_QPA_PLATFORM="offscreen", QT_QUICK_CONTROLS_STYLE=style),
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_no_service_launcher_exits_without_dangling_qml_bindings(self) -> None:
+        result = subprocess.run(
+            [sys.executable, str(CHECK.with_name("launcher_no_service_check.py"))],
+            capture_output=True, text=True, timeout=20,
+            env=dict(os.environ, QT_QPA_PLATFORM="offscreen"),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("TypeError", result.stderr)
+        self.assertNotIn("Binding loop", result.stderr)
+
+    def test_daily_use_workflows(self) -> None:
+        for style in ("Basic", "org.kde.breeze"):
+            with self.subTest(style=style):
+                environment = dict(os.environ, QT_QUICK_CONTROLS_STYLE=style)
+                result = subprocess.run(
+                    [sys.executable, str(CHECK.with_name("qml_daily_use_check.py"))],
+                    capture_output=True, text=True, timeout=20, env=environment,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
+
     def test_gui_state_survives_model_replacement(self) -> None:
         environment = dict(os.environ)
         environment["QT_QPA_PLATFORM"] = "offscreen"
@@ -161,7 +191,7 @@ class QmlStateTests(unittest.TestCase):
             overview.count("rightPadding: page.shell.compactMode ? 12 : 16"),
             2,
         )
-        self.assertEqual(service.count("PanelHeader {"), 4)
+        self.assertEqual(service.count("PanelHeader {"), 5)
         self.assertGreaterEqual(panel_header.count("Layout.alignment: Qt.AlignTop"), 3)
         self.assertEqual(overview.count("IconSlot {"), 2)
         self.assertEqual(overview.count("horizontalAlignment: Text.AlignLeft"), 4)

@@ -21,6 +21,14 @@ telemetry polls never replace them. Reset draft restores the loaded curve.
 Reload is available after discarding the draft. Sensor and pump controls are
 not offered by this fan-only editor.
 
+The editor accepts decimal values to one decimal place and checks ordering,
+ranges, and nondecreasing output while editing. Invalid drafts show an inline
+explanation and cannot be saved. Restoring the original values clears the dirty
+state. After verified saving, Reset draft uses that newly saved baseline.
+Close, Escape, and window close offer Keep/Cancel or Discard when the curve is
+dirty. Navigation shortcuts cannot bypass the modal editor. Window close and
+data-source switching wait for in-flight command verification to finish.
+
 Before writing, a fresh full-profile read must match the loaded baseline. The
 client then saves a mode-0600 recovery copy under
 $XDG_STATE_HOME/openlinkhub-plasma/cooling-backups (default ~/.local/state).

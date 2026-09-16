@@ -9,6 +9,8 @@ Panel {
     required property var ownership
     required property var targets
     required property var availableDevices
+    property string clusterScene: "Not reported"
+    property string clusterRenderer: "unavailable"
 
     signal closeRequested()
     signal editMembersRequested()
@@ -111,10 +113,17 @@ Panel {
 
     RowLayout {
         Layout.fillWidth: true
-        ComboBox {
+        ColumnLayout {
             Layout.fillWidth: true
-            enabled: false
-            model: ["Use current synchronized scene"]
+            Label { text: "Configured scene"; color: shell.mutedText }
+            Label {
+                objectName: "clusterEditorSceneName"
+                text: clusterEditor.clusterScene
+                color: shell.primaryText
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+            Label { text: "Renderer " + clusterEditor.clusterRenderer; color: shell.mutedText }
         }
         Button { text: "Edit scene"; icon.name: "document-edit"; enabled: false }
         Button { text: "Apply to cluster"; icon.name: "dialog-ok-apply"; enabled: false }

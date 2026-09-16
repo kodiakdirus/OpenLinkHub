@@ -14,7 +14,7 @@ ApplicationWindow {
     minimumWidth: 1120
     minimumHeight: 700
     visible: true
-    title: "OpenLinkHub — Plasma Prototype"
+    title: "OpenLinkHub Plasma · Alpha"
 
     property string activeSection: "overview"
     property bool demoDialog: false
@@ -24,8 +24,33 @@ ApplicationWindow {
     property string selectedDeviceId: ""
     property bool pendingChanges: false
     property bool lightsEnabled: true
+    property var activeCurveEditor: null
     readonly property var backendClient: backend
     readonly property bool liveMode: backendClient.mode === "live"
+    property bool backendNoticeReady: false
+    readonly property bool showBackendSetupNotice: backendNoticeReady
+        && backendClient.backendSetup.showReminder
+        && !backendClient.preferences.values.backendSetupReminderDismissed
+        && activeSection !== "service" && !backendSetupDialog.visible
+
+    function openBackendSetup() {
+        backendSetupDialog.open()
+    }
+
+    function dismissBackendSetupReminder() {
+        savePreference("backendSetupReminderDismissed", true)
+    }
+
+    Timer {
+        interval: 800
+        running: true
+        onTriggered: root.backendNoticeReady = true
+    }
+
+    BackendSetupDialog {
+        id: backendSetupDialog
+        shell: root
+    }
 
     property string themeMode: "Dark Modern"
     property color accentColor: "#0078d4"
@@ -35,6 +60,83 @@ ApplicationWindow {
     property var stableSearchResults: []
     property string searchResultSignature: ""
     property int searchPresentationRevision: 0
+    property bool restoringPreferences: true
+    signal presentationReset()
+
+    function restoreAppearance() {
+        restoringPreferences = true
+        const saved = backendClient.preferences.values
+        themeMode = saved.themeMode
+        accentColor = saved.accentColor
+        compactMode = saved.compactMode
+        sidebarLabels = saved.sidebarLabels
+        cornerRadius = saved.cornerRadius
+        restoringPreferences = false
+    }
+
+    function savePreference(key, value) {
+        if (!restoringPreferences) backendClient.preferences.setValue(key, value)
+    }
+
+    function savedLayout(key) {
+        return backendClient.preferences.values.layouts[key] || ({})
+    }
+
+    function saveLayout(key, layout) {
+        const layouts = Object.assign({}, backendClient.preferences.values.layouts)
+        layouts[key] = layout
+        backendClient.preferences.setValue("layouts", layouts)
+    }
+
+    function arrangeSavedGroups(key, groups) {
+        const saved = savedLayout(key).groups || []
+        const remaining = groups.slice()
+        const ordered = []
+        saved.forEach(cell => {
+            const index = remaining.findIndex(group => group.key === cell.key)
+            if (index < 0) return
+            const group = Object.assign({}, remaining.splice(index, 1)[0])
+            group.wide = cell.wide
+            ordered.push(group)
+        })
+        return ordered.concat(remaining)
+    }
+
+    function saveGroupLayout(key, groups) {
+        saveLayout(key, {groups: groups.map(group => ({key: group.key, wide: Boolean(group.wide)}))})
+    }
+
+    function resetPresentation() {
+        if (backendClient.preferences.resetPresentation()) {
+            restoreAppearance()
+            presentationReset()
+            showToast("Presentation reset", "Appearance and cell layouts restored to defaults.")
+        }
+    }
+
+    onThemeModeChanged: savePreference("themeMode", themeMode)
+    onAccentColorChanged: savePreference("accentColor", accentColor.toString())
+    onCompactModeChanged: savePreference("compactMode", compactMode)
+    onSidebarLabelsChanged: savePreference("sidebarLabels", sidebarLabels)
+    onCornerRadiusChanged: savePreference("cornerRadius", cornerRadius)
+    Component.onCompleted: restoreAppearance()
+    onClosing: function(event) {
+        if (backendClient.commandBusy || backendClient.coolingBusy) {
+            event.accepted = false
+            showToast("Operation in progress", "Wait for verification before closing OpenLinkHub.")
+        } else if (activeCurveEditor && activeCurveEditor.dirty) {
+            event.accepted = false
+            activeCurveEditor.requestClose(true)
+        }
+    }
+
+    Connections {
+        target: root.backendClient.preferences
+        function onErrorChanged() {
+            if (root.backendClient.preferences.error)
+                root.showToast("Preferences not saved", root.backendClient.preferences.error)
+        }
+    }
 
     readonly property int contentPadding: compactMode ? 13 : 17
     readonly property int cardSpacing: compactMode ? 10 : 14
@@ -121,6 +223,7 @@ ApplicationWindow {
         target: root.backendClient
 
         function onModeChanged() {
+            root.pendingChanges = false
             root.selectedDeviceIndex = 0
             root.selectedDeviceId = ""
             if (root.activeSection === "device") root.activeSection = "devices"
@@ -806,20 +909,20 @@ ApplicationWindow {
     }
 
     function baseStatusHint() {
-        if (!liveMode) return "Demo controls remain local to this prototype"
+        if (!liveMode) return "Demo controls simulate hardware · appearance and layouts save automatically"
         if (backendClient.connectionState === "connected") {
             return backendClient.contractVersion === "1.0"
                 ? backendClient.lightingOwnershipAvailable
-                    ? "Live telemetry · guarded label + lighting + ownership writes · updated " + backendClient.lastUpdated
+                    ? "Live telemetry · labels, lighting, ownership and saved fan curves · updated " + backendClient.lastUpdated
                     : backendClient.lightingAssignmentAvailable
-                    ? "Live telemetry · guarded label + lighting writes · updated " + backendClient.lastUpdated
-                    : "Live telemetry · guarded label writes · updated " + backendClient.lastUpdated
-                : "Live telemetry is read-only · updated " + backendClient.lastUpdated
+                    ? "Live telemetry · labels, lighting and saved fan curves · updated " + backendClient.lastUpdated
+                    : "Live telemetry · labels and saved fan curves · updated " + backendClient.lastUpdated
+                : "Live telemetry · existing fan-curve editor available · updated " + backendClient.lastUpdated
         }
         if (backendClient.connectionState === "degraded") {
-            return "Live telemetry is read-only · some data is stale or unavailable"
+            return "Some live data is stale or unavailable · last updated " + (backendClient.lastUpdated || "never")
         }
-        return "Live telemetry is read-only · " + backendClient.statusText
+        return backendClient.statusText
     }
 
     function connectionBadgeColor() {
@@ -845,12 +948,14 @@ ApplicationWindow {
     }
 
     function navigate(key) {
+        if (activeCurveEditor && activeCurveEditor.visible) return
         activeSection = key
         searchField.clear()
         searchPopup.close()
     }
 
     function selectDevice(id) {
+        if (activeCurveEditor && activeCurveEditor.visible) return
         for (let i = 0; i < devices.length; ++i) {
             if (devices[i].id === id) {
                 selectedDeviceIndex = i
@@ -1075,9 +1180,7 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             spacing: 0
                             Label {
-                                text: root.liveMode && root.backendClient.contractVersion === "1.0"
-                                    ? "Guarded live mode"
-                                    : root.liveMode ? "Read-only live mode" : "Demo mode"
+                                text: root.liveMode ? "Live mode" : "Demo mode"
                                 color: root.primaryText
                                 font.weight: Font.DemiBold
                             }
@@ -1116,7 +1219,7 @@ ApplicationWindow {
                     spacing: 18
 
                     ColumnLayout {
-                        Layout.preferredWidth: 300
+                        Layout.preferredWidth: topbar.width > 1200 ? 300 : 190
                         spacing: 1
 
                         Label {
@@ -1142,7 +1245,7 @@ ApplicationWindow {
                     TextField {
                         id: searchField
                         objectName: "globalSearchField"
-                        Layout.preferredWidth: Math.min(430, Math.max(280, topbar.width * 0.30))
+                        Layout.preferredWidth: Math.min(430, Math.max(180, topbar.width * 0.25))
                         placeholderText: "Search settings and devices…"
                         leftPadding: 38
 
@@ -1259,14 +1362,19 @@ ApplicationWindow {
                         valueRole: "key"
                         currentIndex: root.backendClient.mode === "live" ? 1 : 0
                         Layout.preferredWidth: 108
-                        onActivated: root.backendClient.setMode(currentValue)
+                        enabled: !root.backendClient.commandBusy && !root.backendClient.coolingBusy
+                        onActivated: {
+                            root.backendClient.setMode(currentValue)
+                            root.savePreference("mode", currentValue)
+                        }
                         ToolTip.visible: hovered
-                        ToolTip.text: "Demo uses local fixtures; Live reads loopback state and enables only backend-published guarded commands"
+                        ToolTip.text: "Live connects to the local service. Hardware changes require an explicit action in an editor."
                         Accessible.name: "Data source"
                     }
 
                     StatusBadge {
                         shell: root
+                        visible: root.liveMode || topbar.width > 1080
                         text: root.backendClient.statusText
                         badgeColor: root.connectionBadgeColor()
                         filled: true
@@ -1274,6 +1382,7 @@ ApplicationWindow {
 
                     ComboBox {
                         id: globalProfileCombo
+                        visible: !root.liveMode
                         model: root.globalProfiles
                         textRole: "name"
                         valueRole: "key"
@@ -1310,6 +1419,41 @@ ApplicationWindow {
                 }
             }
 
+            Rectangle {
+                visible: root.liveMode && ["offline", "degraded"].indexOf(root.backendClient.connectionState) >= 0
+                Layout.fillWidth: true
+                implicitHeight: connectionRow.implicitHeight + 20
+                color: Qt.rgba(root.warningColor.r, root.warningColor.g, root.warningColor.b, 0.12)
+                RowLayout {
+                    id: connectionRow
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    Label {
+                        Layout.fillWidth: true
+                        text: root.backendClient.statusText + ". " + root.backendClient.errorMessage
+                        color: root.warningColor
+                        wrapMode: Text.WordWrap
+                    }
+                    Button {
+                        text: "Retry connection"
+                        icon.name: "view-refresh"
+                        enabled: !root.backendClient.refreshing && !root.backendClient.commandBusy
+                        onClicked: root.backendClient.refresh()
+                    }
+                    Button {
+                        text: "Backend setup"
+                        flat: true
+                        onClicked: root.openBackendSetup()
+                    }
+                }
+            }
+
+            BackendSetupNotice {
+                shell: root
+                Layout.fillWidth: true
+                visible: root.showBackendSetupNotice
+            }
+
             Loader {
                 id: pageLoader
                 Layout.fillWidth: true
@@ -1321,14 +1465,16 @@ ApplicationWindow {
                 sourceComponent: {
                     switch (root.activeSection) {
                     case "overview": return overviewPageComponent
-                    case "profiles": return profilesPageComponent
+                    case "profiles": return root.liveMode ? liveServiceWorkspaceComponent : profilesPageComponent
                     case "devices": return devicesPageComponent
                     case "cooling": return coolingPageComponent
-                    case "lighting": return lightingPageComponent
-                    case "integrations": return integrationsPageComponent
+                    case "lighting": return root.liveMode ? liveDeviceWorkspaceComponent : lightingPageComponent
+                    case "integrations": return root.liveMode ? liveServiceWorkspaceComponent : integrationsPageComponent
+                    case "automations": return root.liveMode ? liveServiceWorkspaceComponent : featurePageComponent
                     case "service": return servicePageComponent
                     case "device": return devicePageComponent
-                    default: return featurePageComponent
+                    default: return root.liveMode && ["input", "audio", "displays"].indexOf(root.activeSection) >= 0
+                        ? liveDeviceWorkspaceComponent : featurePageComponent
                     }
                 }
             }
@@ -1353,6 +1499,16 @@ ApplicationWindow {
     Component {
         id: coolingPageComponent
         CoolingPage { shell: root }
+    }
+
+    Component {
+        id: liveServiceWorkspaceComponent
+        LiveServiceWorkspace { shell: root; section: root.activeSection }
+    }
+
+    Component {
+        id: liveDeviceWorkspaceComponent
+        LiveDeviceWorkspace { shell: root; section: root.activeSection }
     }
 
     Component {
@@ -1451,6 +1607,7 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Ctrl+K"
+        enabled: !root.activeCurveEditor
         onActivated: {
             searchField.forceActiveFocus()
             searchField.selectAll()

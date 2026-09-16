@@ -1,0 +1,79 @@
+name: Plasma client package
+
+on:
+  pull_request:
+    paths:
+      - 'prototype-plasma/**'
+      - 'src/server/**'
+      - '.github/workflows/plasma-package.yml'
+  push:
+    tags: ['plasma-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream-compose desktop-file-utils python3-venv
+          python3 -m venv /tmp/plasma-build-venv
+          /tmp/plasma-build-venv/bin/pip install 'setuptools>=77' wheel
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+      - name: Check version and desktop metadata
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          desktop-file-validate prototype-plasma/packaging/*.desktop
+          appstreamcli validate --no-net prototype-plasma/packaging/*.metainfo.xml
+          /tmp/plasma-build-venv/bin/python prototype-plasma/scripts/check-metadata.py
+          if [ "$REF_TYPE" = tag ]; then
+            /tmp/plasma-build-venv/bin/python prototype-plasma/scripts/check-metadata.py --tag "$RELEASE_TAG"
+          fi
+      - name: Build client source and wheel
+        run: /tmp/plasma-build-venv/bin/python prototype-plasma/scripts/build-release.py --output prototype-plasma/dist
+      - name: Build and test Flatpak
+        run: prototype-plasma/scripts/build-flatpak.sh
+      - name: Test bundle installation
+        run: |
+          flatpak install --user --noninteractive prototype-plasma/dist/*.flatpak
+          flatpak run --user --env=QT_QPA_PLATFORM=offscreen --env=QT_QUICK_BACKEND=software \
+            io.github.kodiakdirus.OpenLinkHubPlasma --demo --smoke-test
+      - name: Collect release artifacts
+        run: |
+          mkdir -p release-artifacts
+          cp prototype-plasma/dist/*.flatpak prototype-plasma/dist/*.sha256 prototype-plasma/dist/*.whl prototype-plasma/dist/*.tar.gz prototype-plasma/dist/SHA256SUMS release-artifacts/
+          cp prototype-plasma/docs/PUBLIC_TESTING.md prototype-plasma/docs/ALPHA_RELEASE_NOTES.md release-artifacts/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openlinkhub-plasma-alpha-x86_64
+          path: release-artifacts/
+          if-no-files-found: error
+
+  draft-release:
+    if: startsWith(github.ref, 'refs/tags/plasma-v')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: openlinkhub-plasma-alpha-x86_64
+          path: release-artifacts
+      - name: Prepare draft prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" release-artifacts/* --verify-tag --draft --prerelease \
+            --title "OpenLinkHub Plasma ${RELEASE_TAG#plasma-v} — community alpha" \
+            --notes-file prototype-plasma/docs/ALPHA_RELEASE_NOTES.md

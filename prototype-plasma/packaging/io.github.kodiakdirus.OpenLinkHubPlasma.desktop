@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=OpenLinkHub Plasma
+GenericName=Hardware Control Client
+Comment=Community alpha desktop client for the OpenLinkHub service
+Exec=openlinkhub-plasma
+Icon=io.github.kodiakdirus.OpenLinkHubPlasma
+Terminal=false
+Categories=Settings;HardwareSettings;Qt;KDE;
+Keywords=RGB;Cooling;Fans;Corsair;Lighting;
+StartupNotify=true
+Actions=Demo;
+
+[Desktop Action Demo]
+Name=Explore Demo
+Exec=openlinkhub-plasma --demo

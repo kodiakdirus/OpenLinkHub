@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openlinkhub-plasma"
+dynamic = ["version"]
+description = "Community Qt/Kirigami desktop client for the OpenLinkHub service"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "GPL-3.0-only"
+license-files = ["LICENSE"]
+dependencies = ["PyQt6>=6.6,<7"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: X11 Applications :: Qt",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/kodiakdirus/OpenLinkHub"
+Issues = "https://github.com/kodiakdirus/OpenLinkHub/issues"
+
+[project.scripts]
+openlinkhub-plasma = "openlinkhub_plasma.main:main"
+
+[tool.setuptools]
+packages = ["openlinkhub_plasma", "openlinkhub_plasma.backend"]
+package-dir = {openlinkhub_plasma = ".", "openlinkhub_plasma.backend" = "backend"}
+include-package-data = false
+
+[tool.setuptools.dynamic]
+version = {attr = "openlinkhub_plasma.backend.application.VERSION"}
+
+[tool.setuptools.package-data]
+openlinkhub_plasma = ["qml/*.qml", "qml/components/*.qml", "qml/pages/*.qml", "packaging/*.svg"]
+
+[tool.setuptools.data-files]
+"share/applications" = ["packaging/io.github.kodiakdirus.OpenLinkHubPlasma.desktop"]
+"share/metainfo" = ["packaging/io.github.kodiakdirus.OpenLinkHubPlasma.metainfo.xml"]
+"share/icons/hicolor/scalable/apps" = ["packaging/io.github.kodiakdirus.OpenLinkHubPlasma.svg"]

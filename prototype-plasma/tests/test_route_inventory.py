@@ -16,6 +16,7 @@ INVENTORY = (
 )
 
 
+@unittest.skipUnless(SERVER_SOURCE.is_file(), "Service-source audit requires the full OpenLinkHub repository")
 class RouteInventoryTests(unittest.TestCase):
     def test_every_registered_api_route_is_documented(self) -> None:
         source = SERVER_SOURCE.read_text(encoding="utf-8")

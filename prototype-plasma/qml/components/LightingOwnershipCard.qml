@@ -8,6 +8,8 @@ Panel {
 
     required property var ownership
     required property var targets
+    property string clusterScene: "Not reported"
+    property string clusterRenderer: "unavailable"
 
     signal reviewRequested()
     signal clusterEditorRequested()
@@ -55,6 +57,33 @@ Panel {
     }
 
     GridLayout {
+        visible: card.ownership.controller === "rgb-cluster"
+        Layout.fillWidth: true
+        columns: width > 600 ? 2 : 1
+        ColumnLayout {
+            Layout.fillWidth: true
+            Label {
+                text: "Configured Cluster scene"
+                color: shell.mutedText
+                font.pixelSize: 12
+            }
+            Label {
+                objectName: "clusterSceneName"
+                text: card.clusterScene
+                color: shell.primaryText
+                font.pixelSize: 24
+                font.weight: Font.DemiBold
+            }
+        }
+        StatusBadge {
+            objectName: "clusterSceneRenderer"
+            shell: card.shell
+            text: "Renderer " + card.clusterRenderer
+            badgeColor: card.clusterRenderer === "running" ? shell.successColor : shell.warningColor
+        }
+    }
+
+    GridLayout {
         Layout.fillWidth: true
         columns: width > 760 ? 3 : 1
         columnSpacing: shell.cardSpacing
@@ -83,8 +112,15 @@ Panel {
             Label { text: "Saved individual state"; color: shell.mutedText; font.pixelSize: 12 }
             Label {
                 text: ownership.savedIndividualSummary || "Not reported"
-                color: shell.primaryText
+                color: ownership.controller === "individual" ? shell.primaryText : shell.mutedText
                 font.weight: Font.DemiBold
+            }
+            Label {
+                visible: ownership.controller !== "individual"
+                text: "Inactive while " + (ownership.label || "another controller") + " controls lighting"
+                color: shell.mutedText
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
             }
         }
     }

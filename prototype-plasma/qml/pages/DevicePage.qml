@@ -32,6 +32,7 @@ Item {
     readonly property var currentTab: tabForKey(selectedTabKey)
     readonly property bool showingLightingEditor: currentTab.name === "Lighting"
         && currentTab.lightingEditor !== undefined
+    readonly property string layoutKey: "device:" + (device.id || "") + ":" + currentTab.name
 
     function tabIndex(name) {
         const availableTabs = navigationTabs
@@ -147,10 +148,10 @@ Item {
             ]),
             wide: Boolean(group.wide)
         }))
-        const nextSignature = JSON.stringify([currentTab.name, structure])
+        const nextSignature = JSON.stringify([device.id, currentTab.name, structure])
         if (!force && nextSignature === layoutSignature) return
         layoutSignature = nextSignature
-        arrangedGroups = structure
+        arrangedGroups = shell.arrangeSavedGroups(layoutKey, structure)
         layoutPresentationRevision += 1
     }
 
@@ -170,7 +171,7 @@ Item {
         updated[index] = updated[destination]
         updated[destination] = moved
         arrangedGroups = updated
-        shell.markDirty(device.name + " · " + currentTab.name + " cell order")
+        shell.saveGroupLayout(layoutKey, arrangedGroups)
     }
 
     function toggleGroupWidth(index) {
@@ -186,7 +187,7 @@ Item {
             wide: !current.wide
         }
         arrangedGroups = updated
-        shell.markDirty(device.name + " · " + currentTab.name + " cell size")
+        shell.saveGroupLayout(layoutKey, arrangedGroups)
     }
 
     onDeviceChanged: {
@@ -205,6 +206,10 @@ Item {
         updatePresentationModels()
         preserveSelectedTab()
         resetLayout()
+    }
+    Connections {
+        target: page.shell
+        function onPresentationReset() { page.resetLayout(true) }
     }
 
     ScrollView {
@@ -283,14 +288,16 @@ Item {
 
                     StatusBadge {
                         shell: page.shell
-                        text: page.shell.liveMode && page.displayLabelTargets.length > 0
+                        text: page.shell.liveMode && !page.shell.backendClient.connected
+                            ? "Last known device state"
+                            : page.shell.liveMode && page.displayLabelTargets.length > 0
                             ? page.shell.backendClient.lightingOwnershipAvailable
                                 ? "Connected · guarded ownership"
                                 : page.shell.backendClient.lightingAssignmentAvailable
                                 ? "Connected · guarded writes"
                                 : "Connected · guarded labels"
                             : page.shell.liveMode ? "Connected · read only" : "Connected · demo"
-                        badgeColor: page.device.connected === false
+                        badgeColor: page.device.connected === false || (page.shell.liveMode && !page.shell.backendClient.connected)
                             ? page.shell.warningColor
                             : page.shell.successColor
                         filled: true
@@ -339,7 +346,10 @@ Item {
                     Button {
                         text: "Reset tab layout"
                         icon.name: "edit-undo"
-                        onClicked: page.resetLayout(true)
+                        onClicked: {
+                            page.shell.saveLayout(page.layoutKey, {})
+                            page.resetLayout(true)
+                        }
                     }
                 }
             }

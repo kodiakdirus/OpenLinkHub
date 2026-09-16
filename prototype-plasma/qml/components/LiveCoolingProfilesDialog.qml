@@ -5,38 +5,100 @@ import org.kde.kirigami as Kirigami
 
 Dialog {
     id: dialog
+    objectName: "liveCoolingProfilesDialog"
     required property var shell
     readonly property var client: shell.backendClient
     property var names: []
     property string selectedName: ""
     property var selectedProfile: ({})
     property var points: []
+    property var baselinePoints: []
     property bool dirty: false
+    property int draftRevision: 0
+    property bool closeWindowAfterDiscard: false
+    readonly property string validationError: {
+        const revision = draftRevision
+        return selectedName ? client.validateFanCurve(JSON.stringify(points)) : ""
+    }
+    readonly property bool canSave: dirty && !validationError && points.length >= 2
+        && !client.coolingBusy && !client.commandBusy
     parent: Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(850, parent.width - 48)
     height: Math.min(760, parent.height - 48)
     modal: true
     title: "Fan curves"
-    closePolicy: client.coolingBusy ? Popup.NoAutoClose : Popup.CloseOnEscape
+    closePolicy: Popup.NoAutoClose
+
+    function requestClose(closeWindow) {
+        if (client.coolingBusy || client.commandBusy) return
+        if (dirty) {
+            closeWindowAfterDiscard = Boolean(closeWindow)
+            discardDialog.open()
+        } else {
+            close()
+            if (closeWindow) shell.close()
+        }
+    }
+
+    function updateDraft() {
+        dirty = JSON.stringify(points) !== JSON.stringify(baselinePoints)
+        draftRevision += 1
+        preview.requestPaint()
+    }
 
     function selectProfile(name) {
         selectedName = name
         selectedProfile = client.coolingProfiles[name] || {}
-        points = JSON.parse(JSON.stringify((selectedProfile.points || {})["1"] || []))
+        baselinePoints = JSON.parse(JSON.stringify((selectedProfile.points || {})["1"] || []))
+        points = JSON.parse(JSON.stringify(baselinePoints))
         dirty = false
+        draftRevision += 1
     }
     function editPoint(index, key, value) {
         points[index][key] = value
-        dirty = true
-        preview.requestPaint()
+        updateDraft()
     }
     onOpened: {
+        shell.activeCurveEditor = dialog
         names = []
         selectedName = ""
         points = []
         dirty = false
         client.loadCoolingProfiles()
+    }
+    onClosed: {
+        if (shell.activeCurveEditor === dialog) shell.activeCurveEditor = null
+    }
+    Component.onDestruction: {
+        if (shell.activeCurveEditor === dialog) shell.activeCurveEditor = null
+    }
+    Shortcut {
+        sequence: "Escape"
+        enabled: dialog.opened && !discardDialog.opened
+        onActivated: dialog.requestClose(false)
+    }
+    Dialog {
+        id: discardDialog
+        objectName: "discardFanCurveDialog"
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(440, parent.width - 48)
+        modal: true
+        title: "Discard unsaved fan curve?"
+        standardButtons: Dialog.Discard | Dialog.Cancel
+        onDiscarded: {
+            dialog.dirty = false
+            dialog.close()
+            close()
+            if (dialog.closeWindowAfterDiscard) dialog.shell.close()
+        }
+        contentItem: Label {
+            // Let Dialog size its content directly. A child sized from the
+            // default content item's width creates a measurement cycle in Breeze.
+            text: "Your edits to " + dialog.selectedName + " have not been saved. Keep editing or discard the draft."
+            wrapMode: Text.WordWrap
+        }
     }
     Connections {
         target: dialog.client
@@ -49,20 +111,26 @@ Dialog {
                 dialog.selectProfile(dialog.names[profiles.currentIndex] || "")
             }
         }
-        function onFanCurveSaved(name) { if (name === dialog.selectedName) dialog.dirty = false }
+        function onFanCurveSaved(name) {
+            if (name !== dialog.selectedName) return
+            dialog.selectedProfile = dialog.client.coolingProfiles[name] || {}
+            dialog.baselinePoints = JSON.parse(JSON.stringify(dialog.points))
+            dialog.updateDraft()
+        }
         function onModeChanged() { dialog.close() }
     }
     footer: DialogButtonBox {
         Button {
+            objectName: "saveFanCurveButton"
             text: "Save fan curve"
             icon.name: "document-save"
-            enabled: dialog.dirty && dialog.points.length >= 2 && !dialog.client.coolingBusy && !dialog.client.commandBusy
+            enabled: dialog.canSave
             onClicked: dialog.client.saveFanCurve(dialog.selectedName, JSON.stringify(dialog.points))
         }
         Button {
             text: "Close"
             enabled: !dialog.client.coolingBusy
-            onClicked: dialog.close()
+            onClicked: dialog.requestClose(false)
         }
     }
     ColumnLayout {
@@ -96,7 +164,7 @@ Dialog {
         Label {
             Layout.fillWidth: true
             text: "Sensor: " + (dialog.selectedProfile.sensorString || "—")
-                + (dialog.selectedProfile.zeroRpm ? " · Zero RPM allowed" : " · Service enforces a 20% fan minimum")
+                + (dialog.selectedProfile.zeroRpm ? " · Zero RPM allowed" : " · Zero RPM disabled")
             color: shell.secondaryText
         }
         Canvas {
@@ -148,16 +216,24 @@ Dialog {
                         enabled: !dialog.client.coolingBusy
                         Label { text: "Point " + (index + 1); Layout.fillWidth: true }
                         SpinBox {
-                            from: 0; to: 200; editable: true
-                            value: modelData.x
-                            onValueModified: dialog.editPoint(index, "x", value)
+                            id: temperatureInput
+                            from: 0; to: 2000; editable: true; stepSize: 10
+                            value: Math.round(modelData.x * 10)
+                            textFromValue: function(value, locale) { return Number(value / 10).toLocaleString(locale, 'f', 1) }
+                            valueFromText: function(text, locale) { return Math.round(Number.fromLocaleString(locale, text) * 10) }
+                            validator: DoubleValidator { bottom: 0; top: 200; decimals: 1; locale: temperatureInput.locale.name }
+                            onValueModified: dialog.editPoint(index, "x", value / 10)
                             Accessible.name: "Point " + (index + 1) + " temperature in Celsius"
                         }
                         Label { text: "°C" }
                         SpinBox {
-                            from: 0; to: 100; editable: true
-                            value: modelData.y
-                            onValueModified: dialog.editPoint(index, "y", value)
+                            id: outputInput
+                            from: 0; to: 1000; editable: true; stepSize: 10
+                            value: Math.round(modelData.y * 10)
+                            textFromValue: function(value, locale) { return Number(value / 10).toLocaleString(locale, 'f', 1) }
+                            valueFromText: function(text, locale) { return Math.round(Number.fromLocaleString(locale, text) * 10) }
+                            validator: DoubleValidator { bottom: 0; top: 100; decimals: 1; locale: outputInput.locale.name }
+                            onValueModified: dialog.editPoint(index, "y", value / 10)
                             Accessible.name: "Point " + (index + 1) + " fan output percentage"
                         }
                         Label { text: "%" }
@@ -167,7 +243,7 @@ Dialog {
                             Accessible.name: "Remove point " + (index + 1)
                             onClicked: {
                                 const updated = dialog.points.slice(); updated.splice(index, 1)
-                                dialog.points = updated; dialog.dirty = true
+                                dialog.points = updated; dialog.updateDraft()
                             }
                         }
                     }
@@ -178,10 +254,24 @@ Dialog {
                     onClicked: {
                         const last = dialog.points[dialog.points.length - 1]
                         dialog.points = dialog.points.concat([{x: Math.min(200, last.x + 5), y: last.y}])
-                        dialog.dirty = true
+                        dialog.updateDraft()
                     }
                 }
             }
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: dialog.validationError.length > 0
+            text: dialog.validationError
+            wrapMode: Text.WordWrap
+            color: shell.warningColor
+        }
+        Label {
+            Layout.fillWidth: true
+            visible: !dialog.client.coolingBusy && dialog.names.length === 0
+            text: "No editable graph-based fan curves are available. Check the service connection and its graph-profile configuration, then Reload."
+            wrapMode: Text.WordWrap
+            color: shell.warningColor
         }
         Label {
             Layout.fillWidth: true
