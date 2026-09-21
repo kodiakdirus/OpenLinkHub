@@ -173,6 +173,7 @@ var (
 	scufVendorId        = uint16(11925) // Scuf
 	interfaceId         = 0
 	devices             = make(map[string]*common.Device)
+	usbDevices          = make(map[string]*common.Device)
 	deviceList          = make(map[string]Device)
 	legacyDevices       = []uint16{3080, 3081, 3082, 3090, 3091, 3093, 7168}
 	initWG              sync.WaitGroup
@@ -201,12 +202,9 @@ func stopDevices() {
 
 // StopDirty will stop the device without closing the file handles. Used when device is unplugged
 func StopDirty(deviceId string, productId uint16) {
-	device, ok := devices[deviceId]
-	if !ok {
-		device, ok = devices[strconv.Itoa(int(productId))]
-		if !ok {
-			return
-		}
+	device := getUSBDevice(deviceId, productId)
+	if device == nil {
+		return
 	}
 
 	if config.GetConfig().EnableOpenRGBTargetServer {
@@ -214,13 +212,11 @@ func StopDirty(deviceId string, productId uint16) {
 	}
 	cluster.Get().RemoveDeviceControllerBySerial(device.Serial)
 
-	res := CallDeviceMethod(device.Serial, "StopDirty")
+	res := callDeviceMethod(device, "StopDirty")
 	if res != nil {
 		val := res[0]
 		uintResult := val.Uint()
-		if uint8(uintResult) == 2 { // USB only devices, remove them from the device list
-			deleteDevice(device.Serial)
-		}
+		retireUSBDevice(device, uint8(uintResult) == 2)
 	}
 }
 
@@ -371,14 +367,69 @@ func UpdateDeviceMetrics() {
 	}
 }
 
-// deleteDevice will remove device from device list
-func deleteDevice(serial string) {
+// getUSBDevice returns the physical USB instance that emitted the hotplug event.
+// A paired Slipstream instance can share the same serial and must not shadow it.
+func getUSBDevice(deviceId string, productId uint16) *common.Device {
 	mutex.Lock()
 	defer mutex.Unlock()
-	delete(devices, serial)
+	if device := usbDevices[deviceId]; device != nil {
+		return device
+	}
+	fallback := strconv.Itoa(int(productId))
+	if device := usbDevices[fallback]; device != nil {
+		return device
+	}
+	// Preserve compatibility for callers/tests that populated the legacy map
+	// before transport-aware registration existed.
+	if device := devices[deviceId]; device != nil {
+		return device
+	}
+	return devices[fallback]
 }
 
-// addDevice will add device to device list
+// retireUSBDevice removes an unplugged physical instance. removeLegacy
+// preserves the old return-code contract for devices that should disappear
+// entirely after unplug.
+func retireUSBDevice(device *common.Device, removeLegacy bool) {
+	if device == nil {
+		return
+	}
+
+	mutex.Lock()
+	defer mutex.Unlock()
+	if usbDevices[device.Serial] == device {
+		delete(usbDevices, device.Serial)
+	}
+	if devices[device.Serial] != device {
+		return
+	}
+	if removeLegacy {
+		delete(devices, device.Serial)
+	}
+}
+
+// addUSBDevice tracks the physical instance independently from the logical
+// registry, which can be shadowed by a receiver-backed device with the same
+// serial.
+func addUSBDevice(device *common.Device) {
+	if device == nil {
+		return
+	}
+
+	mutex.Lock()
+	previous := usbDevices[device.Serial]
+	usbDevices[device.Serial] = device
+	mutex.Unlock()
+
+	// A duplicate add/re-enumeration must not orphan the previous physical
+	// instance and its background workers.
+	if previous != nil && previous != device {
+		callDeviceMethod(previous, "StopDirty")
+	}
+	addDevice(device)
+}
+
+// addDevice adds a device to the logical registry.
 func addDevice(device *common.Device) {
 	if device == nil {
 		return
@@ -388,7 +439,7 @@ func addDevice(device *common.Device) {
 	devices[device.Serial] = device
 	mutex.Unlock()
 
-	CallDeviceMethod(device.Serial, "SetDispatcher", Dispatch)
+	callDeviceMethod(device, "SetDispatcher", Dispatch)
 }
 
 // CallDeviceMethod will call device method based on method name and arguments
@@ -402,7 +453,15 @@ func CallDeviceMethod(deviceId string, methodName string, args ...interface{}) [
 		return nil
 	}
 
-	method := reflect.ValueOf(GetDevice(device.Serial)).MethodByName(methodName)
+	return callDeviceMethod(device, methodName, args...)
+}
+
+func callDeviceMethod(device *common.Device, methodName string, args ...interface{}) []reflect.Value {
+	if device == nil || device.Instance == nil {
+		return nil
+	}
+
+	method := reflect.ValueOf(device.Instance).MethodByName(methodName)
 	if !method.IsValid() {
 		return nil
 	}
@@ -911,7 +970,7 @@ func initializeDevice(productId uint16, key, productPath string) {
 			go func(vid, pid uint16, serial, path string, cb deviceRegister) {
 				defer initWG.Done()
 				dev := cb(vid, pid, serial, path)
-				addDevice(dev)
+				addUSBDevice(dev)
 			}(vendorId, productId, key, productPath, callback.DeviceRegister)
 		}
 
@@ -920,7 +979,7 @@ func initializeDevice(productId uint16, key, productPath string) {
 			go func(vid, pid uint16, serial, path string, cb deviceRegisterEx) {
 				defer initWG.Done()
 				dev := cb(vid, pid, serial, path, addDevice)
-				addDevice(dev)
+				addUSBDevice(dev)
 			}(vendorId, productId, key, productPath, callback.DeviceRegisterEx)
 		}
 	}
