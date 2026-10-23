@@ -164,7 +164,7 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 Demo hardware values and local control previews reset when the application exits.
 Live writes include published labels, capability-authorized lighting assignment,
 ownership and runtime operations, and existing saved fan curves. The client
-exposes no generic mutation method. Input/audio/display configuration,
+exposes no generic mutation method. Input/display configuration,
 global profiles, automations, integration setup and administration remain
 unimplemented; Live mode shows reported state or an availability explanation.
 
@@ -215,3 +215,7 @@ all fans using that profile, with a fresh-baseline check, private recovery copy,
 and full-profile read-back. Pump curves and assignments are preserved. The
 existing deployed graph-profile API is used; no backend restart is required.
 See [Cooling curve behavior and limits](docs/COOLING_CURVES.md).
+
+## Headset audio
+
+The [VOID ELITE audio slice](docs/AUDIO_CONTROLS.md) adds guarded sidetone, battery and a separate unprivileged session EQ helper. A compatible backend must be deployed for sidetone/battery; EQ stays bypassed until Apply EQ.

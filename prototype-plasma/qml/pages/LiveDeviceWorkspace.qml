@@ -70,6 +70,7 @@ Item {
         spacing: page.shell.cardSpacing
 
         RowLayout {
+            visible: page.section !== "audio"
             Layout.fillWidth: true
             spacing: 12
             Label {
@@ -120,9 +121,15 @@ Item {
                 width: workspaceScroll.availableWidth
                 spacing: page.shell.cardSpacing
 
+                HeadsetAudioPanel {
+                    shell: page.shell
+                    visible: page.section === "audio"
+                    Layout.fillWidth: true
+                }
+
                 Panel {
                     shell: page.shell
-                    visible: !page.selectedDevice
+                    visible: !page.selectedDevice && page.section !== "audio"
                     Layout.fillWidth: true
                     Label {
                         Layout.fillWidth: true
@@ -160,7 +167,7 @@ Item {
 
                 Label {
                     Layout.fillWidth: true
-                    visible: page.selectedDevice !== null && (page.section !== "lighting" || !page.lightingModel)
+                    visible: page.section !== "audio" && page.selectedDevice !== null && (page.section !== "lighting" || !page.lightingModel)
                     text: page.workspace.description + " These settings are currently read-only."
                     color: page.shell.secondaryText
                     wrapMode: Text.WordWrap
@@ -168,7 +175,7 @@ Item {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    visible: page.selectedDevice !== null && (page.section !== "lighting" || !page.lightingModel)
+                    visible: page.section !== "audio" && page.selectedDevice !== null && (page.section !== "lighting" || !page.lightingModel)
                     columns: width > 820 ? 2 : 1
                     columnSpacing: page.shell.cardSpacing
                     rowSpacing: page.shell.cardSpacing

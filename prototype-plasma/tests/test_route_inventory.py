@@ -31,16 +31,16 @@ class RouteInventoryTests(unittest.TestCase):
         ]
         registered.extend(
             (method.title(), path)
-            for method, path in re.findall(r'r.HandleFunc\("(PUT|DELETE) (/api[^" ]+)"', source)
+            for method, path in re.findall(r'r.HandleFunc\("(GET|PUT|DELETE) (/api[^" ]+)"', source)
         )
         documented = set(
             re.findall(r"`(GET|POST|PUT|DELETE) (/api[^` ]*)`", documentation)
         )
 
-        self.assertEqual(len(registered), 172)
+        self.assertEqual(len(registered), 174)
         self.assertEqual(
             Counter(method.upper() for method, _path in registered),
-            Counter({"GET": 46, "POST": 107, "PUT": 12, "DELETE": 7}),
+            Counter({"GET": 47, "POST": 107, "PUT": 13, "DELETE": 7}),
         )
         missing = {
             (method.upper(), path)

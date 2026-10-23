@@ -11,7 +11,8 @@
     "--socket=fallback-x11",
     "--socket=wayland",
     "--device=dri",
-    "--share=network"
+    "--share=network",
+    "--filesystem=xdg-run/openlinkhub-plasma:ro"
   ],
   "modules": [
     {
