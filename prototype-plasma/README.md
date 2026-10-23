@@ -164,7 +164,7 @@ python3 -m unittest discover -s prototype-plasma/tests -v
 Demo hardware values and local control previews reset when the application exits.
 Live writes include published labels, capability-authorized lighting assignment,
 ownership and runtime operations, and existing saved fan curves. The client
-exposes no generic mutation method. Input/audio/display configuration,
+exposes no generic mutation method. Input/display configuration,
 global profiles, automations, integration setup and administration remain
 unimplemented; Live mode shows reported state or an availability explanation.
 

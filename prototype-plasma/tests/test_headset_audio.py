@@ -115,5 +115,17 @@ class AudioTests(unittest.TestCase):
         process.terminate.assert_called_once()
         self.assertIsNone(helper.process)
 
+    def test_battery_is_matched_by_hid_identity(self):
+        from backend.audio_session import headset_battery
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            entry=Path(directory)/"battery"; (entry/"device").mkdir(parents=True)
+            (entry/"device/uevent").write_text("HID_ID=0003:00001B1C:00000A55\n")
+            for name,value in [("capacity","97"),("present","1"),("status","Full")]:
+                (entry/name).write_text(value)
+            self.assertEqual(headset_battery(Path(directory))["percent"],97)
+            (entry/"device/uevent").write_text("HID_ID=0003:00001B1C:00001BDC\n")
+            self.assertEqual(headset_battery(Path(directory)),{})
+
 
 if __name__ == "__main__": unittest.main()

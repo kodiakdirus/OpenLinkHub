@@ -5,6 +5,7 @@ Owning work: [audio #4](https://github.com/kodiakdirus/OpenLinkHub/issues/4),
 
 The Audio workspace and device Audio tab share the same retained controller.
 It exposes wireless connection/battery and sidetone enable/level (1–100%).
+Battery prefers the host helper’s power-supply report, matched by HID vendor/product identity. The legacy driver’s startup zero is shown as awaiting a report, not a confirmed empty battery.
 GET/PUT `/api/v1/audio/headsets` is additive: older services show a compatibility
 message and cannot receive audio writes. Only the reviewed VOID ELITE driver
 implements this first adapter. Other headset families remain unavailable.

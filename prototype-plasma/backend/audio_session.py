@@ -31,6 +31,21 @@ def validate_bands(value):
     return [float(v) for v in value]
 
 
+def headset_battery(root=Path("/sys/class/power_supply")):
+    """Read the kernel's battery report, matched to the HID USB identity."""
+    matches = []
+    for entry in root.glob("*"):
+        try:
+            identity = (entry / "device/uevent").read_text()
+            if "HID_ID=0003:00001B1C:00000A55" not in identity: continue
+            value = int((entry / "capacity").read_text())
+            if (entry / "present").read_text().strip() != "1" or not 0 <= value <= 100: continue
+            matches.append({"percent": value, "status": (entry / "status").read_text().strip(),
+                            "source": "kernel-power-supply"})
+        except (OSError, ValueError): continue
+    return matches[0] if len(matches) == 1 else {}
+
+
 def filter_config(target, bands):
     bands = validate_bands(bands)
     # Compensate the largest positive gain to leave headroom.
@@ -97,7 +112,8 @@ class SessionEQ:
         settings = {"bands": self.bands, "enabled": running}
         revision = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
         return dict(settings, revision=revision, frequencies=FREQUENCIES,
-                    target=self.target, headroomDb=-sum(max(0, g) for g in self.bands))
+                    target=self.target, headroomDb=-sum(max(0, g) for g in self.bands),
+                    headsetBattery=headset_battery())
 
     def move_streams(self, source, destination):
         source_sink = next((s for s in self.sinks() if s["name"] == source), None)

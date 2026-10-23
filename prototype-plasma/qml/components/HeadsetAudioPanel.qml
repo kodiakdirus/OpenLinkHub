@@ -5,6 +5,7 @@ import QtQuick.Layouts
 Panel {
     id: panel
     readonly property var audio: shell.backendClient.headsetAudio
+    readonly property var battery: audio.eqState.headsetBattery || ({})
     property var headsetChoices: []
     property string headsetSignature: ""
     function reconcile() {
@@ -28,7 +29,9 @@ Panel {
     }
     Label {
         Layout.fillWidth: true
-        text: panel.audio.state.connected ? "Connected · Battery " + panel.audio.state.battery + "%" : "Headset unavailable"
+        text: panel.audio.state.connected ? "Connected · " + (panel.battery.percent !== undefined
+            ? "Battery " + panel.battery.percent + "% · " + panel.battery.status
+            : panel.audio.state.battery > 0 ? "Battery " + panel.audio.state.battery + "%" : "Waiting for battery report") : "Headset unavailable"
         color: panel.shell.secondaryText
     }
     CheckBox {
