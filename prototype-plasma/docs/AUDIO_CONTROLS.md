@@ -103,3 +103,23 @@ Listening acceptance on 2026-10-22: the user confirmed corrected EQ boosts and
 natural stereo sound with the revised surround enabled, and audible sidetone.
 Dedicated 7.1 game-channel localization and physical reconnect remain untested. The rejected initial
 summed-headroom and all-front-HRTF behavior is superseded by the current helper.
+
+## Hardware volume and transparent routing
+
+Processing attaches to the physical headset with WirePlumber smart filters.
+The physical headset remains the selected default, so Plasma and headset volume
+controls share the hardware volume/mute. Internal EQ/surround stages stay at
+unity rather than introducing additional user volume controls. Both filters
+match the same physical node; explicit ordering puts surround before EQ.
+Starting either mode preserves hardware volume; bypass removes processing while
+retaining ordinary hardware control. No volume polling or synchronization daemon
+is used. Other outputs are not matched by this chain.
+
+Silent two/eight-channel source tests confirm automatic routing through the
+surround input. Stereo/surround/bypass transitions preserve physical selection,
+volume/mute and EQ. The user confirms the headset wheel and selected Plasma
+slider work together. Individual game channel negotiation remains unverified.
+Reference: [WirePlumber smart filters](https://pipewire.pages.freedesktop.org/wireplumber/policies/smart_filters.html), validated with installed0.5.18 policy scripts.
+
+This supersedes the earlier explicit-default-virtual-output routing described
+above; it caused split volume controls and an unselected hardware slider.

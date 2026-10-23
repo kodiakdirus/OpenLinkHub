@@ -119,6 +119,17 @@ def filter_config(target, bands, preamp=0, surround=False, sofa=SOFA):
                 "playback.props": {"node.name": SINK + ".output", "node.passive": True,
                                    "target.object": target, "node.dont-fallback": True}}}]}
     if surround: configuration["context.modules"].append(surround_module(sofa))
+    for module in configuration["context.modules"]:
+        args = module.get("args", {})
+        capture, playback = args.get("capture.props"), args.get("playback.props")
+        if capture is None: continue
+        name = capture["node.name"]
+        capture.update({"filter.smart": True, "filter.smart.name": name,
+                        "filter.smart.target": {"node.name": target},
+                        "filter.smart.targetable": False})
+        if name == SURROUND_SINK: capture["filter.smart.before"] = [SINK]
+        playback.pop("target.object", None)
+        playback["stream.dont-remix"] = True
     return spa(configuration)
 
 
@@ -222,10 +233,11 @@ class SessionEQ:
             else: raise RuntimeError("EQ output did not appear")
             # Keep physical volume unchanged; the virtual sink starts at unity.
             run("pactl", "set-sink-volume", SINK, "100%")
-            route = SURROUND_SINK if surround else SINK
             if surround: run("pactl", "set-sink-volume", SURROUND_SINK, "100%")
-            run("pactl", "set-default-sink", route)
-            self.move_streams(self.target, route)
+            # Keep hardware volume authoritative. WirePlumber inserts the
+            # processing chain transparently when a stream targets this headset.
+            run("pactl", "set-default-sink", self.target)
+            self.move_streams(self.target, self.target)
         # Verify the actual filter control values, not just our saved draft.
         expected = {f"eq{i}:Gain": gain for i, gain in enumerate(bands)}
         expected["preamp:Mult"] = 10 ** (preamp / 20)

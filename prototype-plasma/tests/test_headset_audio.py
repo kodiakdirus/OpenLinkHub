@@ -159,5 +159,12 @@ class AudioTests(unittest.TestCase):
         command,_=self.ipc.pop()
         self.assertEqual(command["preamp"],-3);self.assertTrue(command["surround"])
 
+    def test_filters_attach_to_hardware_with_explicit_order(self):
+        config=filter_config("physical-headset",[0]*10,0,True)
+        self.assertEqual(config.count('"filter.smart" = true'),2)
+        self.assertEqual(config.count('"filter.smart.target" = { "node.name" = "physical-headset" }'),2)
+        self.assertIn('"filter.smart.before" = [ "openlinkhub.headset.eq" ]',config)
+        self.assertNotIn('"target.object"',config)
+
 
 if __name__ == "__main__": unittest.main()
