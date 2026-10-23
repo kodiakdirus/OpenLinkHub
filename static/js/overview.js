@@ -1313,6 +1313,16 @@ $(document).ready(function () {
                             </label>
                         `;
 
+                        const keyboardToggleSupported = $("#keyboardToggleSupported").length > 0;
+                        let keyboardToggleCheckbox = keyboardToggleSupported ? `
+                            <label class="system-toggle compact">
+                                <input type="checkbox" id="keyboardToggle" ${data.actionToggle ? "checked" : ""}>
+                                <span class="toggle-track"></span>
+                            </label>
+                        ` : "";
+                        let keyboardToggleHeader = keyboardToggleSupported ? "<th>Toggle held key</th>" : "";
+                        let keyboardToggleCell = keyboardToggleSupported ? `<td>${keyboardToggleCheckbox}</td>` : "";
+
                         let retainCheckbox = `
                             <label class="system-toggle compact">
                                 <input type="checkbox" id="retainOriginal" ${data.retainOriginal ? "checked" : ""}>
@@ -1343,6 +1353,7 @@ $(document).ready(function () {
                                                     ${i18n.t('txtPressHoldToggle')}
                                                     <i style="cursor: pointer;" class="bi bi-info-circle-fill svg-icon svg-icon-sm svg-icon-heavy pressAndHoldInfoToggle"></i>
                                                 </th>
+                                                ${keyboardToggleHeader}
                                                 <th>
                                                     ${i18n.t('txtToggleDelayMs')}
                                                     <i style="cursor: pointer;" class="bi bi-info-circle-fill svg-icon svg-icon-sm svg-icon-heavy toggleDelayInfoToggle"></i>
@@ -1361,6 +1372,7 @@ $(document).ready(function () {
                                                 <td class="key-assignments">${data.keyName}</td>
                                                 <td>${defaultCheckbox}</td>
                                                 <td>${holdCheckbox}</td>
+                                                ${keyboardToggleCell}
                                                 <td>
                                                     <div class="system-input text-input compact">
                                                         <label for="toggleDelay">
@@ -1675,6 +1687,7 @@ $(document).ready(function () {
                             modal.find('#btnSaveKeyAssignments').on('click', function () {
                                 const enabled = modal.find("#default").is(':checked');
                                 const pressAndHold = modal.find("#pressAndHold").is(':checked');
+                                const keyboardToggle = keyboardToggleSupported && modal.find("#keyboardToggle").is(':checked');
                                 const retainOriginal = modal.find("#retainOriginal").is(':checked');
                                 const keyAssignmentModifier = modal.find("#keyAssignmentModifier").val();
                                 const keyAssignmentType = modal.find("#keyAssignmentType").val();
@@ -1686,6 +1699,7 @@ $(document).ready(function () {
                                 pf["keyIndex"] = parseInt(lastIndex);
                                 pf["enabled"] = enabled;
                                 pf["pressAndHold"] = pressAndHold;
+                                pf["keyboardToggle"] = keyboardToggle;
                                 pf["keyAssignmentOriginal"] = retainOriginal;
                                 pf["keyAssignmentModifier"] = parseInt(keyAssignmentModifier);
                                 pf["keyAssignmentType"] = parseInt(keyAssignmentType);

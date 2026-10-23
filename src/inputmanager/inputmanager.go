@@ -26,6 +26,7 @@ type KeyAssignment struct {
 	ActionType     uint8  `json:"actionType"`
 	ActionCommand  uint16 `json:"actionCommand"`
 	ActionHold     bool   `json:"actionHold"`
+	ActionToggle   bool   `json:"actionToggle"`
 	ButtonIndex    int    `json:"buttonIndex"`
 	IsMacro        bool   `json:"isMacro"`
 	ModifierKey    uint8  `json:"modifierKey"`

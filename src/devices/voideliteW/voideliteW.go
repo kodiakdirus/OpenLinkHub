@@ -62,6 +62,7 @@ type DeviceProfile struct {
 }
 
 type Device struct {
+	audioControlMutex     sync.Mutex
 	Debug                 bool
 	dev                   *hid.Device
 	listener              *hid.Device
@@ -957,8 +958,14 @@ func (d *Device) UpdateEqualizer(values map[int]float64) uint8 {
 }
 
 func (d *Device) configureHeadset() {
+	if err := d.configureHeadsetChecked(); err != nil {
+		logger.Log(logger.Fields{"error": err, "serial": d.Serial}).Error("Unable to configure headset")
+	}
+}
+
+func (d *Device) configureHeadsetChecked() error {
 	if d.DeviceProfile == nil {
-		return
+		return fmt.Errorf("headset configuration unavailable")
 	}
 
 	if d.DeviceProfile.SideTone == 1 {
@@ -969,12 +976,11 @@ func (d *Device) configureHeadset() {
 		buf[3] = 0x00
 		err := d.transfer(cmdSideTone, buf)
 		if err != nil {
-			logger.Log(logger.Fields{"error": err, "serial": d.Serial}).Error("Unable to change side tone")
-			return
+			return err
 		}
 
 		if d.DeviceProfile.SideToneValue > 100 || d.DeviceProfile.SideToneValue < 1 {
-			return
+			return fmt.Errorf("headset configuration unavailable")
 		}
 		var sideToneValue byte = 0x00
 
@@ -1000,8 +1006,7 @@ func (d *Device) configureHeadset() {
 
 		_, err = d.dev.SendFeatureReport(report)
 		if err != nil {
-			logger.Log(logger.Fields{"error": err, "serial": d.Serial}).Error("Unable to set side tone value")
-			return
+			return err
 		}
 	} else {
 		buf := make([]byte, 4)
@@ -1011,14 +1016,16 @@ func (d *Device) configureHeadset() {
 		buf[3] = 0x00
 		err := d.transfer(cmdSideTone, buf)
 		if err != nil {
-			logger.Log(logger.Fields{"error": err, "serial": d.Serial}).Error("Unable to change side tone")
-			return
+			return err
 		}
 	}
+	return nil
 }
 
 // UpdateSidetone will update device side tone
 func (d *Device) UpdateSidetone(value int) uint8 {
+	d.audioControlMutex.Lock()
+	defer d.audioControlMutex.Unlock()
 	if d.DeviceProfile != nil {
 		d.DeviceProfile.SideTone = value
 		d.saveDeviceProfile()
@@ -1030,6 +1037,8 @@ func (d *Device) UpdateSidetone(value int) uint8 {
 
 // UpdateSidetoneValue will update device sidetone value
 func (d *Device) UpdateSidetoneValue(value int) uint8 {
+	d.audioControlMutex.Lock()
+	defer d.audioControlMutex.Unlock()
 	if d.DeviceProfile != nil {
 		if d.DeviceProfile.SideTone == 1 {
 			d.DeviceProfile.SideToneValue = value

@@ -97,6 +97,9 @@ type Device struct {
 	KeyAssignmentTypes     map[int]string
 	ModifierIndex          *big.Int
 	KeyboardKey            *keyboards.Key
+	keyboardToggleMutex    sync.Mutex
+	keyboardToggleKeys     map[string]uint16
+	keyboardToggleEmit     func(uint16, bool)
 	PressLoop              bool
 	MacroTracker           map[int]macro.Tracker
 	mouseLoopActive        bool
@@ -231,6 +234,8 @@ func Init(vendorId, slipstreamId, productId uint16, dev *common.Slipstream, endp
 		UIKeyboard:    "keyboard-7",
 		UIKeyboardRow: "keyboard-row-25",
 		MacroTracker:  make(map[int]macro.Tracker),
+		keyboardToggleKeys: make(map[string]uint16),
+		keyboardToggleEmit: inputmanager.InputControlKeyboardHold,
 	}
 
 	d.getDebugMode()       // Debug mode
@@ -262,13 +267,14 @@ func (d *Device) GetRgbProfiles() interface{} {
 
 // Stop will stop all device operations and switch a device back to hardware mode
 func (d *Device) Stop() {
-	// Placeholder
+	d.releaseKeyboardToggles()
 }
 
 // StopInternal will stop all device operations and switch a device back to hardware mode
 func (d *Device) StopInternal() {
 	d.Exit = true
 	logger.Log(logger.Fields{"serial": d.Serial}).Info("Stopping device...")
+	d.releaseKeyboardToggles()
 	if d.activeRgb != nil {
 		d.activeRgb.Stop()
 	}
@@ -279,6 +285,7 @@ func (d *Device) StopInternal() {
 func (d *Device) StopDirty() uint8 {
 	d.Exit = true
 	logger.Log(logger.Fields{"serial": d.Serial}).Info("Stopping device (dirty)...")
+	d.releaseKeyboardToggles()
 
 	if d.activeRgb != nil {
 		d.activeRgb.Stop()
@@ -1354,6 +1361,7 @@ func (d *Device) UpdateKeyboardProfile(profileName string) uint8 {
 		return 2
 	}
 
+	d.releaseKeyboardToggles()
 	d.DeviceProfile.Profile = profileName
 	d.saveDeviceProfile()
 	// RGB reset
@@ -1395,6 +1403,7 @@ func (d *Device) DeleteKeyboardProfile(profileName string) uint8 {
 		return 0
 	}
 
+	d.releaseKeyboardToggles()
 	d.DeviceProfile.Profile = "default"
 	d.DeviceProfile.Profiles = append(d.DeviceProfile.Profiles[:index], d.DeviceProfile.Profiles[index+1:]...)
 	delete(d.DeviceProfile.Keyboards, profileName)
@@ -1577,6 +1586,7 @@ func (d *Device) UpdateDeviceKeyAssignment(keyIndex int, keyAssignment inputmana
 				key.ActionCommand = keyAssignment.ActionCommand
 				key.DeviceId = keyAssignment.DeviceId
 				key.ActionHold = keyAssignment.ActionHold
+				key.ActionToggle = keyAssignment.ActionToggle
 				key.ModifierKey = keyAssignment.ModifierKey
 				key.RetainOriginal = keyAssignment.RetainOriginal
 
@@ -1586,6 +1596,7 @@ func (d *Device) UpdateDeviceKeyAssignment(keyIndex int, keyAssignment inputmana
 					key.ColorOffOnFunctionKey = !d.isFunctionKey(int(keyAssignment.ModifierKey))
 				}
 
+				d.releaseKeyboardToggles()
 				d.DeviceProfile.Keyboards[d.DeviceProfile.Profile].Row[rowId].Keys[keyId] = key
 				d.saveDeviceProfile()
 				d.setupKeyAssignment()
@@ -2705,6 +2716,42 @@ func (d *Device) releaseMacroTracker() {
 	}
 }
 
+// toggleKeyboardAction presses a virtual key on the first assigned-key press
+// and releases it on the next press of the same assigned key.
+func (d *Device) toggleKeyboardAction(keyName string, actionCommand uint16) {
+	d.keyboardToggleMutex.Lock()
+	defer d.keyboardToggleMutex.Unlock()
+
+	if currentCommand, ok := d.keyboardToggleKeys[keyName]; ok {
+		d.emitKeyboardToggle(currentCommand, false)
+		delete(d.keyboardToggleKeys, keyName)
+		return
+	}
+
+	d.emitKeyboardToggle(actionCommand, true)
+	d.keyboardToggleKeys[keyName] = actionCommand
+}
+
+func (d *Device) emitKeyboardToggle(actionCommand uint16, pressed bool) {
+	if d.keyboardToggleEmit != nil {
+		d.keyboardToggleEmit(actionCommand, pressed)
+		return
+	}
+	inputmanager.InputControlKeyboardHold(actionCommand, pressed)
+}
+
+// releaseKeyboardToggles prevents a latched virtual key from surviving a
+// profile/assignment change, device stop, or service shutdown.
+func (d *Device) releaseKeyboardToggles() {
+	d.keyboardToggleMutex.Lock()
+	defer d.keyboardToggleMutex.Unlock()
+
+	for keyName, actionCommand := range d.keyboardToggleKeys {
+		d.emitKeyboardToggle(actionCommand, false)
+		delete(d.keyboardToggleKeys, keyName)
+	}
+}
+
 // mouseEventLoop will send mouse action until stopped
 func mouseEventLoop(stopCh <-chan struct{}, actionCommand, actionSleep uint16) {
 	// Send input once
@@ -2863,10 +2910,18 @@ func (d *Device) triggerKeyAssignment(value []byte, functionKey bool, modifierKe
 		// Process it
 		switch key.ActionType {
 		case 1, 3:
-			if key.ActionHold {
+			if key.ActionToggle {
+				keyName := key.KeyNameInternal
+				if len(keyName) == 0 {
+					keyName = key.KeyName
+				}
+				d.toggleKeyboardAction(keyName, key.ActionCommand)
+			} else if key.ActionHold {
 				d.KeyboardKey = key
+				inputmanager.InputControlKeyboard(key.ActionCommand, true)
+			} else {
+				inputmanager.InputControlKeyboard(key.ActionCommand, false)
 			}
-			inputmanager.InputControlKeyboard(key.ActionCommand, key.ActionHold)
 			break
 		case 8:
 			if key.ActionHold {

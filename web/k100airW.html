@@ -15,6 +15,7 @@
     {{ $keyboard := index $device.DeviceProfile.Keyboards $profile }}
     <input type="hidden" id="deviceId" name="deviceId" value="{{ $device.Serial }}">
     <input type="hidden" id="selectedDevices" name="selectedDevices" value="">
+    <input type="hidden" id="keyboardToggleSupported" value="1">
     
     <div class="row">
         <!-- Sidebar -->

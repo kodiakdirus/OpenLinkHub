@@ -93,6 +93,7 @@ type Key struct {
 	ActionType                    uint8     `json:"actionType"`
 	ActionCommand                 uint16    `json:"actionCommand"`
 	ActionHold                    bool      `json:"actionHold"`
+	ActionToggle                  bool      `json:"actionToggle"`
 	ToggleDelay                   uint16    `json:"toggleDelay"`
 	OnlyColor                     bool      `json:"onlyColor"`
 	IsLock                        bool      `json:"isLock"`

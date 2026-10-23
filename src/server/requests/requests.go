@@ -97,6 +97,7 @@ type Payload struct {
 	MotionSync                    int                   `json:"motionSync"`
 	AutoBrightness                int                   `json:"autoBrightness"`
 	PressAndHold                  bool                  `json:"pressAndHold"`
+	KeyboardToggle               bool                  `json:"keyboardToggle"`
 	ActionRepeatValue             uint8                 `json:"actionRepeatValue"`
 	ActionRepeatDelay             uint16                `json:"actionRepeatDelay"`
 	ToggleDelay                   uint16                `json:"toggleDelay"`
@@ -1945,6 +1946,7 @@ func ProcessChangeKeyAssignment(r *http.Request) *Payload {
 		ActionCommand:  req.KeyAssignmentValue,
 		DeviceId:       req.KeyAssignmentValueString, // Sniper
 		ActionHold:     req.PressAndHold,
+		ActionToggle:   req.KeyboardToggle,
 		IsMacro:        req.KeyAssignmentType == 10,
 		ModifierKey:    req.KeyAssignmentModifier,
 		RetainOriginal: req.KeyAssignmentOriginal,
@@ -1955,6 +1957,10 @@ func ProcessChangeKeyAssignment(r *http.Request) *Payload {
 
 	if keyAssignment.IsMacro && keyAssignment.ActionHold {
 		return &Payload{Message: language.GetValue("txtPressAndHoldNotAllowed"), Code: http.StatusOK, Status: 0}
+	}
+
+	if keyAssignment.ActionToggle && keyAssignment.ActionType != 1 && keyAssignment.ActionType != 3 {
+		return &Payload{Message: language.GetValue("txtUnableToValidateRequest"), Code: http.StatusOK, Status: 0}
 	}
 
 	if keyAssignment.OnRelease && keyAssignment.ActionHold {
