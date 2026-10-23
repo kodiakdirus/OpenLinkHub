@@ -24,6 +24,8 @@ class HeadsetAudioController(QObject):
         self._eq = {}
         self._eq_draft = [0.] * 10
         self._eq_baseline = self._eq_draft[:]
+        self._eq_preamp = self._eq_preamp_baseline = 0.
+        self._eq_surround = self._eq_surround_baseline = False
         self._eq_revision = ""
         self._eq_busy = self._eq_reading = False
         self._eq_message = "Start the user-session EQ helper to enable equalization."
@@ -58,7 +60,13 @@ class HeadsetAudioController(QObject):
     @pyqtProperty("QVariantList", notify=changed)
     def bands(self): return self._eq_draft
     @pyqtProperty(bool, notify=changed)
-    def eqDirty(self): return self._eq_draft != self._eq_baseline
+    def eqDirty(self):
+        return (self._eq_draft != self._eq_baseline or self._eq_preamp != self._eq_preamp_baseline
+                or self._eq_surround != self._eq_surround_baseline)
+    @pyqtProperty(float, notify=changed)
+    def preamp(self): return self._eq_preamp
+    @pyqtProperty(bool, notify=changed)
+    def surround(self): return self._eq_surround
     @pyqtProperty(str, notify=changed)
     def eqMessage(self): return self._eq_message
     @pyqtProperty(bool, notify=changed)
@@ -112,6 +120,21 @@ class HeadsetAudioController(QObject):
             self._eq_draft[index] = value
             self.changed.emit()
 
+    @pyqtSlot(float)
+    def setPreamp(self, value):
+        if not self.busy and -24 <= value <= 0:
+            self._eq_preamp = value; self.changed.emit()
+
+    @pyqtSlot(bool)
+    def setSurround(self, value):
+        if not self.busy and (not value or self._eq.get("surroundAvailable")):
+            self._eq_surround = value; self.changed.emit()
+
+    @pyqtSlot()
+    def flatEQ(self):
+        if not self.busy:
+            self._eq_draft = [0.] * 10; self._eq_preamp = 0.; self.changed.emit()
+
     @pyqtSlot()
     def revert(self):
         if self.busy: return
@@ -122,7 +145,12 @@ class HeadsetAudioController(QObject):
         if self._eq:
             self._eq_draft = self._eq_baseline = self._eq["bands"][:]
             self._eq_revision = self._eq["revision"]
-        else: self._eq_draft = self._eq_baseline[:]
+            self._eq_preamp = self._eq_preamp_baseline = self._eq["preamp"]
+            self._eq_surround = self._eq_surround_baseline = self._eq["surround"]
+        else:
+            self._eq_draft = self._eq_baseline[:]
+            self._eq_preamp = self._eq_preamp_baseline
+            self._eq_surround = self._eq_surround_baseline
         self.changed.emit()
 
     @pyqtSlot()
@@ -211,11 +239,13 @@ class HeadsetAudioController(QObject):
         sock.connectToServer(str(Path(os.environ.get("XDG_RUNTIME_DIR", "/nonexistent")) / "openlinkhub-plasma/audio.sock"))
 
     def acceptEQ(self, payload, error):
-        from .audio_session import validate_bands
+        from .audio_session import validate_bands, validate_preamp
         state = payload.get("state") if isinstance(payload, dict) else None
         try:
             if error or not isinstance(state, dict) or payload.get("ok") is not True: raise ValueError()
             validate_bands(state["bands"])
+            validate_preamp(state["preamp"])
+            if state.get("processingVersion") != 3 or type(state.get("surround")) is not bool or type(state.get("surroundAvailable")) is not bool: raise ValueError()
             if type(state.get("enabled")) is not bool or not isinstance(state.get("revision"),str): raise ValueError()
         except (ValueError, KeyError):
             self._eq = {}
@@ -224,8 +254,10 @@ class HeadsetAudioController(QObject):
         if not self.eqDirty:
             self._eq_draft = self._eq_baseline = state["bands"][:]
             self._eq_revision = state["revision"]
+            self._eq_preamp = self._eq_preamp_baseline = state["preamp"]
+            self._eq_surround = self._eq_surround_baseline = state["surround"]
         self._eq = state
-        self._eq_message = "EQ active; live filter gains verified." if state["enabled"] else "EQ bypassed. Apply enables it for the VOID ELITE output."
+        self._eq_message = ("Virtual 7.1 + EQ active." if state["surround"] else "Stereo EQ active.") if state["enabled"] else "Processing bypassed. Apply enables the selected mode."
         return True
 
     @pyqtSlot()
@@ -243,8 +275,10 @@ class HeadsetAudioController(QObject):
         if not self.canApplyEQ: return
         self._eq_busy = True
         requested = self._eq_draft[:]
+        requested_preamp, requested_surround = self._eq_preamp, self._eq_surround
         command = {"operation": operation, "expectedRevision": self._eq_revision}
-        if operation == "apply": command["bands"] = requested
+        if operation == "apply":
+            command.update(bands=requested, preamp=requested_preamp, surround=requested_surround)
         self.backend._set_command(True, "pending", "Updating session EQ…")
         self.changed.emit()
         def accepted(payload, error):
@@ -252,10 +286,13 @@ class HeadsetAudioController(QObject):
             verified = self.acceptEQ(payload, error)
             if verified:
                 verified = ((operation == "disable" and not self._eq["enabled"])
-                            or (operation == "apply" and self._eq["enabled"] and self._eq["bands"] == requested))
+                            or (operation == "apply" and self._eq["enabled"] and self._eq["bands"] == requested
+                                and self._eq["preamp"] == requested_preamp and self._eq["surround"] == requested_surround))
             if verified:
                 self._eq_baseline = self._eq["bands"][:]
                 self._eq_revision = self._eq["revision"]
+                self._eq_preamp_baseline = self._eq["preamp"]
+                self._eq_surround_baseline = self._eq["surround"]
             else:
                 self._eq = {}
                 self._eq_message = "EQ outcome unverified. Refresh before retrying; the draft is retained."

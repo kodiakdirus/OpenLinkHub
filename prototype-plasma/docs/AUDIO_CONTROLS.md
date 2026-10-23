@@ -23,8 +23,7 @@ retains drafts and closing warns before discarding them.
 The system backend keeps ownership of USB and cooling. EQ is a separate
 unprivileged desktop helper using PipeWire's builtin ten-band peaking filters
 at 32/64/125/250/500 Hz and 1/2/4/8/16 kHz, ±12 dB. Stereo processing duplicates
-the filter graph per channel. Positive gains receive conservative input headroom
-equal to their sum, so boosts can reduce overall loudness.
+the filter graph per channel. Preamp is a separate manual control (−24 to0 dB, default0). Band boosts do not automatically reduce overall gain. The first summed-headroom implementation made boosts progressively quieter and was rejected during listening acceptance.
 
 Host dependencies: Python 3, PipeWire/filter-chain, `pw-cli`, `pw-dump`,
 `pactl` and a user systemd session. Install as the desktop user:
@@ -39,7 +38,7 @@ EQ bypassed. Apply EQ creates its virtual sink, pins playback to the uniquely
 inventoried Corsair `1b1c:0a55` output, selects the EQ sink and moves only streams
 currently playing through that physical headset. Other existing streams keep
 their routes. Subsequent gain updates use live controls without restarting the
-graph. All ten gains and headroom are read back before saving/reporting success.
+graph. All ten gains and the explicit preamp are read back before saving/reporting success.
 Failed application bypasses the helper. Saved gains reopen without automatically
 enabling processing after login. Bypass restores the previous default when EQ
 still owns that selection; an independently changed default is preserved.
@@ -75,3 +74,32 @@ References:
 - [PipeWire filter-chain](https://docs.pipewire.org/page_module_filter_chain.html): builtin `bq_peaking`, `linear`, stereo graph replication and stream properties; tested with PipeWire 1.6.9.
 - [PipeWire pw-cli](https://docs.pipewire.org/page_man_pw-cli_1.html): runtime Props updates.
 - [Corsair headset setup](https://help.corsair.com/hc/en-us/articles/360059501391-How-to-Set-up-gaming-headsets-in-iCUE-4-or-newer): vendor context for sidetone/EQ; Windows iCUE procedures do not authorize Linux HID commands.
+
+## Graph controls and virtual 7.1
+
+The graph contains ten vertical tracks and draggable gain handles with a smooth
+band-setting curve between them. It displays the draft, rather than claiming
+to plot measured headset frequency response. Apply audio commits the draft;
+Flat EQ resets the bands/preamp, and Revert restores reported settings.
+
+Virtual surround accepts eight channels (FL/FR/FC/LFE/RL/RR/SL/SR) and renders
+binaural stereo through PipeWire SOFA spatializers, followed by the same EQ.
+Front left/right pass directly to their respective ears; center dialogue uses equal-power stereo and LFE is low-passed at120 Hz. Only side/rear channels use HRTF processing, avoiding the hollow stereo coloration of the first all-channel HRTF variant.
+
+It uses the system-provided `/usr/share/libmysofa/default.sofa` MIT KEMAR data;
+missing data makes the option unavailable. This is Linux binaural processing,
+not the proprietary iCUE surround engine. It adds no downloaded dataset.
+Side/rear azimuths and the eight-channel input map are verified from the live graph
+before success. Configure supporting games for7.1 output; stereo sources feed
+the front pair with upmix disabled. Mode changes replace only the user graph.
+Bypass removes both surround and EQ and restores direct playback.
+
+The helper protocol's processingVersion3 requires explicit preamp and surround
+fields and the natural-front renderer; an older helper cannot silently accept a command with new semantics.
+Saved settings reopen bypassed after helper/login restart. Runtime headphone
+listening acceptance is separate from graph/control verification.
+
+Listening acceptance on2026-10-22: the user confirmed corrected EQ boosts and
+natural stereo sound with the revised surround enabled. This does not establish
+7.1 game-channel localization or sidetone acceptance. The rejected initial
+summed-headroom and all-front-HRTF behavior is superseded by the current helper.

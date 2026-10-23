@@ -74,7 +74,7 @@ class AudioTests(unittest.TestCase):
 
     def test_eq_revision_conflict_and_failure_keep_draft(self):
         self.backend._mode="live"
-        state={"bands":[0.]*10,"enabled":False,"revision":"x"*64}
+        state={"bands":[0.]*10,"enabled":False,"revision":"x"*64,"preamp":0.,"surround":False,"surroundAvailable":True,"processingVersion":3}
         self.audio.acceptEQ({"ok":True,"state":state},None)
         self.audio.setBand(1,3)
         self.audio.applyEQ()
@@ -83,15 +83,15 @@ class AudioTests(unittest.TestCase):
         callback({"ok":False,"error":"stale"},None)
         self.assertTrue(self.audio.eqDirty); self.assertFalse(self.audio.canApplyEQ)
 
-    def test_filter_is_stereo_pinned_and_has_headroom(self):
-        config=filter_config('target"name',[6]+[0]*9)
+    def test_filter_is_stereo_pinned_and_uses_explicit_preamp(self):
+        config=filter_config('target"name',[6]+[0]*9,-6)
         self.assertIn('"node.dont-fallback" = true', config)
         self.assertIn('"audio.position" = [ "FL" "FR" ]', config)
         self.assertIn('"Mult" = 0.501187', config)
         self.assertIn('target\\"name', config)
 
     def test_helper_rejects_unknown_commands_before_subprocess(self):
-        helper=object.__new__(SessionEQ);helper.process=None;helper.bands=[0]*10;helper.target=""
+        helper=object.__new__(SessionEQ);helper.process=None;helper.bands=[0]*10;helper.target="";helper.preamp=0.;helper.surround=False
         with self.assertRaises(ValueError):helper.command({"operation":"shell","expectedRevision":helper.state()["revision"]})
 
     def test_stream_migration_excludes_filter_playback(self):
@@ -126,6 +126,38 @@ class AudioTests(unittest.TestCase):
             self.assertEqual(headset_battery(Path(directory))["percent"],97)
             (entry/"device/uevent").write_text("HID_ID=0003:00001B1C:00001BDC\n")
             self.assertEqual(headset_battery(Path(directory)),{})
+
+    def test_multiple_boosts_do_not_silently_reduce_preamp(self):
+        config=filter_config("hardware",[12]*10,0)
+        self.assertIn('"Mult" = 1.0',config)
+        self.assertNotIn('0.000001',config)
+        from backend.audio_session import validate_preamp
+        for invalid in [True, float("nan"), 1, -25]:
+            with self.assertRaises(ValueError):validate_preamp(invalid)
+
+    def test_surround_preserves_front_stereo_with_eight_inputs(self):
+        from backend.audio_session import surround_module
+        module=surround_module(Path("fixture.sofa"))["args"]
+        self.assertEqual(module["capture.props"]["audio.channels"],8)
+        self.assertEqual(module["playback.props"]["audio.channels"],2)
+        self.assertEqual(len(module["filter.graph"]["inputs"]),8)
+        self.assertEqual(len(module["filter.graph"]["outputs"]),2)
+        self.assertEqual([n["control"]["Azimuth"] for n in module["filter.graph"]["nodes"] if n["type"]=="sofa"],
+                         [150,210,90,270])
+        self.assertIn({"output":"FL:Out","input":"mixL:In 1"},module["filter.graph"]["links"])
+        self.assertFalse(any(link["output"]=="FL:Out" and link["input"].startswith("mixR") for link in module["filter.graph"]["links"]))
+
+    def test_preamp_and_surround_are_retained_and_submitted(self):
+        self.backend._mode="live"
+        state={"bands":[0.]*10,"enabled":False,"revision":"x"*64,"preamp":0.,
+               "surround":False,"surroundAvailable":True,"processingVersion":3}
+        self.audio.acceptEQ({"ok":True,"state":state},None)
+        self.audio.setPreamp(-3);self.audio.setSurround(True)
+        self.audio.acceptEQ({"ok":True,"state":state},None)
+        self.assertEqual(self.audio.preamp,-3);self.assertTrue(self.audio.surround)
+        self.audio.applyEQ()
+        command,_=self.ipc.pop()
+        self.assertEqual(command["preamp"],-3);self.assertTrue(command["surround"])
 
 
 if __name__ == "__main__": unittest.main()
