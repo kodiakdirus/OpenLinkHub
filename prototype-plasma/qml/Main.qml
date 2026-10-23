@@ -74,6 +74,17 @@ ApplicationWindow {
         restoringPreferences = false
     }
 
+    Dialog {
+        id: audioExitDialog
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        title: "Unsaved audio changes"
+        modal: true
+        standardButtons: Dialog.Discard | Dialog.Cancel
+        onDiscarded: { root.backendClient.headsetAudio.revert(); root.close() }
+        Label { text: "Discard the unsaved audio drafts and close?" }
+    }
+
     function savePreference(key, value) {
         if (!restoringPreferences) backendClient.preferences.setValue(key, value)
     }
@@ -124,6 +135,9 @@ ApplicationWindow {
         if (backendClient.commandBusy || backendClient.coolingBusy) {
             event.accepted = false
             showToast("Operation in progress", "Wait for verification before closing OpenLinkHub.")
+        } else if (backendClient.headsetAudio.dirty) {
+            event.accepted = false
+            audioExitDialog.open()
         } else if (activeCurveEditor && activeCurveEditor.dirty) {
             event.accepted = false
             activeCurveEditor.requestClose(true)
@@ -1362,7 +1376,7 @@ ApplicationWindow {
                         valueRole: "key"
                         currentIndex: root.backendClient.mode === "live" ? 1 : 0
                         Layout.preferredWidth: 108
-                        enabled: !root.backendClient.commandBusy && !root.backendClient.coolingBusy
+                        enabled: !root.backendClient.commandBusy && !root.backendClient.coolingBusy && !root.backendClient.headsetAudio.dirty
                         onActivated: {
                             root.backendClient.setMode(currentValue)
                             root.savePreference("mode", currentValue)

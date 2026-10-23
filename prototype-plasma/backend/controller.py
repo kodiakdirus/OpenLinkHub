@@ -23,6 +23,7 @@ from PyQt6.QtNetwork import (
 
 from .cooling import backup_profile, catalog, fan_points
 from .preferences import Preferences
+from .headset_audio import HeadsetAudioController
 from .application import APP_ID, APP_NAME, VERSION, PROJECT_URL, ISSUES_URL
 from .diagnostics import report
 
@@ -70,6 +71,7 @@ class BackendController(QObject):
         self._timer.setInterval(max(1000, refresh_interval_ms))
         self._timer.timeout.connect(self.refresh)
 
+        self._headset_audio = HeadsetAudioController(self)
         self._cooling_profiles = {}
         self._cooling_busy = False
         self._cooling_message = ""
@@ -105,6 +107,10 @@ class BackendController(QObject):
         self._overview_metrics: list[dict[str, Any]] = []
         self._cooling_zones: list[dict[str, Any]] = []
         self._zone_values: dict[str, str] = {}
+
+    @pyqtProperty(QObject, constant=True)
+    def headsetAudio(self):
+        return self._headset_audio
 
     @pyqtProperty(QObject, constant=True)
     def preferences(self):
@@ -202,6 +208,9 @@ class BackendController(QObject):
         if self._mode != "live" or self._cooling_busy or self._command_busy:
             return
         self._cooling_busy = True
+        if self._headset_audio.busy or self._headset_audio.dirty:
+            return
+        self._headset_audio.reset()
         self._cooling_epoch += 1
         epoch = self._cooling_epoch
         self._cooling_message = "Loading saved curves…"

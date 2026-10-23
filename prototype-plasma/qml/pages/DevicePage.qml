@@ -356,7 +356,7 @@ Item {
 
             GridLayout {
                 id: contentGrid
-                visible: !page.showingLightingEditor
+                visible: !page.showingLightingEditor && !(page.shell.liveMode && page.currentTab.name === "Audio")
                 Layout.fillWidth: true
                 columns: width > 960 ? 2 : 1
                 columnSpacing: page.shell.cardSpacing
@@ -452,6 +452,12 @@ Item {
                         }
                     }
                 }
+            }
+
+            HeadsetAudioPanel {
+                shell: page.shell
+                visible: page.shell.liveMode && page.currentTab.name === "Audio"
+                Layout.fillWidth: true
             }
 
             LightingDeviceEditor {

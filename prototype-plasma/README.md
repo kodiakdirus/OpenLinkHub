@@ -215,3 +215,7 @@ all fans using that profile, with a fresh-baseline check, private recovery copy,
 and full-profile read-back. Pump curves and assignments are preserved. The
 existing deployed graph-profile API is used; no backend restart is required.
 See [Cooling curve behavior and limits](docs/COOLING_CURVES.md).
+
+## Headset audio
+
+The [VOID ELITE audio slice](docs/AUDIO_CONTROLS.md) adds guarded sidetone, battery and a separate unprivileged session EQ helper. A compatible backend must be deployed for sidetone/battery; EQ stays bypassed until Apply EQ.

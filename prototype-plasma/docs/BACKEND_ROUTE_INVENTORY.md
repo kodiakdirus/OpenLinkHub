@@ -175,6 +175,11 @@ Count: 172 `/api` registrations: 46 `GET`, 107 `POST`, 12 `PUT`, and 7 `DELETE`.
 
 ## Headset, audio, and media
 
+- `GET /api/v1/audio/headsets` — typed VOID ELITE battery/connection and saved sidetone baseline.
+- `PUT /api/v1/audio/headsets` — revision-checked sidetone enable/level with persisted readback.
+
+Session EQ uses a private user-runtime Unix socket. See [Audio controls](AUDIO_CONTROLS.md).
+
 - `GET /api/headset/getEqualizers/` — equalizer inventory.
 - `POST /api/headset/updateKeyAssignment` — headset control assignment.
 - `POST /api/headset/zoneColors` — headset zone colors.

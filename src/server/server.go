@@ -2626,6 +2626,8 @@ func handleFunc(mux *http.ServeMux, path, method string, handler func(w http.Res
 // setRoutes will set up all routes
 func setRoutes() http.Handler {
 	r := http.NewServeMux()
+	r.HandleFunc("GET /api/v1/audio/headsets", boundedHandler(headsetAudio, headsetAudioGate, 3*time.Second))
+	r.HandleFunc("PUT /api/v1/audio/headsets", boundedHandler(headsetAudio, headsetAudioGate, 3*time.Second))
 	fs := http.FileServer(http.Dir("./static"))
 	r.Handle("/static/", http.StripPrefix("/static/", fs))
 
