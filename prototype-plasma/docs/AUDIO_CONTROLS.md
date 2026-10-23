@@ -23,7 +23,7 @@ retains drafts and closing warns before discarding them.
 The system backend keeps ownership of USB and cooling. EQ is a separate
 unprivileged desktop helper using PipeWire's builtin ten-band peaking filters
 at 32/64/125/250/500 Hz and 1/2/4/8/16 kHz, ±12 dB. Stereo processing duplicates
-the filter graph per channel. Preamp is a separate manual control (−24 to0 dB, default0). Band boosts do not automatically reduce overall gain. The first summed-headroom implementation made boosts progressively quieter and was rejected during listening acceptance.
+the filter graph per channel. Preamp is a separate manual control (−24 to 0 dB, default 0). Band boosts do not automatically reduce overall gain. The first summed-headroom implementation made boosts progressively quieter and was rejected during listening acceptance.
 
 Host dependencies: Python 3, PipeWire/filter-chain, `pw-cli`, `pw-dump`,
 `pactl` and a user systemd session. Install as the desktop user:
@@ -84,13 +84,13 @@ Flat EQ resets the bands/preamp, and Revert restores reported settings.
 
 Virtual surround accepts eight channels (FL/FR/FC/LFE/RL/RR/SL/SR) and renders
 binaural stereo through PipeWire SOFA spatializers, followed by the same EQ.
-Front left/right pass directly to their respective ears; center dialogue uses equal-power stereo and LFE is low-passed at120 Hz. Only side/rear channels use HRTF processing, avoiding the hollow stereo coloration of the first all-channel HRTF variant.
+Front left/right pass directly to their respective ears; center dialogue uses equal-power stereo and LFE is low-passed at 120 Hz. Only side/rear channels use HRTF processing, avoiding the hollow stereo coloration of the first all-channel HRTF variant.
 
 It uses the system-provided `/usr/share/libmysofa/default.sofa` MIT KEMAR data;
 missing data makes the option unavailable. This is Linux binaural processing,
 not the proprietary iCUE surround engine. It adds no downloaded dataset.
 Side/rear azimuths and the eight-channel input map are verified from the live graph
-before success. Configure supporting games for7.1 output; stereo sources feed
+before success. Configure supporting games for 7.1 output; stereo sources feed
 the front pair with upmix disabled. Mode changes replace only the user graph.
 Bypass removes both surround and EQ and restores direct playback.
 
@@ -99,7 +99,7 @@ fields and the natural-front renderer; an older helper cannot silently accept a 
 Saved settings reopen bypassed after helper/login restart. Runtime headphone
 listening acceptance is separate from graph/control verification.
 
-Listening acceptance on2026-10-22: the user confirmed corrected EQ boosts and
-natural stereo sound with the revised surround enabled. This does not establish
-7.1 game-channel localization or sidetone acceptance. The rejected initial
+Listening acceptance on 2026-10-22: the user confirmed corrected EQ boosts and
+natural stereo sound with the revised surround enabled, and audible sidetone.
+Dedicated 7.1 game-channel localization and physical reconnect remain untested. The rejected initial
 summed-headroom and all-front-HRTF behavior is superseded by the current helper.
