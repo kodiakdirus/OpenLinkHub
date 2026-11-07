@@ -53,18 +53,70 @@ func (r *ActiveRGB) MidnightAurora(startTime *time.Time) {
 	}
 }
 
-// midnightAuroraColor interpolates in RGB so the reference's dark anchors
-// retain their luminance instead of being replaced by an HSV hue sweep.
-func midnightAuroraColor(t float64) (r, g, b float64) {
-	t = math.Max(0, math.Min(1, t)) * float64(len(midnightAuroraPalette)-1)
-	index := int(t)
-	if index == len(midnightAuroraPalette)-1 {
-		c := midnightAuroraPalette[index]
-		return c.R, c.G, c.B
+// midnightAuroraHSV preserves each reference anchor's value (including the
+// near-black navy colors) while letting us blend without gray crossfades.
+func midnightAuroraHSV(r, g, b float64) (h, s, v float64) {
+	high, low := math.Max(r, math.Max(g, b)), math.Min(r, math.Min(g, b))
+	delta := high - low
+	v = high / 255
+	if high == 0 || delta == 0 {
+		return 0, 0, v
 	}
+	s = delta / high
+	switch high {
+	case r:
+		h = 60 * math.Mod((g-b)/delta, 6)
+	case g:
+		h = 60 * ((b-r)/delta + 2)
+	default:
+		h = 60 * ((r-g)/delta + 4)
+	}
+	if h < 0 {
+		h += 360
+	}
+	return
+}
+
+// midnightAuroraColor blends hue/saturation/value rather than desaturating
+// complementary colors with RGB mixing. Warm anchors get a 25% saturation lift;
+// value, brightness, timing and the reference's dark/cool anchors are unchanged.
+func midnightAuroraColor(t float64) (r, g, b float64) {
+	position := math.Max(0, math.Min(1, t)) * float64(len(midnightAuroraPalette)-1)
+	index := int(position)
+	if index == len(midnightAuroraPalette)-1 {
+		index--
+	}
+	f := position - float64(index)
 	a, z := midnightAuroraPalette[index], midnightAuroraPalette[index+1]
-	f := t - float64(index)
-	return lerp(a.R, z.R, f), lerp(a.G, z.G, f), lerp(a.B, z.B, f)
+	h1, s1, v1 := midnightAuroraHSV(a.R, a.G, a.B)
+	h2, s2, v2 := midnightAuroraHSV(z.R, z.G, z.B)
+	delta := math.Mod(h2-h1+540, 360) - 180
+	if index == 4 {
+		// Route teal -> coral through blue/violet, not yellow-green.
+		delta = math.Mod(h2-h1+360, 360)
+	}
+	h := math.Mod(h1+delta*f+360, 360)
+	warm := math.Max(0, math.Min(1, position-4))
+	s := math.Min(1, lerp(s1, s2, f)*(1+0.25*warm))
+	v := lerp(v1, v2, f)
+	c := v * s
+	x := c * (1 - math.Abs(math.Mod(h/60, 2)-1))
+	m := v - c
+	switch {
+	case h < 60:
+		r, g, b = c, x, 0
+	case h < 120:
+		r, g, b = x, c, 0
+	case h < 180:
+		r, g, b = 0, c, x
+	case h < 240:
+		r, g, b = 0, x, c
+	case h < 300:
+		r, g, b = x, 0, c
+	default:
+		r, g, b = c, 0, x
+	}
+	return (r + m) * 255, (g + m) * 255, (b + m) * 255
 }
 
 func generateMidnightAuroraColors(lightChannels int, progress, brightness float64) []struct{ R, G, B float64 } {

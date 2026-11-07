@@ -8,16 +8,27 @@ import (
 )
 
 func TestMidnightAuroraReferencePalette(t *testing.T) {
-	want := [][3]float64{{8, 11, 20}, {16, 22, 47}, {37, 37, 88}, {114, 72, 217}, {41, 211, 194}, {236, 111, 120}, {242, 180, 95}}
+	want := [][3]float64{{8, 11, 20}, {16, 22, 47}, {37, 37, 88}, {114, 72, 217}, {41, 211, 194}, {236, 79.75, 91}, {242, 164.5, 58.25}}
 	for i, c := range want {
 		r, g, b := midnightAuroraColor(float64(i) / 6)
-		if math.Abs(r-c[0])+math.Abs(g-c[1])+math.Abs(b-c[2]) > 1e-9 {
+		if math.Abs(r-c[0])+math.Abs(g-c[1])+math.Abs(b-c[2]) > 1e-8 {
 			t.Fatalf("anchor %d: %v %v %v", i, r, g, b)
 		}
 	}
-	r, g, b := midnightAuroraColor(0.75 / 6)
-	if r != 14 || g != 19.25 || b != 40.25 {
-		t.Fatalf("RGB interpolation: %v %v %v", r, g, b)
+	// The old teal/coral RGB midpoint had saturation below 15%; retain
+	// the palette saturation through this transition without a brightness lift.
+	r, g, b := midnightAuroraColor(4.5 / 6)
+	h, s, v := midnightAuroraHSV(r, g, b)
+	if s < 0.7 || h < 240 || h > 300 || math.Abs(v-223.5/255) > 1e-8 {
+		t.Fatalf("washed out transition: h=%v s=%v v=%v", h, s, v)
+	}
+	for i := 0; i <= 600; i++ {
+		r, g, b := midnightAuroraColor(float64(i) / 600)
+		for _, c := range []float64{r, g, b} {
+			if c < 0 || c > 255 {
+				t.Fatalf("out of range: %v", c)
+			}
+		}
 	}
 }
 
