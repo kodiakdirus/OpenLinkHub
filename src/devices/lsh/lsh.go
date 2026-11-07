@@ -5432,6 +5432,7 @@ func (d *Device) setupLCD() {
 	lcdTimer := time.NewTicker(time.Duration(lcdRefreshInterval) * time.Millisecond)
 	d.lcdRefreshChan = make(chan struct{})
 	go func() {
+		animationSamples := make(map[int]*lcdAnimationSamples)
 		for {
 			select {
 			case <-lcdTimer.C:
@@ -5609,30 +5610,47 @@ func (d *Device) setupLCD() {
 									}
 								case lcd.DisplayAnimation:
 									{
-										values := []float32{
-											temperatures.GetCpuTemperature(),
-											temperatures.GetGpuTemperature(),
-											d.getLiquidTemperature(),
-											float32(systeminfo.GetCpuUtilization()),
-											float32(systeminfo.GetGPUUtilization()),
-											float32(d.getPumpSpeed()),
+										samples := animationSamples[device.ChannelId]
+										if samples == nil {
+											samples = &lcdAnimationSamples{}
+											animationSamples[device.ChannelId] = samples
 										}
-										image := lcd.GenerateAnimationScreenImage(values)
-										if image != nil {
-											imageLen := len(image)
-											for i := 0; i < imageLen; i++ {
-												if d.DeviceProfile.LCDModes[device.ChannelId] != lcd.DisplayAnimation {
-													break
+										frameCount := lcd.AnimationFrameCount()
+										for i := 0; i < frameCount; i++ {
+											if d.Exit || d.DeviceProfile.LCDModes[device.ChannelId] != lcd.DisplayAnimation {
+												break
+											}
+											values := samples.get(time.Now(), func() []float32 {
+												return []float32{
+													temperatures.GetCpuTemperature(),
+													temperatures.GetGpuTemperature(),
+													d.getLiquidTemperature(),
+													float32(systeminfo.GetCpuUtilization()),
+													float32(systeminfo.GetGPUUtilization()),
+													float32(d.getPumpSpeed()),
 												}
-												d.transferToLcd(image[i].Buffer, lcdDevice.Lcd)
-												if i != imageLen-1 {
-													if image[i].Delay > 0 {
-														time.Sleep(time.Duration(image[i].Delay) * time.Millisecond)
-													}
+											})
+											frame, ok := lcd.GenerateAnimationScreenFrame(i, values)
+											if !ok {
+												break
+											}
+											d.transferToLcd(frame.Buffer, lcdDevice.Lcd)
+											// Honor the final frame too: sensor refresh must not
+											// reset animation phase or shorten its loop seam.
+											delay := time.Duration(frame.Delay) * time.Millisecond
+											if delay > 0 {
+												timer := time.NewTimer(delay)
+												select {
+												case <-timer.C:
+												case <-d.lcdRefreshChan:
+													timer.Stop()
+													lcdTimer.Stop()
+													return
 												}
 											}
 										}
 									}
+
 								}
 							}
 						}
