@@ -207,6 +207,11 @@
       },
       "speed": 5
     },
+    "midnight-aurora": {
+      "profileName": "Midnight Aurora",
+      "speed": 5,
+      "brightness": 1
+    },
     "nebula": {
       "profileName": "Nebula",
       "speed": 5,
