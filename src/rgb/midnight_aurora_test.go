@@ -8,22 +8,22 @@ import (
 )
 
 func TestMidnightAuroraReferencePalette(t *testing.T) {
-	want := [][3]float64{{8, 11, 20}, {16, 22, 47}, {37, 37, 88}, {114, 72, 217}, {41, 211, 194}, {236, 79.75, 91}, {242, 164.5, 58.25}}
+	want := [][3]float64{{88, 88, 208}, {114, 72, 217}, {41, 211, 194}, {236, 79.75, 91}, {242, 164.5, 58.25}}
 	for i, c := range want {
-		r, g, b := midnightAuroraColor(float64(i) / 6)
+		r, g, b := midnightAuroraColor(float64(i) / 4)
 		if math.Abs(r-c[0])+math.Abs(g-c[1])+math.Abs(b-c[2]) > 1e-8 {
 			t.Fatalf("anchor %d: %v %v %v", i, r, g, b)
 		}
 	}
 	// The old teal/coral RGB midpoint had saturation below 15%; retain
 	// the palette saturation through this transition without a brightness lift.
-	r, g, b := midnightAuroraColor(4.5 / 6)
+	r, g, b := midnightAuroraColor(2.5 / 4)
 	h, s, v := midnightAuroraHSV(r, g, b)
 	if s < 0.7 || h < 240 || h > 300 || math.Abs(v-223.5/255) > 1e-8 {
 		t.Fatalf("washed out transition: h=%v s=%v v=%v", h, s, v)
 	}
 	for i := 0; i <= 600; i++ {
-		r, g, b := midnightAuroraColor(float64(i) / 600)
+		r, g, b := midnightAuroraColor(float64(i) / 400)
 		for _, c := range []float64{r, g, b} {
 			if c < 0 || c > 255 {
 				t.Fatalf("out of range: %v", c)
@@ -75,7 +75,7 @@ func TestMidnightAuroraSimultaneousLocalColorVariety(t *testing.T) {
 	for _, channels := range []int{24, 120, 360, 720} {
 		for phase := 0; phase < 24; phase++ {
 			for offset := 0; offset+24 <= channels; offset += 24 {
-				cool, warm, dark := 0, 0, 0
+				cool, warm, indigo := 0, 0, 0
 				for i := offset; i < offset+24; i++ {
 					r, g, b := midnightAuroraWaveColor(i, channels, float64(phase)/24)
 					if (b > r*1.3 || g > r*1.3) && math.Max(g, b) > 80 {
@@ -84,12 +84,12 @@ func TestMidnightAuroraSimultaneousLocalColorVariety(t *testing.T) {
 					if r > g*1.1 && r > b*1.3 && r > 150 {
 						warm++
 					}
-					if math.Max(r, math.Max(g, b)) < 50 {
-						dark++
+					if b > r*1.5 && b > g*1.5 {
+						indigo++
 					}
 				}
-				if cool < 2 || warm < 2 || dark < 2 {
-					t.Fatalf("channels=%d phase=%d offset=%d: cool=%d warm=%d dark=%d", channels, phase, offset, cool, warm, dark)
+				if cool < 2 || warm < 2 || indigo < 2 {
+					t.Fatalf("channels=%d phase=%d offset=%d: cool=%d warm=%d indigo=%d", channels, phase, offset, cool, warm, indigo)
 				}
 			}
 		}
@@ -120,5 +120,24 @@ func TestMidnightAuroraVisibleDrift(t *testing.T) {
 	}
 	if changed < 4 {
 		t.Fatalf("warm band drift too subtle after one second: %d LEDs changed", changed)
+	}
+}
+
+// No phase should reproduce the near-black background colors that made legends
+// disappear. Check the complete base gradient and the final brightness scaling.
+func TestMidnightAuroraNoNearBlackBands(t *testing.T) {
+	for phase := 0; phase <= 1000; phase++ {
+		r, g, b := midnightAuroraColor(float64(phase) / 1000)
+		if math.Max(r, math.Max(g, b)) < 208-1e-8 {
+			t.Fatalf("dim palette phase %d: %v %v %v", phase, r, g, b)
+		}
+	}
+	for _, level := range []float64{0.25, 1} {
+		colors := generateMidnightAuroraColors(720, 0.37, level)
+		for i, c := range colors {
+			if math.Max(c.R, math.Max(c.G, c.B)) < 208*0.6*level-1e-8 {
+				t.Fatalf("near-black LED%d at brightness%v: %+v", i, level, c)
+			}
+		}
 	}
 }
