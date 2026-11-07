@@ -686,115 +686,111 @@ func GenerateDoubleArcScreenImage(values []float32) []byte {
 	return b.Bytes()
 }
 
-// GenerateAnimationScreenImage handles generation of animation screen image
-func GenerateAnimationScreenImage(values []float32) []Frames {
+// animationScreenSnapshot detaches the small overlay map from frame rendering.
+// Background canvases are immutable; every render owns its output canvas.
+func animationScreenSnapshot() ([]AnimationFrames, map[int]Sensors, rgb.Color, int, int) {
 	mutex.Lock()
-	background := animation.Background
-	val, ok := animation.Images[background]
-	sensors := animation.Sensors
-	separatorColor := animation.SeparatorColor
-	margin := int(animation.Margin)
-	mutex.Unlock()
+	defer mutex.Unlock()
+	frames := animation.Images[animation.Background]
+	sensors := make(map[int]Sensors, len(animation.Sensors))
+	for key, value := range animation.Sensors {
+		sensors[key] = value
+	}
+	return frames, sensors, animation.SeparatorColor, int(animation.Margin), max(1, animation.Workers)
+}
 
-	if !ok {
+// AnimationFrameCount returns the current background's frame count.
+func AnimationFrameCount() int {
+	frames, _, _, _, _ := animationScreenSnapshot()
+	return len(frames)
+}
+
+// GenerateAnimationScreenFrame renders current values on one continuing GIF
+// frame. Index wraps without tying sensor sampling to the GIF's loop duration.
+func GenerateAnimationScreenFrame(index int, values []float32) (Frames, bool) {
+	frames, sensors, separator, margin, _ := animationScreenSnapshot()
+	if len(frames) == 0 || index < 0 {
+		return Frames{}, false
+	}
+	return renderAnimationScreenFrame(frames[index%len(frames)], values, sensors, separator, margin), true
+}
+
+// GenerateAnimationScreenImage retains the batch API for existing drivers.
+func GenerateAnimationScreenImage(values []float32) []Frames {
+	frames, sensors, separator, margin, workers := animationScreenSnapshot()
+	if len(frames) == 0 {
 		return nil
 	}
-
-	z := 0
-	for _, sensor := range sensors {
-		if sensor.Enabled {
-			z++
-		}
-	}
-
-	jpegOptions := jpeg.Options{Quality: 90}
-
-	imageBuffer := make([]Frames, len(val))
+	output := make([]Frames, len(frames))
 	var wg sync.WaitGroup
-	wg.Add(len(val))
-	sem := make(chan struct{}, animation.Workers)
-
-	for i := 0; i < len(val); i++ {
+	sem := make(chan struct{}, workers)
+	for i := range frames {
 		sem <- struct{}{}
-
-		i := i
-		canvasSource := val[i].Canvas
-		canvasRGBA := val[i].RGBA
-		delay := val[i].Delay
-
-		go func() {
+		wg.Add(1)
+		go func(index int) {
 			defer wg.Done()
 			defer func() { <-sem }()
-
-			canvas := canvasRGBA
-			copy(canvas.Pix, canvasSource.Pix)
-
-			total := z * 125
-			paddingStart := -total / 2
-			paddingStart += margin
-			padding := paddingStart
-
-			for m := 0; m < len(sensors); m++ {
-				sensor := sensors[m]
-				if sensor.Enabled {
-					var valueText string
-
-					switch sensor.Sensor {
-					case SensorDate:
-						valueText = common.GetDate()
-
-					case SensorTime:
-						valueText = common.GetTime()
-
-					default:
-						var sensorValue float32
-
-						if int(sensor.Sensor) < len(values) {
-							sensorValue = values[sensor.Sensor]
-						}
-
-						sensorMax := sensorMaximumValue(sensor.Sensor)
-						if sensorValue > float32(sensorMax) {
-							sensorValue = float32(sensorMax)
-						}
-
-						if isSensorTemperature(sensor.Sensor) {
-							valueText = dashboard.GetDashboard().TemperatureToString(sensorValue)
-						} else if isSpeedTemperature(sensor.Sensor) {
-							valueText = fmt.Sprintf("%.0f RPM", sensorValue)
-						} else {
-							valueText = fmt.Sprintf("%.1f %%", sensorValue)
-						}
-					}
-					x, y := calculateStringXY(80, valueText)
-					drawColorString(x, y+padding, 80, valueText, canvas, sensor.TextColor)
-
-					sensorText := sensorTextCache[sensor.Sensor]
-					x, y = calculateStringXY(40, sensorText)
-					drawColorString(x, y+padding+55, 40, sensorText, canvas, sensor.TextColor)
-
-					if m != len(sensors)-1 {
-						separator := "-------------------------------------------"
-						x, y = calculateStringXY(20, separator)
-						drawColorString(x, y+padding+88, 20, separator, canvas, separatorColor)
-					}
-					padding += 125
-				}
-			}
-
-			var buf bytes.Buffer
-			err := jpeg.Encode(&buf, canvas, &jpegOptions)
-			if err == nil {
-				imageBuffer[i] = Frames{
-					Buffer: buf.Bytes(),
-					Delay:  delay,
-				}
-			}
-		}()
+			output[index] = renderAnimationScreenFrame(frames[index], values, sensors, separator, margin)
+		}(i)
 	}
-
 	wg.Wait()
-	return imageBuffer
+	return output
+}
+
+func renderAnimationScreenFrame(frame AnimationFrames, values []float32, sensors map[int]Sensors, separator rgb.Color, margin int) Frames {
+	canvas := image.NewRGBA(frame.Canvas.Bounds())
+	copy(canvas.Pix, frame.Canvas.Pix)
+	enabled := 0
+	for _, sensor := range sensors {
+		if sensor.Enabled {
+			enabled++
+		}
+	}
+	padding := -(enabled*125)/2 + margin
+	for m := 0; m < len(sensors); m++ {
+		sensor := sensors[m]
+		if !sensor.Enabled {
+			continue
+		}
+		var valueText string
+		switch sensor.Sensor {
+		case SensorDate:
+			valueText = common.GetDate()
+		case SensorTime:
+			valueText = common.GetTime()
+		default:
+			var sensorValue float32
+			if int(sensor.Sensor) < len(values) {
+				sensorValue = values[sensor.Sensor]
+			}
+			if maximum := sensorMaximumValue(sensor.Sensor); sensorValue > float32(maximum) {
+				sensorValue = float32(maximum)
+			}
+			if isSensorTemperature(sensor.Sensor) {
+				valueText = dashboard.GetDashboard().TemperatureToString(sensorValue)
+			} else if isSpeedTemperature(sensor.Sensor) {
+				valueText = fmt.Sprintf("%.0f RPM", sensorValue)
+			} else {
+				valueText = fmt.Sprintf("%.1f %%", sensorValue)
+			}
+		}
+		x, y := calculateStringXY(80, valueText)
+		drawColorString(x, y+padding, 80, valueText, canvas, sensor.TextColor)
+		label := sensorTextCache[sensor.Sensor]
+		x, y = calculateStringXY(40, label)
+		drawColorString(x, y+padding+55, 40, label, canvas, sensor.TextColor)
+		if m != len(sensors)-1 {
+			text := "-------------------------------------------"
+			x, y = calculateStringXY(20, text)
+			drawColorString(x, y+padding+88, 20, text, canvas, separator)
+		}
+		padding += 125
+	}
+	var buffer bytes.Buffer
+	if err := jpeg.Encode(&buffer, canvas, &jpeg.Options{Quality: 90}); err != nil {
+		return Frames{Delay: frame.Delay}
+	}
+	return Frames{Buffer: buffer.Bytes(), Delay: frame.Delay}
 }
 
 // GenerateArcScreenImage handles generation or arc screen image
