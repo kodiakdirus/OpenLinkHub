@@ -24,4 +24,7 @@ After physical acceptance of the richer warm colors, spatial waves were shortene
 to a 24-LED wavelength (or the full LED count on smaller standalone frames).
 This keeps warm, cool and dark colors visible together within short spans of a
 large Cluster instead of stretching one wave across every concatenated device.
-Temporal speed, accepted saturation and brightness remain unchanged.
+Accepted saturation and brightness remain unchanged. A later motion refinement
+shortens the default cycle from 25 seconds to 10 seconds so the shorter waves
+visibly travel across LEDs (about 2.4 LEDs/second) rather than appearing static.
+The speed control still scales the cycle duration.

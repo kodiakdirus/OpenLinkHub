@@ -15,14 +15,7 @@ var midnightAuroraPalette = [...]struct{ R, G, B float64 }{
 // MidnightAurora renders Nebula-style waves using the Midnight Aurora palette.
 func (r *ActiveRGB) MidnightAurora(startTime *time.Time) {
 	buf := map[int][]byte{}
-	elapsed := time.Since(*startTime).Milliseconds()
-	progress := math.Mod(float64(elapsed)/(r.RgbModeSpeed*5000), 1.0)
-
-	if progress >= 1.0 {
-		*startTime = time.Now()
-		elapsed = 0
-		progress = 0
-	}
+	progress := midnightAuroraProgress(time.Since(*startTime), r.RgbModeSpeed)
 
 	colors := generateMidnightAuroraColors(r.LightChannels, progress, r.RGBBrightness)
 
@@ -51,6 +44,15 @@ func (r *ActiveRGB) MidnightAurora(startTime *time.Time) {
 	} else {
 		r.Output = SetColor(buf)
 	}
+}
+
+// midnightAuroraProgress keeps short spatial waves visibly moving: the default
+// speed 5 now takes ten seconds per cycle (2.4 LEDs/second over a 24-LED wave).
+func midnightAuroraProgress(elapsed time.Duration, speed float64) float64 {
+	if speed <= 0 {
+		speed = 5
+	}
+	return math.Mod(elapsed.Seconds()/(speed*2), 1)
 }
 
 // midnightAuroraHSV preserves each reference anchor's value (including the

@@ -95,3 +95,30 @@ func TestMidnightAuroraSimultaneousLocalColorVariety(t *testing.T) {
 		}
 	}
 }
+
+func TestMidnightAuroraVisibleDrift(t *testing.T) {
+	for _, sample := range []struct {
+		elapsed     time.Duration
+		speed, want float64
+	}{
+		{time.Second, 5, 0.1}, {5 * time.Second, 5, 0.5}, {10 * time.Second, 5, 0},
+		{5 * time.Second, 10, 0.25}, {time.Second, 0, 0.1},
+	} {
+		if got := midnightAuroraProgress(sample.elapsed, sample.speed); math.Abs(got-sample.want) > 1e-9 {
+			t.Fatalf("cadence: got %v want %v", got, sample.want)
+		}
+	}
+	changed := 0
+	for i := 0; i < 24; i++ {
+		r, g, b := midnightAuroraWaveColor(i, 360, 0)
+		r2, g2, b2 := midnightAuroraWaveColor(i, 360, midnightAuroraProgress(time.Second, 5))
+		warm := r > 150 && r > g*1.1 && r > b*1.3
+		warm2 := r2 > 150 && r2 > g2*1.1 && r2 > b2*1.3
+		if warm != warm2 {
+			changed++
+		}
+	}
+	if changed < 4 {
+		t.Fatalf("warm band drift too subtle after one second: %d LEDs changed", changed)
+	}
+}
