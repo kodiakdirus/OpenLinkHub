@@ -6,9 +6,10 @@ import (
 	"time"
 )
 
-// Exact sRGB anchors from the requested reference, darkest to warmest.
+// Keep the reference chromatic range, omitting its near-black background stops.
+// Lift indigo at the same hue/saturation so legends stay visible in cool bands.
 var midnightAuroraPalette = [...]struct{ R, G, B float64 }{
-	{8, 11, 20}, {16, 22, 47}, {37, 37, 88}, {114, 72, 217},
+	{88, 88, 208}, {114, 72, 217},
 	{41, 211, 194}, {236, 111, 120}, {242, 180, 95},
 }
 
@@ -55,8 +56,8 @@ func midnightAuroraProgress(elapsed time.Duration, speed float64) float64 {
 	return math.Mod(elapsed.Seconds()/(speed*2), 1)
 }
 
-// midnightAuroraHSV preserves each reference anchor's value (including the
-// near-black navy colors) while letting us blend without gray crossfades.
+// midnightAuroraHSV preserves each chromatic anchor's value while letting us
+// blend without gray crossfades.
 func midnightAuroraHSV(r, g, b float64) (h, s, v float64) {
 	high, low := math.Max(r, math.Max(g, b)), math.Min(r, math.Min(g, b))
 	delta := high - low
@@ -81,7 +82,7 @@ func midnightAuroraHSV(r, g, b float64) (h, s, v float64) {
 
 // midnightAuroraColor blends hue/saturation/value rather than desaturating
 // complementary colors with RGB mixing. Warm anchors get a 25% saturation lift;
-// value, brightness, timing and the reference's dark/cool anchors are unchanged.
+// brightness controls and timing are independent of palette selection.
 func midnightAuroraColor(t float64) (r, g, b float64) {
 	position := math.Max(0, math.Min(1, t)) * float64(len(midnightAuroraPalette)-1)
 	index := int(position)
@@ -93,12 +94,12 @@ func midnightAuroraColor(t float64) (r, g, b float64) {
 	h1, s1, v1 := midnightAuroraHSV(a.R, a.G, a.B)
 	h2, s2, v2 := midnightAuroraHSV(z.R, z.G, z.B)
 	delta := math.Mod(h2-h1+540, 360) - 180
-	if index == 4 {
+	if index == 2 {
 		// Route teal -> coral through blue/violet, not yellow-green.
 		delta = math.Mod(h2-h1+360, 360)
 	}
 	h := math.Mod(h1+delta*f+360, 360)
-	warm := math.Max(0, math.Min(1, position-4))
+	warm := math.Max(0, math.Min(1, position-2))
 	s := math.Min(1, lerp(s1, s2, f)*(1+0.25*warm))
 	v := lerp(v1, v2, f)
 	c := v * s
