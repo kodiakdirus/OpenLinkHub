@@ -19,3 +19,9 @@ catalogs are unchanged. The native Cluster selector consumes the backend catalog
 A backend binary plus the updated `database/rgb.json` must be deployed before
 this effect is available on hardware. Source tests do not establish physical
 LED appearance. Select Nebula again to restore the previous effect.
+
+After physical acceptance of the richer warm colors, spatial waves were shortened
+to a 24-LED wavelength (or the full LED count on smaller standalone frames).
+This keeps warm, cool and dark colors visible together within short spans of a
+large Cluster instead of stretching one wave across every concatenated device.
+Temporal speed, accepted saturation and brightness remain unchanged.

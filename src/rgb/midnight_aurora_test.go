@@ -68,3 +68,30 @@ func TestMidnightAuroraBrightnessAndWave(t *testing.T) {
 		t.Fatal("planar output was not populated")
 	}
 }
+
+// Assert visible variety locally, not merely across the entire concatenated
+// Cluster. The previous one-wave-per-Cluster rendering fails this check.
+func TestMidnightAuroraSimultaneousLocalColorVariety(t *testing.T) {
+	for _, channels := range []int{24, 120, 360, 720} {
+		for phase := 0; phase < 24; phase++ {
+			for offset := 0; offset+24 <= channels; offset += 24 {
+				cool, warm, dark := 0, 0, 0
+				for i := offset; i < offset+24; i++ {
+					r, g, b := midnightAuroraWaveColor(i, channels, float64(phase)/24)
+					if (b > r*1.3 || g > r*1.3) && math.Max(g, b) > 80 {
+						cool++
+					}
+					if r > g*1.1 && r > b*1.3 && r > 150 {
+						warm++
+					}
+					if math.Max(r, math.Max(g, b)) < 50 {
+						dark++
+					}
+				}
+				if cool < 2 || warm < 2 || dark < 2 {
+					t.Fatalf("channels=%d phase=%d offset=%d: cool=%d warm=%d dark=%d", channels, phase, offset, cool, warm, dark)
+				}
+			}
+		}
+	}
+}

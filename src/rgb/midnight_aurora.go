@@ -119,12 +119,23 @@ func midnightAuroraColor(t float64) (r, g, b float64) {
 	return (r + m) * 255, (g + m) * 255, (b + m) * 255
 }
 
+// midnightAuroraWaveColor repeats the full palette over short spatial waves.
+// A Cluster may concatenate hundreds of LEDs: scaling one wave across that
+// entire layout made each fan/peripheral display only a narrow palette slice.
+func midnightAuroraWaveColor(index, channels int, progress float64) (r, g, b float64) {
+	wavelength := math.Min(24, float64(channels))
+	if wavelength <= 0 {
+		return 0, 0, 0
+	}
+	pos := float64(index)/wavelength + progress
+	t := (math.Sin(pos*math.Pi*2) + 1) * 0.5
+	return midnightAuroraColor(t)
+}
+
 func generateMidnightAuroraColors(lightChannels int, progress, brightness float64) []struct{ R, G, B float64 } {
 	colors := make([]struct{ R, G, B float64 }, lightChannels)
 	for i := range colors {
-		pos := float64(i)/float64(lightChannels) + progress
-		t := (math.Sin(pos*math.Pi*2) + 1) * 0.5
-		r, g, b := midnightAuroraColor(t)
+		r, g, b := midnightAuroraWaveColor(i, lightChannels, progress)
 		gain := brightness * 0.6 // Preserve Nebula's subdued base lighting.
 		if rand.Float64() < 0.001 {
 			// Twinkles stay within the reference palette, at full user brightness.
